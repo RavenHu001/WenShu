@@ -1,0 +1,262 @@
+:root {
+  color: #202532;
+  background: #eef0f4;
+  font-family: Inter, 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr) 24px;
+  width: 100%;
+  height: 100%;
+  background: #f8f9fb;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  padding: 0 18px;
+  color: #333947;
+  background: #ffffff;
+  border-bottom: 1px solid #dfe2e8;
+  user-select: none;
+}
+
+.brand-mark {
+  color: #4d5f9b;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.menu-placeholder {
+  display: flex;
+  gap: 23px;
+  color: #5b6170;
+  font-size: 13px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 52px 238px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.activity-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding-top: 12px;
+  color: #aeb5c4;
+  background: #252a37;
+}
+
+.activity-item {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.activity-item.active {
+  color: #ffffff;
+  background: #5268ad;
+  box-shadow: 0 5px 14px rgb(33 43 78 / 35%);
+}
+
+.sidebar {
+  min-width: 0;
+  color: #4a5060;
+  background: #f3f4f7;
+  border-right: 1px solid #dfe2e8;
+}
+
+.section-label {
+  padding: 14px 16px 11px;
+  color: #6d7382;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.empty-tree {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 70px 24px 0;
+  text-align: center;
+}
+
+.folder-icon {
+  width: 48px;
+  height: 34px;
+  margin-bottom: 14px;
+  background: #d9dde7;
+  border-radius: 5px;
+}
+
+.folder-icon::before {
+  display: block;
+  width: 21px;
+  height: 8px;
+  background: #d9dde7;
+  border-radius: 4px 4px 0 0;
+  content: '';
+  transform: translateY(-5px);
+}
+
+.empty-tree p {
+  margin: 0 0 7px;
+  color: #555d6d;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.empty-tree span {
+  color: #9198a7;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.editor-area {
+  display: grid;
+  grid-template-rows: 38px minmax(0, 1fr);
+  min-width: 0;
+  background: #ffffff;
+}
+
+.editor-tabs {
+  display: flex;
+  align-items: stretch;
+  background: #f3f4f7;
+  border-bottom: 1px solid #e1e4ea;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  min-width: 132px;
+  padding: 0 18px;
+  color: #7d8492;
+  border-right: 1px solid #e1e4ea;
+  font-size: 12px;
+}
+
+.tab.active {
+  color: #343a48;
+  background: #ffffff;
+  border-top: 2px solid #5268ad;
+}
+
+.welcome-panel {
+  display: grid;
+  min-height: 0;
+  padding: 54px;
+  overflow: auto;
+  place-items: center;
+  background:
+    radial-gradient(circle at 78% 18%, rgb(101 126 194 / 10%), transparent 34%),
+    linear-gradient(145deg, #ffffff, #f9fafc);
+}
+
+.welcome-copy {
+  width: min(650px, 100%);
+}
+
+.eyebrow {
+  margin-bottom: 14px;
+  color: #6577b4;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.welcome-copy h1 {
+  margin: 0;
+  color: #29334f;
+  font-family: 'Microsoft YaHei UI', sans-serif;
+  font-size: clamp(52px, 8vw, 88px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+}
+
+.welcome-copy > p {
+  max-width: 520px;
+  margin: 22px 0 38px;
+  color: #6c7382;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.scope-note {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 530px;
+  padding: 18px 20px;
+  background: #f4f6fb;
+  border: 1px solid #e2e6f0;
+  border-left: 3px solid #6577b4;
+  border-radius: 0 7px 7px 0;
+}
+
+.scope-note strong {
+  color: #424d6b;
+  font-size: 13px;
+}
+
+.scope-note span {
+  color: #7e8593;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  color: #eef1fb;
+  background: #5268ad;
+  font-size: 11px;
+  user-select: none;
+}
+
+.runtime-status {
+  opacity: 0.9;
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 48px 200px minmax(0, 1fr);
+  }
+
+  .welcome-panel {
+    padding: 34px;
+  }
+}
