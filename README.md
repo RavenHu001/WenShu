@@ -15,21 +15,24 @@ Task 1 只提供可运行、可构建、可测试的应用外壳：
 ## 环境要求
 
 - Windows 10 或 Windows 11
-- Node.js 22.12 或更高版本
-- npm 10 或更高版本
+- Windows PowerShell 5.1 或更高版本
+- 首次初始化时能够访问 Node.js 和 npm 的下载服务
 
-本项目开发时使用 Node.js 22.15.0。若 PowerShell 因执行策略禁止运行 `npm.ps1`，可将下列命令中的 `npm` 替换为 `npm.cmd`。
+项目提供本地便携工具链，不要求预先全局安装 Node.js。Node.js 22.15.0 和随附的 npm 10.9.2 会安装到被 Git 忽略的 `.tools/`，项目命令始终优先使用该版本。
 
-## 安装
+## 首次初始化
 
 ```powershell
-npm install
+.\scripts\bootstrap.cmd
+.\scripts\npm.cmd ci
 ```
+
+第一条命令从 Node.js 官方版本目录下载 Windows 便携包、校验 SHA-256 后解压到项目内；第二条命令严格按照 `package-lock.json` 安装项目依赖。
 
 ## 开发
 
 ```powershell
-npm run dev
+.\scripts\dev.cmd
 ```
 
 该命令启动 Vite 开发服务器和 Electron 窗口，并支持渲染进程热更新。
@@ -37,22 +40,22 @@ npm run dev
 ## 质量检查
 
 ```powershell
-npm run typecheck
-npm run lint
-npm run format:check
-npm test
+.\scripts\npm.cmd run typecheck
+.\scripts\npm.cmd run lint
+.\scripts\npm.cmd run format:check
+.\scripts\npm.cmd test
 ```
 
 也可以运行全部检查：
 
 ```powershell
-npm run check
+.\scripts\npm.cmd run check
 ```
 
 ## 生产构建
 
 ```powershell
-npm run build
+.\scripts\npm.cmd run build
 ```
 
 构建产物写入 `out/`。Task 1 不生成 Windows 安装包；安装包与自动更新不在本阶段范围内。
@@ -66,6 +69,8 @@ src/
 ├─ renderer/   React 界面与样式
 └─ shared/     跨进程共享的纯类型契约
 tests/         可独立运行的基础测试
+scripts/       本地 Node.js 引导及命令包装器
+.tools/        本机便携工具链（自动生成，不提交 Git）
 ```
 
-工程决策、验证结果和已知限制见 [`TASK_001_COMPLETION_REPORT.md`](./TASK_001_COMPLETION_REPORT.md)。产品与技术基线见 [`PROJECT_BASELINE.md`](./PROJECT_BASELINE.md)。
+工具链原理、更新方式和故障处理见 [`DEVELOPMENT_ENVIRONMENT.md`](./DEVELOPMENT_ENVIRONMENT.md)。工程决策、验证结果和已知限制见 [`TASK_001_COMPLETION_REPORT.md`](./TASK_001_COMPLETION_REPORT.md)。产品与技术基线见 [`PROJECT_BASELINE.md`](./PROJECT_BASELINE.md)。
