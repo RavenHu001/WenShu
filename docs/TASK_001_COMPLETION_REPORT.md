@@ -70,7 +70,7 @@ preload 被显式构建为 CommonJS。原因是应用启用了 Electron sandbox�
 
 ## 7. 验收结论
 
-Task 1 的安装、开发启动、非空 React 界面、类型化 preload、安全窗口配置、类型检查、Lint、格式、测试和生产构建均已验证。实现未加入任务范围外的产品功能，满足 `TASK_001_PROJECT_BOOTSTRAP.md` 的全部验收标准。
+Task 1 的安装、开发启动、非空 React 界面、类型化 preload、安全窗口配置、类型检查、Lint、格式、测试和生产构建均已验证。实现未加入任务范围外的产品功能，满足 [`TASK_001_PROJECT_BOOTSTRAP.md`](./TASK_001_PROJECT_BOOTSTRAP.md) 的全部验收标准。
 
 ## 8. 后续环境调整
 
@@ -81,7 +81,7 @@ Task 1 的安装、开发启动、非空 React 界面、类型化 preload、安�
 - `scripts/bootstrap.cmd` 下载并校验 Node.js 官方便携包；
 - `scripts/node.cmd`、`scripts/npm.cmd` 和 `scripts/dev.cmd` 保证项目命令使用 `.tools/` 内的运行时；
 - `.tools/` 不提交 Git，`package-lock.json` 继续作为 npm 依赖的可复现来源；
-- 详细操作和更新流程记录于 `DEVELOPMENT_ENVIRONMENT.md`。
+- 详细操作和更新流程记录于 [`DEVELOPMENT_ENVIRONMENT.md`](./DEVELOPMENT_ENVIRONMENT.md)。
 
 本机从 Node.js 官方端点下载 ZIP 超过了首次命令的等待时间，但后台下载随后完成，官方 SHA-256 校验通过。脚本另行验证了重复执行会识别已有的完整工具链。由于 Electron 官方二进制连接被重置，本地 `npm ci` 验证临时使用了 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`；镜像设置未写入仓库。
 

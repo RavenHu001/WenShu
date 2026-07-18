@@ -1,76 +1,92 @@
 # 文枢（WenShu）
 
-文枢是一款面向个人多文档创作与资料管理的 Windows 桌面应用。本仓库当前完成了 Electron、React、TypeScript 和 Vite 的最小工程骨架，用于承载后续工作区、文件树与文档编辑功能。
+文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-## 当前范围
+## 项目状态
 
-Task 1 只提供可运行、可构建、可测试的应用外壳：
+项目目前处于工程基座阶段，已经具备：
 
-- Electron 主进程负责窗口与生命周期；
-- preload 通过 `contextBridge` 暴露只读、窄范围的运行环境信息；
-- React 渲染进程提供“文枢”占位工作台；
-- 渲染进程不具备 Node.js 或文件系统访问能力；
-- 暂不包含工作区、文件树、TXT/DOCX 编辑等产品功能。
+- Electron、React、TypeScript 与 Vite 开发和生产构建链路；
+- 相互隔离的主进程、preload 和渲染进程类型环境；
+- 通过 `contextBridge` 提供的最小只读桌面 API；
+- ESLint、Prettier、Vitest 与严格 TypeScript 检查；
+- 项目本地的便携 Node.js/npm 开发工具链；
+- 可运行的“文枢”桌面工作台占位界面。
 
-## 环境要求
+工作区选择、文件树、TXT/DOCX 编辑和多标签页等产品功能尚未实现。
+
+## 快速开始
+
+### 环境要求
 
 - Windows 10 或 Windows 11
 - Windows PowerShell 5.1 或更高版本
-- 首次初始化时能够访问 Node.js 和 npm 的下载服务
+- 首次初始化时能够访问 Node.js 和 npm 下载服务
 
-项目提供本地便携工具链，不要求预先全局安装 Node.js。Node.js 22.15.0 和随附的 npm 10.9.2 会安装到被 Git 忽略的 `.tools/`，项目命令始终优先使用该版本。
-
-## 首次初始化
+项目不要求预先全局安装 Node.js。首次克隆后，在仓库根目录运行：
 
 ```powershell
 .\scripts\bootstrap.cmd
 .\scripts\npm.cmd ci
 ```
 
-第一条命令从 Node.js 官方版本目录下载 Windows 便携包、校验 SHA-256 后解压到项目内；第二条命令严格按照 `package-lock.json` 安装项目依赖。
-
-## 开发
+随后启动开发环境：
 
 ```powershell
 .\scripts\dev.cmd
 ```
 
-该命令启动 Vite 开发服务器和 Electron 窗口，并支持渲染进程热更新。
+本地 Node.js 安装在被 Git 忽略的 `.tools/` 中，不会修改系统 PATH 或 PowerShell 执行策略。网络受限环境的镜像配置和故障处理参见[开发环境说明](./docs/DEVELOPMENT_ENVIRONMENT.md)。
 
-## 质量检查
+## 常用命令
 
-```powershell
-.\scripts\npm.cmd run typecheck
-.\scripts\npm.cmd run lint
-.\scripts\npm.cmd run format:check
-.\scripts\npm.cmd test
-```
+| 操作         | 命令                                 |
+| ------------ | ------------------------------------ |
+| 启动开发环境 | `.\scripts\dev.cmd`                  |
+| 完整质量检查 | `.\scripts\npm.cmd run check`        |
+| 类型检查     | `.\scripts\npm.cmd run typecheck`    |
+| 代码检查     | `.\scripts\npm.cmd run lint`         |
+| 格式检查     | `.\scripts\npm.cmd run format:check` |
+| 单元测试     | `.\scripts\npm.cmd test`             |
+| 生产构建     | `.\scripts\npm.cmd run build`        |
 
-也可以运行全部检查：
+生产构建产物写入 `out/`。当前阶段不生成 Windows 安装包。
 
-```powershell
-.\scripts\npm.cmd run check
-```
+## 技术栈
 
-## 生产构建
+- Electron
+- React
+- TypeScript
+- Vite / electron-vite
+- Vitest
+- ESLint / Prettier
 
-```powershell
-.\scripts\npm.cmd run build
-```
-
-构建产物写入 `out/`。Task 1 不生成 Windows 安装包；安装包与自动更新不在本阶段范围内。
-
-## 目录结构
+## 项目结构
 
 ```text
-src/
-├─ main/       Electron 生命周期、窗口和安全策略
-├─ preload/    受控桌面 API 的唯一渲染进程入口
-├─ renderer/   React 界面与样式
-└─ shared/     跨进程共享的纯类型契约
-tests/         可独立运行的基础测试
-scripts/       本地 Node.js 引导及命令包装器
-.tools/        本机便携工具链（自动生成，不提交 Git）
+.
+├─ docs/        项目基线、任务记录和开发说明
+├─ scripts/     本地工具链及开发命令包装器
+├─ src/
+│  ├─ main/     Electron 生命周期、窗口与安全策略
+│  ├─ preload/  受控桌面 API 桥接
+│  ├─ renderer/ React 界面与样式
+│  └─ shared/   跨进程共享的纯类型契约
+├─ tests/       基础单元测试
+└─ README.md    项目入口与快速使用说明
 ```
 
-工具链原理、更新方式和故障处理见 [`DEVELOPMENT_ENVIRONMENT.md`](./DEVELOPMENT_ENVIRONMENT.md)。工程决策、验证结果和已知限制见 [`TASK_001_COMPLETION_REPORT.md`](./TASK_001_COMPLETION_REPORT.md)。产品与技术基线见 [`PROJECT_BASELINE.md`](./PROJECT_BASELINE.md)。
+## 文档
+
+- [项目定义与技术基线](./docs/PROJECT_BASELINE.md)
+- [开发环境说明](./docs/DEVELOPMENT_ENVIRONMENT.md)
+- [TASK-001：桌面应用工程骨架](./docs/TASK_001_PROJECT_BOOTSTRAP.md)
+- [TASK-001 完成报告](./docs/TASK_001_COMPLETION_REPORT.md)
+
+## 核心原则
+
+- 本地文件优先，基础功能无需联网；
+- 中央文档编辑区域优先；
+- 渲染进程不直接拥有 Node.js 或文件系统权限；
+- 文件能力通过受控 preload/IPC 接口逐项提供；
+- 先保证简单、稳定和可运行，再逐步扩展文件类型与 AI 能力。
