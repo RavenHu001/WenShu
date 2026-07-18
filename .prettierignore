@@ -1,0 +1,7 @@
+node_modules/
+out/
+dist/
+coverage/
+package-lock.json
+docs/PROJECT_BASELINE.md
+docs/TASK_001_PROJECT_BOOTSTRAP.md

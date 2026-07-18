@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "electron"]
+  },
+  "include": ["src/preload/**/*.ts", "src/shared/**/*.ts"]
+}
