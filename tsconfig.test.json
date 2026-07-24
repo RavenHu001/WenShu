@@ -3,5 +3,10 @@
   "compilerOptions": {
     "types": ["node", "vitest/globals"]
   },
-  "include": ["tests/**/*.ts", "src/renderer/lib/**/*.ts", "src/shared/**/*.ts"]
+  "include": [
+    "tests/**/*.ts",
+    "src/renderer/lib/**/*.ts",
+    "src/shared/**/*.ts",
+    "src/main/workspace/**/*.ts"
+  ]
 }
