@@ -1,0 +1,144 @@
+import { useCallback, useState } from 'react';
+import { FileTree } from './FileTree';
+import type { WorkspaceEntryError, WorkspaceSnapshot } from '../../../shared/workspace';
+
+type Status = 'idle' | 'loading' | 'loaded' | 'error' | 'refreshing';
+
+interface State {
+  status: Status;
+  workspace: WorkspaceSnapshot | null;
+  error: WorkspaceEntryError | null;
+}
+
+export function WorkspaceSidebar(): React.JSX.Element {
+  const [state, setState] = useState<State>({
+    status: 'idle',
+    workspace: null,
+    error: null,
+  });
+
+  const handleOpen = useCallback(async () => {
+    const prevWorkspace = state.workspace;
+    setState({ status: 'loading', workspace: prevWorkspace, error: null });
+
+    const result = await window.desktop.workspace.open();
+
+    if (result.status === 'selected') {
+      setState({ status: 'loaded', workspace: result.workspace, error: null });
+    } else if (result.status === 'cancelled') {
+      setState({
+        status: prevWorkspace ? 'loaded' : 'idle',
+        workspace: prevWorkspace,
+        error: null,
+      });
+    } else {
+      setState({
+        status: 'error',
+        workspace: prevWorkspace,
+        error: result.error,
+      });
+    }
+  }, [state.workspace]);
+
+  const handleRefresh = useCallback(async () => {
+    if (!state.workspace) {
+      return;
+    }
+    setState((prev) => ({ ...prev, status: 'refreshing' as const }));
+
+    const result = await window.desktop.workspace.refresh();
+
+    if (result.status === 'refreshed') {
+      setState({ status: 'loaded', workspace: result.workspace, error: null });
+    } else if (result.status === 'error') {
+      setState((prev) => ({
+        status: 'error',
+        workspace: prev.workspace,
+        error: result.error,
+      }));
+    } else {
+      setState((prev) => ({
+        status: 'loaded',
+        workspace: prev.workspace,
+        error: null,
+      }));
+    }
+  }, [state.workspace]);
+
+  const busy = state.status === 'loading' || state.status === 'refreshing';
+  const showIdle = state.status === 'idle';
+
+  return (
+    <aside className="sidebar">
+      <div className="section-label">工作区</div>
+
+      {showIdle && (
+        <div className="ws-idle">
+          <div className="folder-icon" aria-hidden="true" />
+          <p>尚未打开文件夹</p>
+          <button
+            className="ws-btn ws-btn-primary"
+            onClick={() => void handleOpen()}
+            disabled={busy}
+          >
+            打开文件夹
+          </button>
+        </div>
+      )}
+
+      {busy && !state.workspace && <div className="ws-status">正在读取工作区…</div>}
+
+      {state.workspace &&
+        (state.status === 'loaded' ||
+          state.status === 'refreshing' ||
+          state.status === 'error') && (
+          <>
+            <div className="ws-info">
+              <div className="ws-info-name">{state.workspace.rootName}</div>
+              <div className="ws-info-path" title={state.workspace.rootPath}>
+                {state.workspace.rootPath}
+              </div>
+              <div className="ws-info-actions">
+                <button className="ws-btn" onClick={() => void handleOpen()} disabled={busy}>
+                  打开文件夹
+                </button>
+                <button
+                  className="ws-btn"
+                  onClick={() => void handleRefresh()}
+                  disabled={state.status === 'refreshing'}
+                >
+                  {state.status === 'refreshing' ? '刷新中…' : '刷新'}
+                </button>
+              </div>
+            </div>
+
+            {state.status === 'refreshing' && <div className="ws-status">正在刷新…</div>}
+
+            {state.status === 'error' && (
+              <div className="ws-error-banner">无法读取工作区：{state.error?.message}</div>
+            )}
+
+            {state.workspace.entries.length === 0 && state.status !== 'refreshing' && (
+              <div className="ws-empty">此文件夹为空</div>
+            )}
+
+            {state.workspace.entries.length > 0 && <FileTree entries={state.workspace.entries} />}
+          </>
+        )}
+
+      {state.status === 'error' && !state.workspace && (
+        <div className="ws-error-full">
+          <p>无法打开工作区</p>
+          <span>{state.error?.message}</span>
+          <button
+            className="ws-btn ws-btn-primary"
+            onClick={() => void handleOpen()}
+            disabled={busy}
+          >
+            重试
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+}

@@ -1,4 +1,5 @@
 import { formatRuntimeInfo } from './lib/runtime-info';
+import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 
 const activityItems = ['文', '搜', '设'];
 
@@ -26,14 +27,7 @@ export const App = (): React.JSX.Element => {
           ))}
         </aside>
 
-        <aside className="sidebar">
-          <div className="section-label">工作区</div>
-          <div className="empty-tree">
-            <div className="folder-icon" aria-hidden="true" />
-            <p>尚未打开文件夹</p>
-            <span>工作区与文件树将在下一任务中提供</span>
-          </div>
-        </aside>
+        <WorkspaceSidebar />
 
         <section className="editor-area">
           <div className="editor-tabs">

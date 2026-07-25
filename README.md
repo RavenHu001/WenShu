@@ -1,15 +1,19 @@
-# 文枢（WenShu）
+﻿# 文枢（WenShu）
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Pre-alpha / 工程基座。** 应用可以启动、检查和构建，但尚未实现真实工作区、文件浏览或文档编辑功能。
+> **当前阶段：Pre-alpha / 工作区与文件树。** 应用具备完整的工作区选择、只读文件树浏览和可展开/折叠的目录结构。
 
 ## 当前能力
 
 ### 可以体验
 
 - 启动 Windows Electron 桌面窗口；
-- 查看“文枢”基础工作台及侧栏、中央区域和状态栏布局；
+- 点击左侧"打开文件夹"按钮，通过原生对话框选择本地工作区；
+- 浏览工作区目录树，展开/折叠多层文件夹；
+- 手动刷新工作区以反映外部文件变化；
+- 切换工作区或取消选择而不丢失当前状态；
+- 查看子目录错误提示而不影响其他节点显示；
 - 通过受控 preload API 在状态栏读取平台和 Electron 版本信息。
 
 ### 工程能力
@@ -17,14 +21,16 @@
 - Electron、React、TypeScript 与 Vite 开发和生产构建链路；
 - 相互隔离的主进程、preload 和渲染进程类型环境；
 - `nodeIntegration: false`、`contextIsolation: true` 和 sandbox 安全基线；
+- 受控 IPC 通道：渲染进程只能通过 `workspace.open()` / `workspace.refresh()` 与主进程通信；
 - ESLint、Prettier、Vitest 与严格 TypeScript 检查；
+- React Testing Library 组件行为测试；
 - 项目本地的便携 Node.js/npm 开发工具链。
 
 ### 尚未实现
 
-- 工作区选择和文件树；
 - TXT、DOCX 文件读取与编辑；
 - 多标签页、搜索、保存和状态恢复；
+- 文件系统监听和自动刷新；
 - Windows 安装包与正式发布流程。
 
 ## 快速开始
@@ -52,7 +58,7 @@
 
 ## 使用与验证
 
-开发窗口启动成功后，应能看到“文枢”欢迎工作台、左侧占位栏、中央欢迎区域和底部状态栏；状态栏应显示 Windows 与当前 Electron 版本。关闭窗口或在终端按 `Ctrl+C` 可以结束开发进程。
+开发窗口启动成功后，左侧栏显示"尚未打开文件夹"的空状态。点击"打开文件夹"按钮，通过原生目录选择器选择一个本地文件夹，即可在左侧栏看到工作区名称、路径和可展开的文件树。点击目录名称可展开/折叠子目录，点击"刷新"按钮可重新扫描当前工作区。关闭窗口或在终端按 `Ctrl+C` 可以结束开发进程。
 
 运行全部自动检查：
 
@@ -85,7 +91,7 @@
 ## Roadmap
 
 - [x] Task 1：建立可运行、可测试的桌面应用工程骨架；
-- [ ] [Task 2：工作区目录选择与只读文件树](./docs/TASK_002_WORKSPACE_READONLY.md)；
+- [x] [Task 2：工作区目录选择与只读文件树](./docs/TASK_002_WORKSPACE_READONLY.md)；
 - [ ] TXT 文件读取、编辑和保存；
 - [ ] 多标签页与工作区搜索；
 - [ ] 基础 DOCX 阅读、编辑和安全保存。
@@ -100,20 +106,26 @@
 - [TASK-001：桌面应用工程骨架](./docs/TASK_001_PROJECT_BOOTSTRAP.md)
 - [TASK-001 完成报告](./docs/TASK_001_COMPLETION_REPORT.md)
 - [TASK-002：工作区目录选择与只读文件树](./docs/TASK_002_WORKSPACE_READONLY.md)
+- [TASK-002 完成报告](./docs/TASK_002_COMPLETION_REPORT.md)
 
 ## 项目结构
 
 ```text
 .
-├─ docs/        项目基线、任务记录和开发说明
-├─ scripts/     本地工具链及开发命令包装器
+├─ docs/                  项目基线、任务记录和开发说明
+├─ scripts/               本地工具链及开发命令包装器
 ├─ src/
-│  ├─ main/     Electron 生命周期、窗口与安全策略
-│  ├─ preload/  受控桌面 API 桥接
-│  ├─ renderer/ React 界面与样式
-│  └─ shared/   跨进程共享的纯类型契约
-├─ tests/       基础单元测试
-└─ README.md    项目入口与快速使用说明
+│  ├─ main/
+│  │  ├─ index.ts         Electron 生命周期、窗口创建与安全策略
+│  │  └─ workspace/       工作区扫描器与 IPC 处理器
+│  ├─ preload/            受控桌面 API 桥接
+│  ├─ renderer/
+│  │  ├─ components/      React UI 组件（工作区侧栏、文件树）
+│  │  ├─ lib/             纯逻辑工具
+│  │  └─ styles/          界面样式
+│  └─ shared/             跨进程共享的纯类型契约
+├─ tests/                  单元测试与组件行为测试
+└─ README.md               项目入口与快速使用说明
 ```
 
 ## 技术栈
@@ -122,7 +134,7 @@
 - React
 - TypeScript
 - Vite / electron-vite
-- Vitest
+- Vitest + React Testing Library
 - ESLint / Prettier
 
 ## 开发原则
