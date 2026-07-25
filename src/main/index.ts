@@ -1,5 +1,6 @@
 import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
+import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 
 const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -40,6 +41,8 @@ void app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
+
+  registerWorkspaceIpc();
 
   createMainWindow();
 

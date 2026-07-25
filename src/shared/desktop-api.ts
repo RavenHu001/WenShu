@@ -7,7 +7,13 @@ export interface DesktopRuntimeInfo {
   readonly electronVersion: string;
 }
 
+import type { OpenWorkspaceResult, RefreshWorkspaceResult } from './workspace';
+
 /** 渲染进程能够使用的完整桌面 API；后续能力应按具体用例逐项添加。 */
 export interface DesktopApi {
   readonly runtime: DesktopRuntimeInfo;
+  readonly workspace: {
+    readonly open: () => Promise<OpenWorkspaceResult>;
+    readonly refresh: () => Promise<RefreshWorkspaceResult>;
+  };
 }
