@@ -1,7 +1,17 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["tests/**/*.ts", "src/renderer/lib/**/*.ts", "src/shared/**/*.ts"]
+  "include": [
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "src/renderer/lib/**/*.ts",
+    "src/renderer/components/**/*.tsx",
+    "src/renderer/App.tsx",
+    "src/renderer/env.d.ts",
+    "src/shared/**/*.ts",
+    "src/main/workspace/**/*.ts"
+  ]
 }

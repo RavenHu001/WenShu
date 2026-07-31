@@ -1,10 +1,16 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
 
 const desktopApi: DesktopApi = Object.freeze({
   runtime: Object.freeze({
     platform: process.platform,
     electronVersion: process.versions.electron,
+  }),
+  // preload 只开放固定的 IPC 调用，不暴露 ipcRenderer、通用 invoke 或可指定通道的接口。
+  // 渲染进程无法向主进程传入路径参数 —— open 使用原生目录选择器，refresh 只操作已有工作区。
+  workspace: Object.freeze({
+    open: () => ipcRenderer.invoke('workspace:open'),
+    refresh: () => ipcRenderer.invoke('workspace:refresh'),
   }),
 });
 

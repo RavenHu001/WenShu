@@ -251,6 +251,238 @@ body {
   opacity: 0.9;
 }
 
+/* ---- 工作区侧栏 ------------------------------------------------------------ */
+
+.ws-idle {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 70px 24px 0;
+  text-align: center;
+}
+
+.ws-idle p {
+  margin: 0 0 14px;
+  color: #555d6d;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ws-status {
+  padding: 14px 16px;
+  color: #9198a7;
+  font-size: 12px;
+}
+
+.ws-info {
+  padding: 12px 16px 8px;
+}
+
+.ws-info-name {
+  color: #343a48;
+  font-size: 13px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.ws-info-path {
+  margin-top: 3px;
+  color: #9198a7;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-info-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.ws-btn {
+  padding: 5px 12px;
+  color: #5b6170;
+  background: #e4e7f0;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.ws-btn:hover:not(:disabled) {
+  background: #d3d8e5;
+}
+
+.ws-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ws-btn-primary {
+  color: #ffffff;
+  background: #5268ad;
+}
+
+.ws-btn-primary:hover:not(:disabled) {
+  background: #455696;
+}
+
+.ws-error-full {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.ws-error-full p {
+  margin: 0;
+  color: #c54949;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ws-error-full span {
+  color: #9198a7;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ws-error-banner {
+  margin: 0 10px;
+  padding: 8px 12px;
+  color: #b34141;
+  background: #fef0f0;
+  border: 1px solid #f5cfcf;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ws-empty {
+  padding: 18px 16px;
+  color: #9198a7;
+  font-size: 12px;
+}
+
+/* ---- 文件树 ---------------------------------------------------------------- */
+
+.ft-tree {
+  padding-bottom: 18px;
+  overflow-y: auto;
+  user-select: none;
+}
+
+.ft-node {
+  outline: none;
+}
+
+.ft-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  height: 28px;
+  padding-right: 12px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: default;
+  font: inherit;
+  text-align: left;
+}
+
+.ft-row--dir {
+  cursor: pointer;
+}
+
+.ft-row:hover {
+  background: #e7eaf0;
+}
+
+.ft-row:focus-visible {
+  outline: 2px solid #6577b4;
+  outline-offset: -2px;
+}
+
+.ft-row--error {
+  color: #b34141;
+}
+
+.ft-arrow {
+  display: inline-block;
+  width: 12px;
+  color: #8b91a0;
+  font-size: 8px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+
+.ft-arrow--open {
+  transform: rotate(90deg);
+}
+
+.ft-kind {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ft-kind--directory {
+  color: #5c73b8;
+  background: #e7ecf7;
+}
+
+.ft-kind--file {
+  color: #6d7b93;
+  background: #f0f1f5;
+}
+
+.ft-kind--symbolic-link {
+  color: #8b6db8;
+  background: #f2edfa;
+}
+
+.ft-kind--other {
+  color: #9198a7;
+  background: #e5e7eb;
+}
+
+.ft-name {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ft-error-message {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #b34141;
+  font-size: 10px;
+}
+
+.ft-children {
+  border-left: none;
+}
+
+.ft-empty-dir {
+  color: #aeb5c4;
+  font-size: 11px;
+  font-style: italic;
+  line-height: 22px;
+}
+
 @media (max-width: 980px) {
   .workspace {
     grid-template-columns: 48px 200px minmax(0, 1fr);
