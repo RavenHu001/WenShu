@@ -24,27 +24,44 @@ export function FileTreeNode({
   const indent = depth * paddingStep;
 
   const toggle = (): void => {
-    if (isDir) {
-      setExpanded((prev) => !prev);
-    }
+    setExpanded((prev) => !prev);
   };
+
+  const rowContents = (
+    <>
+      {isDir && (
+        <span className={`ft-arrow ${expanded ? 'ft-arrow--open' : ''}`} aria-hidden="true">
+          &#9654;
+        </span>
+      )}
+      <span className={`ft-kind ft-kind--${entry.kind}`}>{kindLabel(entry.kind)}</span>
+      <span className="ft-name">{entry.name}</span>
+      {entry.error ? (
+        <span className="ft-error-message" title={entry.error.message}>
+          无法读取
+        </span>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="ft-node" role="treeitem" aria-expanded={isDir ? expanded : undefined}>
-      <div
-        className={`ft-row ${isDir ? 'ft-row--dir' : ''} ${entry.error ? 'ft-row--error' : ''}`}
-        style={{ paddingLeft: 14 + indent }}
-        onClick={toggle}
-      >
-        {isDir && (
-          <span className={`ft-arrow ${expanded ? 'ft-arrow--open' : ''}`} aria-hidden="true">
-            &#9654;
-          </span>
-        )}
-        <span className={`ft-kind ft-kind--${entry.kind}`}>{kindLabel(entry.kind)}</span>
-        <span className="ft-name">{entry.name}</span>
-        {entry.error ? <span className="ft-error-mark" title={entry.error.message} /> : null}
-      </div>
+      {isDir ? (
+        <button
+          type="button"
+          className={`ft-row ft-row--dir ${entry.error ? 'ft-row--error' : ''}`}
+          style={{ paddingLeft: 14 + indent }}
+          onClick={toggle}
+          aria-expanded={expanded}
+          aria-label={entry.name}
+        >
+          {rowContents}
+        </button>
+      ) : (
+        <div className="ft-row" style={{ paddingLeft: 14 + indent }}>
+          {rowContents}
+        </div>
+      )}
 
       {hasChildren && expanded && (
         <div className="ft-children" role="group">

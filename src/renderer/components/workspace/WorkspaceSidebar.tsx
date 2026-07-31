@@ -10,6 +10,12 @@ interface State {
   error: WorkspaceEntryError | null;
 }
 
+function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
+  return {
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
+
 export function WorkspaceSidebar(): React.JSX.Element {
   const [state, setState] = useState<State>({
     status: 'idle',
@@ -21,21 +27,29 @@ export function WorkspaceSidebar(): React.JSX.Element {
     const prevWorkspace = state.workspace;
     setState({ status: 'loading', workspace: prevWorkspace, error: null });
 
-    const result = await window.desktop.workspace.open();
+    try {
+      const result = await window.desktop.workspace.open();
 
-    if (result.status === 'selected') {
-      setState({ status: 'loaded', workspace: result.workspace, error: null });
-    } else if (result.status === 'cancelled') {
-      setState({
-        status: prevWorkspace ? 'loaded' : 'idle',
-        workspace: prevWorkspace,
-        error: null,
-      });
-    } else {
+      if (result.status === 'selected') {
+        setState({ status: 'loaded', workspace: result.workspace, error: null });
+      } else if (result.status === 'cancelled') {
+        setState({
+          status: prevWorkspace ? 'loaded' : 'idle',
+          workspace: prevWorkspace,
+          error: null,
+        });
+      } else {
+        setState({
+          status: 'error',
+          workspace: prevWorkspace,
+          error: result.error,
+        });
+      }
+    } catch (error) {
       setState({
         status: 'error',
         workspace: prevWorkspace,
-        error: result.error,
+        error: toWorkspaceEntryError(error),
       });
     }
   }, [state.workspace]);
@@ -46,21 +60,29 @@ export function WorkspaceSidebar(): React.JSX.Element {
     }
     setState((prev) => ({ ...prev, status: 'refreshing' as const }));
 
-    const result = await window.desktop.workspace.refresh();
+    try {
+      const result = await window.desktop.workspace.refresh();
 
-    if (result.status === 'refreshed') {
-      setState({ status: 'loaded', workspace: result.workspace, error: null });
-    } else if (result.status === 'error') {
+      if (result.status === 'refreshed') {
+        setState({ status: 'loaded', workspace: result.workspace, error: null });
+      } else if (result.status === 'error') {
+        setState((prev) => ({
+          status: 'error',
+          workspace: prev.workspace,
+          error: result.error,
+        }));
+      } else {
+        setState((prev) => ({
+          status: 'loaded',
+          workspace: prev.workspace,
+          error: null,
+        }));
+      }
+    } catch (error) {
       setState((prev) => ({
         status: 'error',
         workspace: prev.workspace,
-        error: result.error,
-      }));
-    } else {
-      setState((prev) => ({
-        status: 'loaded',
-        workspace: prev.workspace,
-        error: null,
+        error: toWorkspaceEntryError(error),
       }));
     }
   }, [state.workspace]);
@@ -89,7 +111,8 @@ export function WorkspaceSidebar(): React.JSX.Element {
       {busy && !state.workspace && <div className="ws-status">正在读取工作区…</div>}
 
       {state.workspace &&
-        (state.status === 'loaded' ||
+        (state.status === 'loading' ||
+          state.status === 'loaded' ||
           state.status === 'refreshing' ||
           state.status === 'error') && (
           <>
@@ -102,17 +125,14 @@ export function WorkspaceSidebar(): React.JSX.Element {
                 <button className="ws-btn" onClick={() => void handleOpen()} disabled={busy}>
                   打开文件夹
                 </button>
-                <button
-                  className="ws-btn"
-                  onClick={() => void handleRefresh()}
-                  disabled={state.status === 'refreshing'}
-                >
+                <button className="ws-btn" onClick={() => void handleRefresh()} disabled={busy}>
                   {state.status === 'refreshing' ? '刷新中…' : '刷新'}
                 </button>
               </div>
             </div>
 
             {state.status === 'refreshing' && <div className="ws-status">正在刷新…</div>}
+            {state.status === 'loading' && <div className="ws-status">正在读取新工作区…</div>}
 
             {state.status === 'error' && (
               <div className="ws-error-banner">无法读取工作区：{state.error?.message}</div>

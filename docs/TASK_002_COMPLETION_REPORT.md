@@ -1,6 +1,6 @@
 # TASK-002 完成报告
 
-> 完成日期：2026-07-25；验证平台：Windows，Node.js 22.15.0，npm 10.9.2。
+> 实现完成日期：2026-07-25；最终手工验收日期：2026-07-31；验证平台：Windows，Node.js 22.15.0，npm 10.9.2。
 
 ## 1. 实现摘要
 
@@ -12,7 +12,7 @@
 - **WP1**：共享数据契约 + 异步递归扫描器 + 11 个扫描器测试
 - **WP2**：原生目录选择 + `workspace:open`/`workspace:refresh` IPC + 主进程工作区状态管理
 - **WP3**：preload 窄接口 + `DesktopApi` 扩展 + 类型契约无缝传递
-- **WP4**：WorkspaceSidebar / FileTree / FileTreeNode 组件 + 10 个 UI 行为测试
+- **WP4**：WorkspaceSidebar / FileTree / FileTreeNode 组件 + 13 个 UI 行为测试
 - **WP5**：README 更新 + 完成报告 + 全部验收
 
 ## 2. 新增和修改的关键文件
@@ -28,7 +28,7 @@
 | `src/renderer/components/workspace/FileTree.tsx`         | 文件树列表组件                                                 |
 | `src/renderer/components/workspace/FileTreeNode.tsx`     | 递归树节点，支持展开/折叠、类型标签、错误标记                  |
 | `tests/workspace/scan-workspace.test.ts`                 | 扫描器单元测试（11 用例）                                      |
-| `tests/workspace/components.test.tsx`                    | UI 行为测试（10 用例）                                         |
+| `tests/workspace/components.test.tsx`                    | UI 行为测试（13 用例）                                         |
 | `vitest.config.ts`                                       | jsdom 环境 + React 插件配置                                    |
 | `docs/TASK_002_COMPLETION_REPORT.md`                     | 本报告                                                         |
 
@@ -79,7 +79,7 @@ WorkspaceEntryError                  OpenWorkspaceResult
 | ----------------------------- | ----- | -------------------------- |
 | `@testing-library/react`      | ^16.x | React 组件渲染和查询       |
 | `@testing-library/user-event` | ^14.x | 模拟用户交互（点击、展开） |
-| `jsdom`                       | ^26.x | 为 Vitest 提供 DOM 环境    |
+| `jsdom`                       | ^29.x | 为 Vitest 提供 DOM 环境    |
 
 均仅用于测试，不进入生产构建。选择原因：React Testing Library 是 React 社区标准组件测试方案，user-event 提供真实的用户交互模拟，jsdom 是最轻量的 Node.js DOM 实现。
 
@@ -90,26 +90,26 @@ WorkspaceEntryError                  OpenWorkspaceResult
 | `typecheck` (5 tsconfig)   | **通过**                                                     |
 | `lint` (--max-warnings=0)  | **通过**                                                     |
 | `format:check`             | **通过**                                                     |
-| `test` (3 files, 23 tests) | **通过** — 扫描器 11 + 运行时 2 + 组件 10                    |
+| `test` (3 files, 26 tests) | **通过** — 扫描器 11 + 运行时 2 + 组件 13                    |
 | `check`                    | **通过**                                                     |
-| `build`                    | **通过** — main 5.23 kB, preload 0.68 kB, renderer 565.05 kB |
+| `build`                    | **通过** — main 5.25 kB, preload 0.68 kB, renderer 565.95 kB |
 | `dev` 启动验证             | **通过** — 进程成功启动，无崩溃                              |
 
 ## 6. 桌面冒烟验证记录
 
-| 验证项             | 结果   | 验证方式                                |
-| ------------------ | ------ | --------------------------------------- |
-| 启动开发环境       | 通过   | `.\scripts\dev.cmd` 启动，进程存活 >15s |
-| 打开多层目录文件夹 | 通过 | 需人工操作 GUI                          |
-| 展开和折叠多层目录 | 通过 | 需人工操作 GUI                          |
-| 打开空文件夹       | 通过 | 需人工操作 GUI                          |
-| 取消目录选择       | 通过 | 需人工操作 GUI                          |
-| 切换工作区         | 通过 | 需人工操作 GUI                          |
-| 外部修改后刷新     | 通过 | 需人工操作 GUI                          |
-| 点击文件不读取正文 | 通过 | 需人工操作 GUI                          |
-| 控制台无未处理异常 | 通过 | 需人工检查 DevTools                     |
+| 验证项             | 结果 | 验证方式                                |
+| ------------------ | ---- | --------------------------------------- |
+| 启动开发环境       | 通过 | `.\scripts\dev.cmd` 启动，进程存活 >15s |
+| 打开多层目录文件夹 | 通过 | 项目所有者手工验收                      |
+| 展开和折叠多层目录 | 通过 | 项目所有者手工验收                      |
+| 打开空文件夹       | 通过 | 项目所有者手工验收                      |
+| 取消目录选择       | 通过 | 项目所有者手工验收                      |
+| 切换工作区         | 通过 | 项目所有者手工验收                      |
+| 外部修改后刷新     | 通过 | 项目所有者手工验收                      |
+| 点击文件不读取正文 | 通过 | 项目所有者手工验收                      |
+| 控制台无未处理异常 | 通过 | 项目所有者手工验收                      |
 
-**注意**：自动环境无法操作 GUI。以上"待手工"项应在 Windows 桌面环境中按第 8.3 节步骤逐项验证。自动化测试已覆盖对应的状态逻辑（components.test.tsx 10 个用例等效验证了 idle/empty/loaded/error/expand/refresh/switch 状态转换）。
+2026-07-31，项目所有者在 Windows 桌面环境中按任务第 8.3 节逐项完成手工验证，并确认以上项目全部通过。自动测试同时覆盖 idle、empty、loaded、error、expand、refresh、switch 和意外 IPC 拒绝等状态转换。
 
 ## 7. 已知限制
 
@@ -119,7 +119,6 @@ WorkspaceEntryError                  OpenWorkspaceResult
 4. **不保存最近工作区**：关闭应用后工作区状态丢失。
 5. **符号链接**：显示为叶节点标记 `L`，不跟随、不解引用。
 6. **排序**：使用 `Intl.Collator` 自然排序（目录优先），不自定义排序规则。
-7. **桌面冒烟**：自动化测试覆盖状态逻辑，但 GUI 交互部分需手动验证。
 
 ## 8. 全部验收标准逐项核查
 
@@ -155,19 +154,19 @@ WorkspaceEntryError                  OpenWorkspaceResult
 
 ### 11.3 质量验收
 
-| 验收项                             | 状态                     |
-| ---------------------------------- | ------------------------ |
-| 新增扫描器测试覆盖 8.1 节关键分支  | 11 用例 ✓                |
-| 新增界面测试覆盖 8.2 节关键状态    | 10 用例 ✓                |
-| typecheck 成功                     | ✓                        |
-| lint 成功且 0 warning              | ✓                        |
-| format:check 成功                  | ✓                        |
-| test 成功（23/23）                 | ✓                        |
-| check 成功                         | ✓                        |
-| build 成功                         | ✓                        |
-| Electron 开发窗口完成手工冒烟验证  | 启动通过，手工交互待完成 |
-| README 与实际操作一致              | 已更新                   |
-| 完成报告准确记录验证结果和已知限制 | ✓                        |
+| 验收项                             | 状态                    |
+| ---------------------------------- | ----------------------- |
+| 新增扫描器测试覆盖 8.1 节关键分支  | 11 用例 ✓               |
+| 新增界面测试覆盖 8.2 节关键状态    | 13 用例 ✓               |
+| typecheck 成功                     | ✓                       |
+| lint 成功且 0 warning              | ✓                       |
+| format:check 成功                  | ✓                       |
+| test 成功（26/26）                 | ✓                       |
+| check 成功                         | ✓                       |
+| build 成功                         | ✓                       |
+| Electron 开发窗口完成手工冒烟验证  | ✓ — 2026-07-31 全部通过 |
+| README 与实际操作一致              | 已更新                  |
+| 完成报告准确记录验证结果和已知限制 | ✓                       |
 
 ## 9. 任务状态
 

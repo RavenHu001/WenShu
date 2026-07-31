@@ -58,31 +58,29 @@ export function registerWorkspaceIpc(): void {
   // 打开原生目录选择器，用户选中后扫描并更新当前工作区。
   // 不接受渲染进程传入的任何路径参数。
   ipcMain.handle('workspace:open', async (event): Promise<OpenWorkspaceResult> => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-
-    const dialogResult = win
-      ? await dialog.showOpenDialog(win, {
-          title: '打开工作区文件夹',
-          properties: ['openDirectory'],
-        })
-      : await dialog.showOpenDialog({
-          title: '打开工作区文件夹',
-          properties: ['openDirectory'],
-        });
-
-    if (dialogResult.canceled || dialogResult.filePaths.length === 0) {
-      return { status: 'cancelled' };
-    }
-
-    const rootPath = dialogResult.filePaths[0]!;
-
     try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const dialogResult = win
+        ? await dialog.showOpenDialog(win, {
+            title: '打开工作区文件夹',
+            properties: ['openDirectory'],
+          })
+        : await dialog.showOpenDialog({
+            title: '打开工作区文件夹',
+            properties: ['openDirectory'],
+          });
+
+      if (dialogResult.canceled || dialogResult.filePaths.length === 0) {
+        return { status: 'cancelled' };
+      }
+
+      const rootPath = dialogResult.filePaths[0]!;
       const workspace = await scanWorkspace(rootPath);
       // 扫描成功后才更新当前工作区，失败或取消保留原状态
       currentWorkspaceRoot = rootPath;
       return { status: 'selected', workspace };
     } catch (err) {
-      // 根目录扫描失败：保留原有工作区，返回错误让界面提示
+      // 对话框或根目录扫描失败：保留原有工作区，返回错误让界面提示
       return { status: 'error', error: toWorkspaceEntryError(err) };
     }
   });

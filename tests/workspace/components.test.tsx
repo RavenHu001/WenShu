@@ -119,10 +119,12 @@ describe('WorkspaceSidebar', () => {
     expect(screen.getByText('src')).toBeDefined();
     expect(screen.queryByText('index.ts')).toBeNull();
 
-    await userEvent.click(screen.getByText('src'));
+    const directoryButton = screen.getByRole('button', { name: 'src' });
+    directoryButton.focus();
+    await userEvent.keyboard('{Enter}');
     expect(screen.getByText('index.ts')).toBeDefined();
 
-    await userEvent.click(screen.getByText('src'));
+    await userEvent.keyboard('{Enter}');
     expect(screen.queryByText('index.ts')).toBeNull();
   });
 
@@ -160,6 +162,7 @@ describe('WorkspaceSidebar', () => {
     await userEvent.click(openBtn());
     expect(screen.getByText('ok')).toBeDefined();
     expect(screen.getByText('bad')).toBeDefined();
+    expect(screen.getByText('无法读取').getAttribute('title')).toBe('拒绝访问');
   });
 
   it('loading state does not show the open button', async () => {
@@ -191,5 +194,49 @@ describe('WorkspaceSidebar', () => {
     await userEvent.click(screen.getByText('刷新'));
     expect(screen.getByText('b.txt')).toBeDefined();
     expect(screen.queryByText('a.txt')).toBeNull();
+  });
+
+  it('keeps the current workspace visible and disables actions while opening a replacement', async () => {
+    const snap = snapshot({ entries: [f('current.txt', 'current.txt')] });
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'selected', workspace: snap } as OpenWorkspaceResult)
+      .mockImplementationOnce(() => new Promise<OpenWorkspaceResult>(() => {}));
+    mockDesktop(open);
+    render(<WorkspaceSidebar />);
+
+    await userEvent.click(openBtn());
+    await userEvent.click(openBtn());
+
+    expect(screen.getByText('current.txt')).toBeDefined();
+    expect(screen.getByText('正在读取新工作区…')).toBeDefined();
+    expect(openBtn().disabled).toBe(true);
+    expect((screen.getByText('刷新') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows a recoverable error when opening rejects unexpectedly', async () => {
+    mockDesktop(vi.fn().mockRejectedValue(new Error('IPC 已断开')));
+    render(<WorkspaceSidebar />);
+
+    await userEvent.click(openBtn());
+
+    expect(screen.getByText('无法打开工作区')).toBeDefined();
+    expect(screen.getByText('IPC 已断开')).toBeDefined();
+    expect(screen.getByText('重试')).toBeDefined();
+  });
+
+  it('keeps the current workspace when refresh rejects unexpectedly', async () => {
+    const snap = snapshot({ entries: [f('current.txt', 'current.txt')] });
+    const open = vi
+      .fn()
+      .mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult);
+    mockDesktop(open, vi.fn().mockRejectedValue(new Error('刷新失败')));
+    render(<WorkspaceSidebar />);
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByText('刷新'));
+
+    expect(screen.getByText('current.txt')).toBeDefined();
+    expect(screen.getByText('无法读取工作区：刷新失败')).toBeDefined();
   });
 });
