@@ -15,6 +15,8 @@ interface WorkspaceSidebarProps {
   readonly onTextFileOpen: (relativePath: string) => void;
   /** 当前选中的文件相对路径，用于文件树的选中高亮。 */
   readonly selectedTextFilePath: string | null;
+  /** 工作区成功切换（新工作区扫描成功）时通知；用于清除旧文档并失效旧读取。 */
+  readonly onWorkspaceSelected: () => void;
 }
 
 function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
@@ -26,6 +28,7 @@ function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
 export function WorkspaceSidebar({
   onTextFileOpen,
   selectedTextFilePath,
+  onWorkspaceSelected,
 }: WorkspaceSidebarProps): React.JSX.Element {
   const [state, setState] = useState<State>({
     status: 'idle',
@@ -42,6 +45,8 @@ export function WorkspaceSidebar({
 
       if (result.status === 'selected') {
         setState({ status: 'loaded', workspace: result.workspace, error: null });
+        // 扫描成功才通知文档状态重置；取消或失败保持旧工作区和旧文档
+        onWorkspaceSelected();
       } else if (result.status === 'cancelled') {
         setState({
           status: prevWorkspace ? 'loaded' : 'idle',
@@ -62,7 +67,7 @@ export function WorkspaceSidebar({
         error: toWorkspaceEntryError(error),
       });
     }
-  }, [state.workspace]);
+  }, [state.workspace, onWorkspaceSelected]);
 
   const handleRefresh = useCallback(async () => {
     if (!state.workspace) {

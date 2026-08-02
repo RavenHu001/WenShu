@@ -51,11 +51,13 @@ function openBtn(): HTMLButtonElement {
 function renderSidebar(
   onTextFileOpen: (relativePath: string) => void = vi.fn(),
   selectedTextFilePath: string | null = null,
+  onWorkspaceSelected: () => void = vi.fn(),
 ): ReturnType<typeof render> {
   return render(
     <WorkspaceSidebar
       onTextFileOpen={onTextFileOpen}
       selectedTextFilePath={selectedTextFilePath}
+      onWorkspaceSelected={onWorkspaceSelected}
     />,
   );
 }
