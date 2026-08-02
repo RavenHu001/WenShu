@@ -12,6 +12,8 @@
     "src/renderer/App.tsx",
     "src/renderer/env.d.ts",
     "src/shared/**/*.ts",
-    "src/main/workspace/**/*.ts"
+    "src/main/workspace/**/*.ts",
+    "src/main/document/**/*.ts",
+    "src/preload/index.ts"
   ]
 }

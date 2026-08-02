@@ -1,10 +1,27 @@
+import { useCallback } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
+import { useTextDocument } from './lib/use-text-document';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
+import { DocumentPane } from './components/document/DocumentPane';
 
 const activityItems = ['文', '搜', '设'];
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
+  const { state: documentState, openTextFile, invalidate } = useTextDocument();
+
+  // 文件树选择 → 发起受控读取；读取结果与竞态由 useTextDocument 处理
+  const handleTextFileOpen = useCallback(
+    (relativePath: string) => {
+      openTextFile(relativePath);
+    },
+    [openTextFile],
+  );
+
+  // 工作区成功切换 → 清除旧文档并使旧工作区未完成的读取失效
+  const handleWorkspaceSelected = useCallback(() => {
+    invalidate();
+  }, [invalidate]);
 
   return (
     <div className="app-shell">
@@ -27,23 +44,14 @@ export const App = (): React.JSX.Element => {
           ))}
         </aside>
 
-        <WorkspaceSidebar />
+        <WorkspaceSidebar
+          onTextFileOpen={handleTextFileOpen}
+          selectedTextFilePath={documentState.selectedRelativePath}
+          onWorkspaceSelected={handleWorkspaceSelected}
+        />
 
         <section className="editor-area">
-          <div className="editor-tabs">
-            <div className="tab active">欢迎</div>
-          </div>
-          <div className="welcome-panel">
-            <div className="welcome-copy">
-              <div className="eyebrow">本地多文档工作台</div>
-              <h1>文枢</h1>
-              <p>让相关文档集中于一处，让创作和资料维护保持清晰。</p>
-              <div className="scope-note">
-                <strong>工程骨架已就绪</strong>
-                <span>当前页面用于验证 Electron、React、样式与安全桥接链路。</span>
-              </div>
-            </div>
-          </div>
+          <DocumentPane state={documentState} />
         </section>
       </main>
 

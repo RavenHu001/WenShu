@@ -12,6 +12,11 @@ const desktopApi: DesktopApi = Object.freeze({
     open: () => ipcRenderer.invoke('workspace:open'),
     refresh: () => ipcRenderer.invoke('workspace:refresh'),
   }),
+  // document.readText 只映射固定的 document:read-text 通道，且只接受一个相对路径参数；
+  // 调用方无法指定通道、根路径、编码或任何读取选项。
+  document: Object.freeze({
+    readText: (relativePath: string) => ipcRenderer.invoke('document:read-text', relativePath),
+  }),
 });
 
 // 只暴露可序列化的只读数据，不传递 ipcRenderer、Node 对象或通用调用器。

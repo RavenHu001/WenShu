@@ -10,13 +10,26 @@ interface State {
   error: WorkspaceEntryError | null;
 }
 
+interface WorkspaceSidebarProps {
+  /** 用户选择工作区内的 TXT 文件时报告其相对路径；由 App/文档容器处理读取。 */
+  readonly onTextFileOpen: (relativePath: string) => void;
+  /** 当前选中的文件相对路径，用于文件树的选中高亮。 */
+  readonly selectedTextFilePath: string | null;
+  /** 工作区成功切换（新工作区扫描成功）时通知；用于清除旧文档并失效旧读取。 */
+  readonly onWorkspaceSelected: () => void;
+}
+
 function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
   return {
     message: error instanceof Error ? error.message : String(error),
   };
 }
 
-export function WorkspaceSidebar(): React.JSX.Element {
+export function WorkspaceSidebar({
+  onTextFileOpen,
+  selectedTextFilePath,
+  onWorkspaceSelected,
+}: WorkspaceSidebarProps): React.JSX.Element {
   const [state, setState] = useState<State>({
     status: 'idle',
     workspace: null,
@@ -32,6 +45,8 @@ export function WorkspaceSidebar(): React.JSX.Element {
 
       if (result.status === 'selected') {
         setState({ status: 'loaded', workspace: result.workspace, error: null });
+        // 扫描成功才通知文档状态重置；取消或失败保持旧工作区和旧文档
+        onWorkspaceSelected();
       } else if (result.status === 'cancelled') {
         setState({
           status: prevWorkspace ? 'loaded' : 'idle',
@@ -52,7 +67,7 @@ export function WorkspaceSidebar(): React.JSX.Element {
         error: toWorkspaceEntryError(error),
       });
     }
-  }, [state.workspace]);
+  }, [state.workspace, onWorkspaceSelected]);
 
   const handleRefresh = useCallback(async () => {
     if (!state.workspace) {
@@ -142,7 +157,13 @@ export function WorkspaceSidebar(): React.JSX.Element {
               <div className="ws-empty">此文件夹为空</div>
             )}
 
-            {state.workspace.entries.length > 0 && <FileTree entries={state.workspace.entries} />}
+            {state.workspace.entries.length > 0 && (
+              <FileTree
+                entries={state.workspace.entries}
+                onFileSelect={onTextFileOpen}
+                selectedRelativePath={selectedTextFilePath}
+              />
+            )}
           </>
         )}
 
