@@ -4,7 +4,10 @@
  * 设计约束：
  * 1. 所有接口字段均为 `readonly`，保证跨进程通过 Electron structured clone 安全传递。
  * 2. 不包含 `Error`、`Dirent`、`Stats`、函数或类实例，避免序列化丢失信息。
- * 3. `relativePath` 仅为树节点标识符，不得用它触发新的文件系统读取。
+ * 3. `relativePath` 仅为树节点标识符，一般不得用它触发新的文件系统读取；
+ *    唯一的受控例外是 TASK-003 的固定 `document:read-text` 流程：渲染进程只提交
+ *    文件树快照中的规范相对路径，主进程必须把它作为不可信输入重新完成全部校验
+ *    （路径格式、工作区边界、符号链接、类型、大小与 UTF-8）。
  * 4. discriminated union 的 `status` 字段让调用方通过收窄类型安全处理取消、成功和错误分支。
  */
 
@@ -29,7 +32,8 @@ export interface WorkspaceEntryError {
 export interface WorkspaceEntry {
   /** 文件 / 目录的基础名称，不含路径。 */
   readonly name: string;
-  /** 相对于工作区根目录的路径，使用 `/` 分隔符，仅作为界面展示和 React key 使用。 */
+  /** 相对于工作区根目录的路径，使用 `/` 分隔符，仅作为界面展示和 React key 使用。
+   *  除 TASK-003 固定 TXT 读取用例（见文件头注释）外，不用于任何文件系统操作。 */
   readonly relativePath: string;
   /** 条目类型，控制展开行为和图标展示。 */
   readonly kind: WorkspaceEntryKind;

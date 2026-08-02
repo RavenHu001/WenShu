@@ -11,7 +11,7 @@
  *
  * ## 工作区状态模型
  *
- * 主进程保存单一的 `currentWorkspaceRoot` 变量：
+ * 当前工作区根路径由 `workspace-session.ts` 会话模块持有（单一状态来源）：
  * - 初始为 `null`（未打开工作区）。
  * - 成功打开后更新为新路径。
  * - 打开失败或取消时保持不变（保留原工作区）。
@@ -20,14 +20,12 @@
 
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { scanWorkspace } from './scan-workspace';
+import { getCurrentWorkspaceRoot, setCurrentWorkspaceRoot } from './workspace-session';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
   WorkspaceEntryError,
 } from '../../shared/workspace';
-
-/** 当前工作区根路径；null 表示尚未打开任何工作区。 */
-let currentWorkspaceRoot: string | null = null;
 
 /** IPC 是否已注册，防止重复注册。 */
 let registered = false;
@@ -77,7 +75,7 @@ export function registerWorkspaceIpc(): void {
       const rootPath = dialogResult.filePaths[0]!;
       const workspace = await scanWorkspace(rootPath);
       // 扫描成功后才更新当前工作区，失败或取消保留原状态
-      currentWorkspaceRoot = rootPath;
+      setCurrentWorkspaceRoot(rootPath);
       return { status: 'selected', workspace };
     } catch (err) {
       // 对话框或根目录扫描失败：保留原有工作区，返回错误让界面提示
@@ -89,12 +87,13 @@ export function registerWorkspaceIpc(): void {
   // 重新扫描已保存的当前工作区根路径。
   // 不接受渲染进程传入的任何路径参数。
   ipcMain.handle('workspace:refresh', async (): Promise<RefreshWorkspaceResult> => {
-    if (currentWorkspaceRoot === null) {
+    const rootPath = getCurrentWorkspaceRoot();
+    if (rootPath === null) {
       return { status: 'not-open' };
     }
 
     try {
-      const workspace = await scanWorkspace(currentWorkspaceRoot);
+      const workspace = await scanWorkspace(rootPath);
       return { status: 'refreshed', workspace };
     } catch (err) {
       return { status: 'error', error: toWorkspaceEntryError(err) };
