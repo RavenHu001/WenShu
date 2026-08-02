@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
 import { useTextDocument } from './lib/use-text-document';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
@@ -9,12 +9,10 @@ const activityItems = ['文', '搜', '设'];
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
   const { state: documentState, openTextFile, invalidate } = useTextDocument();
-  const [selectedTextFilePath, setSelectedTextFilePath] = useState<string | null>(null);
 
   // 文件树选择 → 发起受控读取；读取结果与竞态由 useTextDocument 处理
   const handleTextFileOpen = useCallback(
     (relativePath: string) => {
-      setSelectedTextFilePath(relativePath);
       openTextFile(relativePath);
     },
     [openTextFile],
@@ -22,7 +20,6 @@ export const App = (): React.JSX.Element => {
 
   // 工作区成功切换 → 清除旧文档并使旧工作区未完成的读取失效
   const handleWorkspaceSelected = useCallback(() => {
-    setSelectedTextFilePath(null);
     invalidate();
   }, [invalidate]);
 
@@ -49,7 +46,7 @@ export const App = (): React.JSX.Element => {
 
         <WorkspaceSidebar
           onTextFileOpen={handleTextFileOpen}
-          selectedTextFilePath={selectedTextFilePath}
+          selectedTextFilePath={documentState.selectedRelativePath}
           onWorkspaceSelected={handleWorkspaceSelected}
         />
 

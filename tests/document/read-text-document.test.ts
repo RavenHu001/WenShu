@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { MAX_TXT_FILE_BYTES, type ReadTextDocumentResult } from '../../src/shared/document';
 import {
   defaultReadTextAdapters,
+  readBoundedTextBytes,
   readTextDocument,
   type ReadTextAdapters,
 } from '../../src/main/document/read-text-document';
@@ -284,6 +285,23 @@ describe('readTextDocument', () => {
     };
     const result = await readTextDocument(workspaceRoot, 'growing.txt', adapters);
     expect(expectError(result).code).toBe('TOO_LARGE');
+  });
+
+  it('有界读取会循环处理短读，不截断正文', async () => {
+    const source = new TextEncoder().encode('short reads must be joined');
+    const handle = {
+      read: async (buffer: Uint8Array, offset: number, length: number, position: number) => {
+        const bytesRead = Math.min(3, length, source.byteLength - position);
+        if (bytesRead > 0) {
+          buffer.set(source.subarray(position, position + bytesRead), offset);
+        }
+        return { bytesRead };
+      },
+    };
+
+    const bytes = await readBoundedTextBytes(handle);
+
+    expect(Array.from(bytes)).toEqual(Array.from(source));
   });
 
   it('非法 UTF-8 被拒绝', async () => {

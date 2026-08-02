@@ -26,6 +26,8 @@ export type TextDocumentStatus = 'welcome' | 'loading' | 'loaded' | 'error';
 
 export interface TextDocumentUiState {
   readonly status: TextDocumentStatus;
+  /** 文件树当前高亮的路径；失败并保留旧正文时回退到上一次成功文档。 */
+  readonly selectedRelativePath: string | null;
   /** 用户最近一次选择/读取的文件名（不含路径），用于标签页标题与提示。 */
   readonly tabName: string | null;
   /** 最后一次成功读取的文档快照；读取失败时保留。 */
@@ -36,6 +38,7 @@ export interface TextDocumentUiState {
 
 const initialUiState: TextDocumentUiState = {
   status: 'welcome',
+  selectedRelativePath: null,
   tabName: null,
   lastDocument: null,
   error: null,
@@ -71,6 +74,7 @@ export function useTextDocument(): TextDocumentController {
     const failedName = fileNameFromRelativePath(relativePath);
     setState((prev) => ({
       status: 'loading',
+      selectedRelativePath: relativePath,
       tabName: failedName,
       lastDocument: prev.lastDocument,
       error: null,
@@ -83,6 +87,7 @@ export function useTextDocument(): TextDocumentController {
       if (result.status === 'loaded') {
         setState({
           status: 'loaded',
+          selectedRelativePath: result.document.relativePath,
           tabName: result.document.name,
           lastDocument: result.document,
           error: null,
@@ -90,6 +95,7 @@ export function useTextDocument(): TextDocumentController {
       } else {
         setState((prev) => ({
           status: 'error',
+          selectedRelativePath: prev.lastDocument?.relativePath ?? relativePath,
           tabName: failedName,
           lastDocument: prev.lastDocument,
           error: result.error,

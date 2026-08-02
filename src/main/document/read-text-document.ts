@@ -66,6 +66,40 @@ export interface ReadTextAdapters {
   readonly readTextBytes: (path: string) => Promise<Uint8Array>;
 }
 
+/** `FileHandle.read` 的最小只读契约，便于确定性测试短读。 */
+export interface ReadableFileHandle {
+  readonly read: (
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number,
+  ) => Promise<{ readonly bytesRead: number }>;
+}
+
+/**
+ * 循环读取直至 EOF 或达到 5 MiB + 1 的硬上限。
+ * 单次 `FileHandle.read` 允许短读，因此不能把一次返回不足误判为 EOF。
+ */
+export async function readBoundedTextBytes(handle: ReadableFileHandle): Promise<Uint8Array> {
+  const buffer = new Uint8Array(MAX_TXT_FILE_BYTES + 1);
+  let totalBytesRead = 0;
+
+  while (totalBytesRead < buffer.byteLength) {
+    const { bytesRead } = await handle.read(
+      buffer,
+      totalBytesRead,
+      buffer.byteLength - totalBytesRead,
+      totalBytesRead,
+    );
+    if (bytesRead === 0) {
+      break;
+    }
+    totalBytesRead += bytesRead;
+  }
+
+  return buffer.subarray(0, totalBytesRead);
+}
+
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 
 /** 生产环境默认适配器：直接使用 `node:fs/promises`，全部为只读操作。 */
@@ -75,9 +109,7 @@ export const defaultReadTextAdapters: ReadTextAdapters = Object.freeze({
   readTextBytes: async (path: string) => {
     const handle = await open(path, 'r');
     try {
-      const buffer = new Uint8Array(MAX_TXT_FILE_BYTES + 1);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
-      return buffer.subarray(0, bytesRead);
+      return await readBoundedTextBytes(handle);
     } finally {
       await handle.close();
     }

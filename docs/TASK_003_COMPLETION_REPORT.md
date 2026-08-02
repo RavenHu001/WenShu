@@ -31,7 +31,7 @@ React 文件树选择 TXT 相对路径
 | `src/renderer/lib/use-text-document.ts`                     | 单文档状态 hook（welcome/loading/loaded/error + 请求编号竞态）              |
 | `src/renderer/components/document/DocumentPane.tsx`         | 中央文档区四状态渲染                                                        |
 | `src/renderer/components/document/ReadonlyTextDocument.tsx` | 只读 textarea 正文视图                                                      |
-| `tests/document/read-text-document.test.ts`                 | 读取器安全分支测试（33 用例）                                               |
+| `tests/document/read-text-document.test.ts`                 | 读取器安全分支测试（34 用例）                                               |
 | `tests/document/components.test.tsx`                        | App 级界面行为与竞态测试（14 用例）                                         |
 | `tests/preload/contract.test.ts`                            | preload 窄接口契约测试（8 用例）                                            |
 | `docs/TASK_003_COMPLETION_REPORT.md`                        | 本报告                                                                      |
@@ -91,9 +91,9 @@ TextDocumentErrorCode（10 种稳定错误码）   MAX_TXT_FILE_BYTES = 5 MiB
 | `typecheck`（5 tsconfig）   | **通过**                                                                                               |
 | `lint`（--max-warnings=0）  | **通过**                                                                                               |
 | `format:check`              | **通过**                                                                                               |
-| `test`（6 files, 89 tests） | **通过** — 运行时 2 + 扫描器 11 + 读取器 33(2 条件跳过) + preload 契约 8 + 工作区组件 21 + 文档组件 14 |
+| `test`（6 files, 90 tests） | **通过** — 运行时 2 + 扫描器 11 + 读取器 34(2 条件跳过) + preload 契约 8 + 工作区组件 21 + 文档组件 14 |
 | `check`                     | **通过**                                                                                               |
-| `build`                     | **通过** — main 11.21 kB, preload 1.00 kB, renderer 572.26 kB                                          |
+| `build`                     | **通过** — main 11.54 kB, preload 1.00 kB, renderer 572.34 kB                                          |
 
 ### 各工作包门禁
 

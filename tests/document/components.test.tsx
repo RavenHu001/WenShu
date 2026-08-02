@@ -191,10 +191,14 @@ describe('中央只读文档区（WP4）', () => {
     await userEvent.click(openBtn());
 
     await userEvent.click(screen.getByRole('button', { name: 'a.txt' }));
+    const aNode = screen.getByRole('button', { name: 'a.txt' }).closest('[role="treeitem"]');
+    const bNode = screen.getByRole('button', { name: 'b.txt' }).closest('[role="treeitem"]');
     await userEvent.click(screen.getByRole('button', { name: 'b.txt' }));
 
     expect(textareaValue()).toBe('内容:a.txt');
     expect(screen.getByText('读取 b.txt 失败：文件不是合法的 UTF-8 编码')).toBeDefined();
+    expect(aNode?.getAttribute('aria-selected')).toBe('true');
+    expect(bNode?.getAttribute('aria-selected')).toBeNull();
   });
 
   it('IPC Promise 意外拒绝被转换为界面错误', async () => {
