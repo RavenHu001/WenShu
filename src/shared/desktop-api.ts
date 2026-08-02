@@ -8,6 +8,7 @@ export interface DesktopRuntimeInfo {
 }
 
 import type { OpenWorkspaceResult, RefreshWorkspaceResult } from './workspace';
+import type { ReadTextDocumentResult } from './document';
 
 /** 渲染进程能够使用的完整桌面 API；后续能力应按具体用例逐项添加。 */
 export interface DesktopApi {
@@ -15,5 +16,9 @@ export interface DesktopApi {
   readonly workspace: {
     readonly open: () => Promise<OpenWorkspaceResult>;
     readonly refresh: () => Promise<RefreshWorkspaceResult>;
+  };
+  readonly document: {
+    /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */
+    readonly readText: (relativePath: string) => Promise<ReadTextDocumentResult>;
   };
 }

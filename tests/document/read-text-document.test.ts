@@ -29,7 +29,6 @@ describe('readTextDocument', () => {
   let outsideDir: string;
   let fileSymlinkSupported = false;
   let dirSymlinkSupported = false;
-
   beforeAll(async () => {
     outsideDir = await mkdtemp(join(tmpdir(), 'wenshu-reader-outside-'));
     const probeDir = await mkdtemp(join(tmpdir(), 'wenshu-reader-probe-'));
@@ -57,11 +56,11 @@ describe('readTextDocument', () => {
     }
 
     await rm(probeDir, { recursive: true, force: true });
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await rm(outsideDir, { recursive: true, force: true });
-  });
+  }, 60_000);
 
   beforeEach(async () => {
     workspaceRoot = await mkdtemp(join(tmpdir(), 'wenshu-reader-ws-'));

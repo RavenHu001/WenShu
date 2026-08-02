@@ -1,6 +1,7 @@
 import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
+import { registerDocumentIpc } from './document/document-ipc';
 
 const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -43,6 +44,7 @@ void app.whenReady().then(() => {
   });
 
   registerWorkspaceIpc();
+  registerDocumentIpc();
 
   createMainWindow();
 
