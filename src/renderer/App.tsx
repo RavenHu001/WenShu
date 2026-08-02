@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 
@@ -5,6 +6,12 @@ const activityItems = ['文', '搜', '设'];
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
+  const [selectedTextFilePath, setSelectedTextFilePath] = useState<string | null>(null);
+
+  // WP3：App 只持有选中路径状态；正文读取与竞态处理在 WP4 接入文档容器。
+  const handleTextFileOpen = useCallback((relativePath: string) => {
+    setSelectedTextFilePath(relativePath);
+  }, []);
 
   return (
     <div className="app-shell">
@@ -27,7 +34,10 @@ export const App = (): React.JSX.Element => {
           ))}
         </aside>
 
-        <WorkspaceSidebar />
+        <WorkspaceSidebar
+          onTextFileOpen={handleTextFileOpen}
+          selectedTextFilePath={selectedTextFilePath}
+        />
 
         <section className="editor-area">
           <div className="editor-tabs">

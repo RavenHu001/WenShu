@@ -10,13 +10,23 @@ interface State {
   error: WorkspaceEntryError | null;
 }
 
+interface WorkspaceSidebarProps {
+  /** 用户选择工作区内的 TXT 文件时报告其相对路径；由 App/文档容器处理读取。 */
+  readonly onTextFileOpen: (relativePath: string) => void;
+  /** 当前选中的文件相对路径，用于文件树的选中高亮。 */
+  readonly selectedTextFilePath: string | null;
+}
+
 function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
   return {
     message: error instanceof Error ? error.message : String(error),
   };
 }
 
-export function WorkspaceSidebar(): React.JSX.Element {
+export function WorkspaceSidebar({
+  onTextFileOpen,
+  selectedTextFilePath,
+}: WorkspaceSidebarProps): React.JSX.Element {
   const [state, setState] = useState<State>({
     status: 'idle',
     workspace: null,
@@ -142,7 +152,13 @@ export function WorkspaceSidebar(): React.JSX.Element {
               <div className="ws-empty">此文件夹为空</div>
             )}
 
-            {state.workspace.entries.length > 0 && <FileTree entries={state.workspace.entries} />}
+            {state.workspace.entries.length > 0 && (
+              <FileTree
+                entries={state.workspace.entries}
+                onFileSelect={onTextFileOpen}
+                selectedRelativePath={selectedTextFilePath}
+              />
+            )}
           </>
         )}
 
