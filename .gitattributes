@@ -1,2 +1,7 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# 统一文本行尾策略（TASK-004 WP0）：
+# - 文本文件一律使用 LF（与仓库索引中已存储的 LF 内容一致，也满足 Prettier 的 endOfLine=lf）；
+# - 只有 Windows 批处理脚本（.cmd/.bat）在检出时保留 CRLF，保证 cmd.exe 兼容。
+# core.autocrlf 不再决定检出行尾：eol 属性优先级高于 autocrlf。
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
