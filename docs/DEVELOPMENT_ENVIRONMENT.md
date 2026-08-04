@@ -97,6 +97,34 @@ Remove-Item Env:WENSHU_NODE_DIST_URL
 
 `npm ci` 会依据锁文件重建 `node_modules`，不应通过 `--force` 绕过依赖冲突。
 
+### Windows 换行符与格式检查
+
+项目在 Windows 开发，但源码和文档应采用仓库统一的行尾策略。Git 的 `core.autocrlf`、`.gitattributes` 与 Prettier 的 `endOfLine` 必须保持一致；否则可能出现 Git 工作树干净，但 `prettier --check` 因磁盘上的 CRLF / LF 差异失败。
+
+诊断时可以检查：
+
+```powershell
+git config --get core.autocrlf
+Get-Content .gitattributes
+Get-Content .prettierrc.json
+.\scripts\npm.cmd run format:check
+```
+
+不要只在个人编辑器中关闭行尾检查。行尾策略应由仓库配置固定，并在调整后通过全新检出或等价的重新规范化验证。批量规范化可能触及大量文件，执行前必须确认工作树并保护用户已有修改。
+
+### Vitest worker 或文件系统测试超时
+
+若测试出现 `vitest-worker` 通信超时、临时目录初始化超时或 symlink/junction 探测卡住：
+
+1. 单独运行失败测试文件，区分业务断言失败和测试基础设施失败；
+2. 确认系统临时目录可创建和删除普通文件；
+3. 在普通本地 PowerShell 与受控环境分别复现，记录环境差异；
+4. 不支持符号链接时只跳过对应真实链接用例，并保留适配器 mock 的确定性安全覆盖；
+5. 必要时对文件系统测试使用受控 worker 数量，但不得用任意长超时掩盖死锁；
+6. 修复后重新运行完整 `check` 和 `build`。
+
+Task 4 的 WP0 将这些项目作为首次写入能力实施前的强制门禁，详见 [TASK-004 规划](./TASK_004_TXT_EDIT_SAFE_SAVE.md)。
+
 ### Electron 下载受限
 
 `npm ci` 安装 Electron npm 包后，还需要下载对应的 Electron 运行时。若官方二进制端点在当前网络中连接重置，可以只为当前安装命令指定镜像：
