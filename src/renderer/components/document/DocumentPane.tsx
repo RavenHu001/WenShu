@@ -1,21 +1,28 @@
-import { ReadonlyTextDocument } from './ReadonlyTextDocument';
+import { TextEditor } from './TextEditor';
 import type { TextDocumentUiState } from '../../lib/use-text-document';
 
 /**
- * 中央文档区 —— 表达 welcome / loading / loaded / error 四种状态。
+ * 中央文档区 —— 表达 welcome / loading / loaded-clean / loaded-dirty /
+ * saving / save-error / conflict / read-error 状态。
  *
  * - welcome：尚未选择文档，显示欢迎内容；
  * - loading：显示正在读取的文件名和加载状态；
- * - loaded：显示一个活动标签及只读正文；
- * - error：已有成功文档时保留原正文并显示非阻塞错误提示；
+ * - loaded-*：显示标签（未保存带 ●）、保存工具条与可编辑正文；
+ * - saving：标签与正文保持，工具条显示"正在保存…"；
+ * - save-error / conflict：正文与未保存标记保留，显示错误横幅；
+ * - read-error：已有成功文档时保留原正文并可继续编辑，显示非阻塞提示；
  *   尚无成功文档时显示错误面板。
  */
 export function DocumentPane({
   state,
+  onContentChange,
+  onSave,
 }: {
   readonly state: TextDocumentUiState;
+  readonly onContentChange: (content: string) => void;
+  readonly onSave: () => void;
 }): React.JSX.Element {
-  const { status, tabName, lastDocument, error } = state;
+  const { status, tabName, document, content, dirty, saving, error } = state;
 
   if (status === 'welcome') {
     return (
@@ -38,30 +45,85 @@ export function DocumentPane({
     );
   }
 
-  // 读取失败但保留上一次成功文档：正文继续显示，错误以非阻塞横幅提示
-  const showRetained = status === 'error' && lastDocument !== null;
-  const bodyDocument = status === 'loaded' || showRetained ? lastDocument : null;
+  const editable =
+    status === 'loaded-clean' ||
+    status === 'loaded-dirty' ||
+    status === 'saving' ||
+    status === 'save-error' ||
+    status === 'conflict' ||
+    (status === 'read-error' && document !== null);
+  const showErrorPanel = status === 'read-error' && document === null;
+
+  const saveStatusLabel = ((): string => {
+    switch (status) {
+      case 'loaded-clean':
+        return '已保存';
+      case 'loaded-dirty':
+        return '未保存';
+      case 'saving':
+        return '正在保存…';
+      case 'save-error':
+        return '保存失败';
+      case 'conflict':
+        return '外部冲突';
+      default:
+        return '';
+    }
+  })();
+
+  const errorBannerText = ((): string | null => {
+    if (error === null) {
+      return null;
+    }
+    if (status === 'read-error') {
+      return `读取 ${tabName} 失败：${error.message}`;
+    }
+    if (status === 'save-error' || status === 'conflict') {
+      return `保存失败：${error.message}`;
+    }
+    return null;
+  })();
 
   return (
     <>
       <div className="editor-tabs">
-        <div className="tab active">{showRetained ? lastDocument?.name : tabName}</div>
+        <div className="tab active">
+          <span className="tab-name">{tabName ?? ''}</span>
+          {dirty && (
+            <span className="tab-dirty" aria-label="未保存">
+              ●
+            </span>
+          )}
+        </div>
+        {editable && (
+          <div className="doc-toolbar">
+            <button
+              className="doc-save-btn"
+              type="button"
+              disabled={saving || !dirty}
+              onClick={onSave}
+            >
+              保存
+            </button>
+            {saveStatusLabel !== '' && (
+              <span className={`doc-save-status${saving ? ' is-saving' : ''}`}>
+                {saveStatusLabel}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {status === 'loading' && <div className="doc-pane-body doc-loading">正在读取 {tabName}…</div>}
 
-      {bodyDocument !== null && (
+      {editable && (
         <div className="doc-pane-body">
-          {showRetained && error !== null && (
-            <div className="doc-error-banner">
-              读取 {tabName} 失败：{error.message}
-            </div>
-          )}
-          <ReadonlyTextDocument name={bodyDocument.name} content={bodyDocument.content} />
+          {errorBannerText !== null && <div className="doc-error-banner">{errorBannerText}</div>}
+          <TextEditor content={content} onContentChange={onContentChange} onSaveRequest={onSave} />
         </div>
       )}
 
-      {status === 'error' && lastDocument === null && (
+      {showErrorPanel && (
         <div className="doc-pane-body doc-error-panel">
           <p>无法读取文件 {tabName}</p>
           <span>{error?.message}</span>

@@ -8,7 +8,7 @@ const activityItems = ['文', '搜', '设'];
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
-  const { state: documentState, openTextFile, invalidate } = useTextDocument();
+  const { state: documentState, openTextFile, editContent, save, invalidate } = useTextDocument();
 
   // 文件树选择 → 发起受控读取；读取结果与竞态由 useTextDocument 处理
   const handleTextFileOpen = useCallback(
@@ -51,7 +51,7 @@ export const App = (): React.JSX.Element => {
         />
 
         <section className="editor-area">
-          <DocumentPane state={documentState} />
+          <DocumentPane state={documentState} onContentChange={editContent} onSave={save} />
         </section>
       </main>
 
