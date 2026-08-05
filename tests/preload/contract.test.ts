@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopApi } from '../../src/shared/desktop-api';
-import type { ReadTextDocumentResult } from '../../src/shared/document';
+import type { ReadTextDocumentResult, SaveTextDocumentResult } from '../../src/shared/document';
 
 const electronMock = vi.hoisted(() => {
   const invoke = vi.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -32,10 +32,12 @@ describe('preload 窄接口契约', () => {
     expect(Object.keys(desktop).sort()).toEqual(['document', 'runtime', 'workspace']);
   });
 
-  it('document 命名空间只暴露 readText 一个函数，且只接受一个参数', () => {
-    expect(Object.keys(desktop.document)).toEqual(['readText']);
+  it('document 命名空间只暴露 readText 与 saveText 两个函数，且各只接受一个参数', () => {
+    expect(Object.keys(desktop.document)).toEqual(['readText', 'saveText']);
     expect(typeof desktop.document.readText).toBe('function');
+    expect(typeof desktop.document.saveText).toBe('function');
     expect(desktop.document.readText.length).toBe(1);
+    expect(desktop.document.saveText.length).toBe(1);
   });
 
   it('readText 只映射固定的 document:read-text 通道并原样传递相对路径', async () => {
@@ -70,6 +72,37 @@ describe('preload 窄接口契约', () => {
     const result = await desktop.document.readText('missing.txt');
 
     expect(JSON.stringify(result)).toBe(JSON.stringify(error));
+  });
+
+  it('saveText 只映射固定的 document:save-text 通道并原样传递结构化请求', async () => {
+    const request = {
+      relativePath: 'sub/a.txt',
+      content: '新正文',
+      expectedRevision: 'b'.repeat(64),
+    };
+    const saved: SaveTextDocumentResult = {
+      status: 'saved',
+      document: {
+        name: 'a.txt',
+        relativePath: 'sub/a.txt',
+        content: '新正文',
+        byteLength: 4,
+        revision: 'c'.repeat(64),
+        hasUtf8Bom: false,
+        lineEnding: 'none',
+      },
+    };
+    electronMock.invoke.mockResolvedValue(saved);
+
+    const result = await desktop.document.saveText(request);
+
+    expect(electronMock.invoke).toHaveBeenCalledTimes(1);
+    expect(electronMock.invoke).toHaveBeenCalledWith('document:save-text', request);
+    expect(JSON.stringify(result)).toBe(JSON.stringify(saved));
+  });
+
+  it('saveText 只接受一个参数：不会接受通道名、根路径或其他选项', () => {
+    expect(desktop.document.saveText.length).toBe(1);
   });
 
   it('workspace.open / refresh 仍映射固定通道', () => {

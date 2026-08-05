@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
+import type { SaveTextDocumentRequest } from '../shared/document';
 
 const desktopApi: DesktopApi = Object.freeze({
   runtime: Object.freeze({
@@ -13,9 +14,12 @@ const desktopApi: DesktopApi = Object.freeze({
     refresh: () => ipcRenderer.invoke('workspace:refresh'),
   }),
   // document.readText 只映射固定的 document:read-text 通道，且只接受一个相对路径参数；
-  // 调用方无法指定通道、根路径、编码或任何读取选项。
+  // document.saveText 只映射固定的 document:save-text 通道，且只接受一个结构化保存请求；
+  // 调用方无法指定通道、根路径、绝对目标、临时路径、编码、大小上限或写入策略。
   document: Object.freeze({
     readText: (relativePath: string) => ipcRenderer.invoke('document:read-text', relativePath),
+    saveText: (request: SaveTextDocumentRequest) =>
+      ipcRenderer.invoke('document:save-text', request),
   }),
 });
 
