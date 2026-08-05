@@ -17,6 +17,11 @@ interface WorkspaceSidebarProps {
   readonly selectedTextFilePath: string | null;
   /** 工作区成功切换（新工作区扫描成功）时通知；用于清除旧文档并失效旧读取。 */
   readonly onWorkspaceSelected: () => void;
+  /**
+   * 打开文件夹前的守卫：返回 false 时中止打开（不弹出原生目录选择器）。
+   * 用于有未保存修改时先完成"放弃/取消"确认；不传则直接打开。
+   */
+  readonly onOpenWorkspaceGuard?: () => boolean | Promise<boolean>;
 }
 
 function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
@@ -29,6 +34,7 @@ export function WorkspaceSidebar({
   onTextFileOpen,
   selectedTextFilePath,
   onWorkspaceSelected,
+  onOpenWorkspaceGuard,
 }: WorkspaceSidebarProps): React.JSX.Element {
   const [state, setState] = useState<State>({
     status: 'idle',
@@ -37,6 +43,10 @@ export function WorkspaceSidebar({
   });
 
   const handleOpen = useCallback(async () => {
+    // 未保存修改保护：守卫返回 false 时不得打开原生目录选择器
+    if (onOpenWorkspaceGuard !== undefined && !(await onOpenWorkspaceGuard())) {
+      return;
+    }
     const prevWorkspace = state.workspace;
     setState({ status: 'loading', workspace: prevWorkspace, error: null });
 
@@ -67,7 +77,7 @@ export function WorkspaceSidebar({
         error: toWorkspaceEntryError(error),
       });
     }
-  }, [state.workspace, onWorkspaceSelected]);
+  }, [state.workspace, onWorkspaceSelected, onOpenWorkspaceGuard]);
 
   const handleRefresh = useCallback(async () => {
     if (!state.workspace) {

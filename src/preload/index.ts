@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
+import type { SaveTextDocumentRequest } from '../shared/document';
 
 const desktopApi: DesktopApi = Object.freeze({
   runtime: Object.freeze({
@@ -13,9 +14,26 @@ const desktopApi: DesktopApi = Object.freeze({
     refresh: () => ipcRenderer.invoke('workspace:refresh'),
   }),
   // document.readText 只映射固定的 document:read-text 通道，且只接受一个相对路径参数；
-  // 调用方无法指定通道、根路径、编码或任何读取选项。
+  // document.saveText 只映射固定的 document:save-text 通道，且只接受一个结构化保存请求；
+  // 调用方无法指定通道、根路径、绝对目标、临时路径、编码、大小上限或写入策略。
   document: Object.freeze({
     readText: (relativePath: string) => ipcRenderer.invoke('document:read-text', relativePath),
+    saveText: (request: SaveTextDocumentRequest) =>
+      ipcRenderer.invoke('document:save-text', request),
+  }),
+  // window 命名空间只提供窗口关闭协调的最小窄协议：
+  // 固定通道 + 固定参数形状，不暴露 ipcRenderer、通用事件总线或任意 send/on。
+  window: Object.freeze({
+    setDirtyState: (dirty: boolean) => ipcRenderer.invoke('window:dirty-changed', dirty),
+    requestClose: () => ipcRenderer.invoke('window:close-allowed'),
+    cancelClose: () => ipcRenderer.invoke('window:close-cancelled'),
+    onCloseRequested: (callback: () => void) => {
+      const listener = (): void => callback();
+      ipcRenderer.on('window:close-requested', listener);
+      return () => {
+        ipcRenderer.removeListener('window:close-requested', listener);
+      };
+    },
   }),
 });
 

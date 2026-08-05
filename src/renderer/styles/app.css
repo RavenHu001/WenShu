@@ -146,6 +146,8 @@ body {
   display: grid;
   grid-template-rows: 38px minmax(0, 1fr);
   min-width: 0;
+  /* 关键：作为 grid 项不允许被超高编辑器内容撑开，否则滚动容器失效 */
+  min-height: 0;
   background: #ffffff;
 }
 
@@ -164,6 +166,18 @@ body {
   color: #7d8492;
   border-right: 1px solid #e1e4ea;
   font-size: 12px;
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-dirty {
+  margin-left: 6px;
+  color: #c54949;
+  font-size: 10px;
 }
 
 .tab.active {
@@ -493,12 +507,50 @@ body {
   line-height: 22px;
 }
 
-/* ---- 中央只读文档区 ------------------------------------------------------ */
+/* ---- 中央文档区 -------------------------------------------------------- */
 
 .doc-pane-body {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  /* 滚动由 CodeMirror 的 .cm-scroller 承担，错误横幅固定在顶部 */
+  overflow: hidden;
   background: #ffffff;
+}
+
+.doc-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.doc-editor .cm-editor {
+  height: 100%;
+  color: #2f3542;
+  background: #ffffff;
+}
+
+.doc-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.doc-editor .cm-scroller {
+  overflow: auto;
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.doc-editor .cm-content {
+  padding: 18px 22px;
+}
+
+.doc-editor .cm-cursor {
+  border-left-color: #2f3542;
+}
+
+.doc-editor .cm-selectionBackground,
+.doc-editor .cm-focused .cm-selectionBackground {
+  background: #dbe2f2;
 }
 
 .doc-loading {
@@ -507,26 +559,48 @@ body {
   font-size: 13px;
 }
 
-.doc-readonly {
-  display: grid;
-  min-height: 100%;
+.doc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  padding: 0 12px;
 }
 
-.doc-readonly-text {
-  width: 100%;
-  min-height: 100%;
-  padding: 18px 22px;
-  color: #2f3542;
-  background: #ffffff;
-  border: 0;
-  outline: none;
-  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.7;
-  resize: none;
+.doc-save-btn {
+  padding: 4px 14px;
+  color: #ffffff;
+  background: #5268ad;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.doc-save-btn:hover:not(:disabled) {
+  background: #455696;
+}
+
+.doc-save-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.doc-save-status {
+  color: #9198a7;
+  font-size: 11px;
+}
+
+.doc-save-status.is-saving {
+  color: #5c73b8;
 }
 
 .doc-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 10px 12px 0;
   padding: 8px 12px;
   color: #b34141;
@@ -535,6 +609,51 @@ body {
   border-radius: 5px;
   font-size: 11px;
   line-height: 1.5;
+}
+
+.doc-reload-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #b34141;
+}
+
+/* ---- 应用内确认对话框 ---------------------------------------------------- */
+
+.confirm-overlay {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  inset: 0;
+  place-items: center;
+  background: rgb(28 32 42 / 38%);
+}
+
+.confirm-dialog {
+  width: min(420px, calc(100vw - 48px));
+  padding: 20px 22px;
+  background: #ffffff;
+  border-radius: 9px;
+  box-shadow: 0 14px 44px rgb(23 28 45 / 28%);
+}
+
+.confirm-title {
+  color: #343a48;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.confirm-message {
+  margin-top: 10px;
+  color: #5b6170;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
 }
 
 .doc-error-panel {

@@ -40,9 +40,11 @@
  */
 
 import { basename, extname, isAbsolute, join, relative, sep } from 'node:path';
+import { createHash } from 'node:crypto';
 import { lstat, open, realpath } from 'node:fs/promises';
 import {
   MAX_TXT_FILE_BYTES,
+  type LineEnding,
   type ReadTextDocumentResult,
   type TextDocumentError,
   type TextDocumentSnapshot,
@@ -101,6 +103,55 @@ export async function readBoundedTextBytes(handle: ReadableFileHandle): Promise<
 }
 
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * 检测正文换行类型：
+ * - 无 `\r` 或 `\n` → `none`；
+ * - 只有 `\r\n` → `crlf`；
+ * - 只有独立 `\n` → `lf`；
+ * - 同时出现多种换行（或含独立 `\r`）→ `mixed`。
+ * 与编码无关：正文为 UTF-8 解码结果，`\r` / `\n` 与原始字节一一对应。
+ */
+export function detectLineEnding(content: string): LineEnding {
+  let crlf = 0;
+  let lf = 0;
+  let cr = 0;
+  for (let i = 0; i < content.length; i += 1) {
+    const code = content.charCodeAt(i);
+    if (code === 0x0d) {
+      if (i + 1 < content.length && content.charCodeAt(i + 1) === 0x0a) {
+        crlf += 1;
+        i += 1;
+      } else {
+        cr += 1;
+      }
+    } else if (code === 0x0a) {
+      lf += 1;
+    }
+  }
+  if (crlf === 0 && lf === 0 && cr === 0) {
+    return 'none';
+  }
+  if (crlf > 0 && lf === 0 && cr === 0) {
+    return 'crlf';
+  }
+  if (crlf === 0 && lf > 0 && cr === 0) {
+    return 'lf';
+  }
+  return 'mixed';
+}
+
+const UTF8_BOM = [0xef, 0xbb, 0xbf] as const;
+
+/** 原始字节是否以 UTF-8 BOM（EF BB BF）开头。 */
+export function hasUtf8Bom(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= UTF8_BOM.length &&
+    bytes[0] === UTF8_BOM[0] &&
+    bytes[1] === UTF8_BOM[1] &&
+    bytes[2] === UTF8_BOM[2]
+  );
+}
 
 /** 生产环境默认适配器：直接使用 `node:fs/promises`，全部为只读操作。 */
 export const defaultReadTextAdapters: ReadTextAdapters = Object.freeze({
@@ -296,12 +347,16 @@ export async function readTextDocument(
     content = content.slice(1);
   }
 
-  // 13. 返回只读快照
+  // 13. 返回只读快照：版本基于原始完整字节（含 BOM 与原始换行），
+  //     BOM 与换行元数据由主进程检测，渲染进程不可指定
   const snapshot: TextDocumentSnapshot = {
     name: basename(candidate),
     relativePath: segments.join('/'),
     content,
     byteLength: bytes.byteLength,
+    revision: createHash('sha256').update(bytes).digest('hex'),
+    hasUtf8Bom: hasUtf8Bom(bytes),
+    lineEnding: detectLineEnding(content),
   };
   return { status: 'loaded', document: snapshot };
 }

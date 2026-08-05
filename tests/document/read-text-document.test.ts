@@ -1,14 +1,24 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MAX_TXT_FILE_BYTES, type ReadTextDocumentResult } from '../../src/shared/document';
+import {
+  MAX_TXT_FILE_BYTES,
+  type LineEnding,
+  type ReadTextDocumentResult,
+} from '../../src/shared/document';
 import {
   defaultReadTextAdapters,
   readBoundedTextBytes,
   readTextDocument,
   type ReadTextAdapters,
 } from '../../src/main/document/read-text-document';
+
+/** 原始字节的 SHA-256 十六进制，用于断言 revision 与磁盘字节严格一致。 */
+function sha256Of(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
 /** 返回 error 结果时抛出，测试断言更直接。 */
 function expectError(
@@ -81,6 +91,9 @@ describe('readTextDocument', () => {
       expect(result.document.relativePath).toBe('hello.txt');
       expect(result.document.content).toBe('hello world');
       expect(result.document.byteLength).toBe(11);
+      expect(result.document.revision).toBe(sha256Of(Buffer.from('hello world', 'utf8')));
+      expect(result.document.hasUtf8Bom).toBe(false);
+      expect(result.document.lineEnding).toBe('none');
     }
   });
 
@@ -107,6 +120,9 @@ describe('readTextDocument', () => {
     if (result.status === 'loaded') {
       expect(result.document.content).toBe(content);
       expect(result.document.byteLength).toBe(Buffer.byteLength(content, 'utf8'));
+      expect(result.document.revision).toBe(sha256Of(Buffer.from(content, 'utf8')));
+      // 同时含 LF 与 CRLF，应识别为 mixed，不静默归一
+      expect(result.document.lineEnding).toBe('mixed');
     }
   });
 
@@ -130,6 +146,116 @@ describe('readTextDocument', () => {
     if (result.status === 'loaded') {
       expect(result.document.content).toBe('你好');
       expect(result.document.byteLength).toBe(Buffer.byteLength('你好') + 3);
+      // BOM 是原始字节的一部分，计入版本
+      expect(result.document.revision).toBe(sha256Of(bytes));
+      expect(result.document.hasUtf8Bom).toBe(true);
+      expect(result.document.lineEnding).toBe('none');
+    }
+  });
+
+  it('无 BOM 文件标记 hasUtf8Bom=false', async () => {
+    await writeFile(join(workspaceRoot, 'plain.txt'), 'no bom');
+    const result = await readTextDocument(workspaceRoot, 'plain.txt');
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.document.hasUtf8Bom).toBe(false);
+    }
+  });
+
+  it('revision 为 64 位小写十六进制', async () => {
+    await writeFile(join(workspaceRoot, 'hex.txt'), 'hex check');
+    const result = await readTextDocument(workspaceRoot, 'hex.txt');
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.document.revision).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it.each([
+    ['LF', 'a\nb\nc', 'lf'],
+    ['CRLF', 'a\r\nb\r\n', 'crlf'],
+    ['LF 与 CRLF 混合', 'a\nb\r\nc', 'mixed'],
+    ['独立 CR（旧式 Mac）', 'a\rb\r', 'mixed'],
+    ['LF 与独立 CR', 'a\rb\nc', 'mixed'],
+    ['无换行', 'plain text', 'none'],
+    ['空文件', '', 'none'],
+    ['只有 LF 换行', '\n\n', 'lf'],
+    ['只有 CRLF 换行', '\r\n\r\n', 'crlf'],
+  ])('lineEnding 检测：%s', async (_label, content, expected) => {
+    await writeFile(join(workspaceRoot, 'ending.txt'), content, 'utf8');
+    const result = await readTextDocument(workspaceRoot, 'ending.txt');
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.document.lineEnding).toBe(expected as LineEnding);
+      expect(result.document.revision).toBe(sha256Of(Buffer.from(content, 'utf8')));
+      expect(result.document.byteLength).toBe(Buffer.byteLength(content, 'utf8'));
+    }
+  });
+
+  it('空文件：无 BOM、无换行、版本为 SHA-256(空字节)', async () => {
+    await writeFile(join(workspaceRoot, 'empty.txt'), '');
+    const result = await readTextDocument(workspaceRoot, 'empty.txt');
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.document.content).toBe('');
+      expect(result.document.hasUtf8Bom).toBe(false);
+      expect(result.document.lineEnding).toBe('none');
+      expect(result.document.revision).toBe(sha256Of(new Uint8Array(0)));
+    }
+  });
+
+  it('中文等多字节字符的版本基于原始字节而非字符串长度', async () => {
+    const content = '中文\n第二行';
+    await writeFile(join(workspaceRoot, 'cjk.txt'), content, 'utf8');
+    const result = await readTextDocument(workspaceRoot, 'cjk.txt');
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.document.revision).toBe(sha256Of(Buffer.from(content, 'utf8')));
+      expect(result.document.byteLength).toBe(Buffer.byteLength(content, 'utf8'));
+    }
+  });
+
+  it('相同字节内容产生相同版本，不同字节内容产生不同版本', async () => {
+    await writeFile(join(workspaceRoot, 'one.txt'), 'same content');
+    await writeFile(join(workspaceRoot, 'two.txt'), 'same content');
+    await writeFile(join(workspaceRoot, 'three.txt'), 'other content');
+
+    const one = await readTextDocument(workspaceRoot, 'one.txt');
+    const two = await readTextDocument(workspaceRoot, 'two.txt');
+    const three = await readTextDocument(workspaceRoot, 'three.txt');
+    expect(one.status).toBe('loaded');
+    expect(two.status).toBe('loaded');
+    expect(three.status).toBe('loaded');
+    if (one.status === 'loaded' && two.status === 'loaded' && three.status === 'loaded') {
+      expect(one.document.revision).toBe(two.document.revision);
+      expect(one.document.revision).not.toBe(three.document.revision);
+    }
+  });
+
+  it('BOM 与换行风格计入版本：同正文不同字节得到不同版本', async () => {
+    const plain = 'hello\nworld';
+    const withBom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(plain, 'utf8')]);
+    const crlf = 'hello\r\nworld';
+    await writeFile(join(workspaceRoot, 'plain.txt'), plain, 'utf8');
+    await writeFile(join(workspaceRoot, 'bom.txt'), withBom);
+    await writeFile(join(workspaceRoot, 'crlf.txt'), crlf, 'utf8');
+
+    const plainRes = await readTextDocument(workspaceRoot, 'plain.txt');
+    const bomRes = await readTextDocument(workspaceRoot, 'bom.txt');
+    const crlfRes = await readTextDocument(workspaceRoot, 'crlf.txt');
+    expect(plainRes.status).toBe('loaded');
+    expect(bomRes.status).toBe('loaded');
+    expect(crlfRes.status).toBe('loaded');
+    if (plainRes.status === 'loaded' && bomRes.status === 'loaded' && crlfRes.status === 'loaded') {
+      expect(bomRes.document.hasUtf8Bom).toBe(true);
+      expect(crlfRes.document.lineEnding).toBe('crlf');
+      expect(bomRes.document.revision).not.toBe(plainRes.document.revision);
+      expect(crlfRes.document.revision).not.toBe(plainRes.document.revision);
     }
   });
 

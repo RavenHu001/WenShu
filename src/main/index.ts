@@ -2,6 +2,7 @@ import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
+import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/window-close';
 
 const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
@@ -27,6 +28,9 @@ const createMainWindow = (): BrowserWindow => {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
 
+  // 窗口关闭协调：未保存修改时由渲染进程确认后才放行关闭
+  registerWindowCloseProtection(window);
+
   const developmentUrl = process.env['ELECTRON_RENDERER_URL'];
   if (!app.isPackaged && developmentUrl) {
     void window.loadURL(developmentUrl);
@@ -45,6 +49,7 @@ void app.whenReady().then(() => {
 
   registerWorkspaceIpc();
   registerDocumentIpc();
+  registerWindowCloseIpc();
 
   createMainWindow();
 

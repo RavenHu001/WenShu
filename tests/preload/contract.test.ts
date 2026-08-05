@@ -1,16 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopApi } from '../../src/shared/desktop-api';
-import type { ReadTextDocumentResult } from '../../src/shared/document';
+import type { ReadTextDocumentResult, SaveTextDocumentResult } from '../../src/shared/document';
 
 const electronMock = vi.hoisted(() => {
   const invoke = vi.fn<(...args: unknown[]) => Promise<unknown>>();
   const expose = vi.fn<(channel: string, api: unknown) => void>();
-  return { invoke, expose };
+  const on = vi.fn<(channel: string, listener: () => void) => void>();
+  const removeListener = vi.fn<(channel: string, listener: () => void) => void>();
+  return { invoke, expose, on, removeListener };
 });
 
 vi.mock('electron', () => ({
   contextBridge: { exposeInMainWorld: electronMock.expose },
-  ipcRenderer: { invoke: electronMock.invoke },
+  ipcRenderer: {
+    invoke: electronMock.invoke,
+    on: electronMock.on,
+    removeListener: electronMock.removeListener,
+  },
 }));
 
 import '../../src/preload/index';
@@ -28,20 +34,30 @@ describe('preload 窄接口契约', () => {
     expect(electronMock.expose.mock.calls[0]?.[0]).toBe('desktop');
   });
 
-  it('desktop 只包含 runtime、workspace、document 三个命名空间', () => {
-    expect(Object.keys(desktop).sort()).toEqual(['document', 'runtime', 'workspace']);
+  it('desktop 只包含 runtime、workspace、document、window 四个命名空间', () => {
+    expect(Object.keys(desktop).sort()).toEqual(['document', 'runtime', 'window', 'workspace']);
   });
 
-  it('document 命名空间只暴露 readText 一个函数，且只接受一个参数', () => {
-    expect(Object.keys(desktop.document)).toEqual(['readText']);
+  it('document 命名空间只暴露 readText 与 saveText 两个函数，且各只接受一个参数', () => {
+    expect(Object.keys(desktop.document)).toEqual(['readText', 'saveText']);
     expect(typeof desktop.document.readText).toBe('function');
+    expect(typeof desktop.document.saveText).toBe('function');
     expect(desktop.document.readText.length).toBe(1);
+    expect(desktop.document.saveText.length).toBe(1);
   });
 
   it('readText 只映射固定的 document:read-text 通道并原样传递相对路径', async () => {
     const loaded: ReadTextDocumentResult = {
       status: 'loaded',
-      document: { name: 'a.txt', relativePath: 'sub/a.txt', content: 'x', byteLength: 1 },
+      document: {
+        name: 'a.txt',
+        relativePath: 'sub/a.txt',
+        content: 'x',
+        byteLength: 1,
+        revision: 'a'.repeat(64),
+        hasUtf8Bom: false,
+        lineEnding: 'none',
+      },
     };
     electronMock.invoke.mockResolvedValue(loaded);
 
@@ -64,6 +80,37 @@ describe('preload 窄接口契约', () => {
     expect(JSON.stringify(result)).toBe(JSON.stringify(error));
   });
 
+  it('saveText 只映射固定的 document:save-text 通道并原样传递结构化请求', async () => {
+    const request = {
+      relativePath: 'sub/a.txt',
+      content: '新正文',
+      expectedRevision: 'b'.repeat(64),
+    };
+    const saved: SaveTextDocumentResult = {
+      status: 'saved',
+      document: {
+        name: 'a.txt',
+        relativePath: 'sub/a.txt',
+        content: '新正文',
+        byteLength: 4,
+        revision: 'c'.repeat(64),
+        hasUtf8Bom: false,
+        lineEnding: 'none',
+      },
+    };
+    electronMock.invoke.mockResolvedValue(saved);
+
+    const result = await desktop.document.saveText(request);
+
+    expect(electronMock.invoke).toHaveBeenCalledTimes(1);
+    expect(electronMock.invoke).toHaveBeenCalledWith('document:save-text', request);
+    expect(JSON.stringify(result)).toBe(JSON.stringify(saved));
+  });
+
+  it('saveText 只接受一个参数：不会接受通道名、根路径或其他选项', () => {
+    expect(desktop.document.saveText.length).toBe(1);
+  });
+
   it('workspace.open / refresh 仍映射固定通道', () => {
     void desktop.workspace.open();
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:open');
@@ -71,6 +118,47 @@ describe('preload 窄接口契约', () => {
     electronMock.invoke.mockClear();
     void desktop.workspace.refresh();
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:refresh');
+  });
+
+  it('window 命名空间只暴露四个固定窄接口', () => {
+    expect(Object.keys(desktop.window).sort()).toEqual([
+      'cancelClose',
+      'onCloseRequested',
+      'requestClose',
+      'setDirtyState',
+    ]);
+    expect(typeof desktop.window.setDirtyState).toBe('function');
+    expect(typeof desktop.window.requestClose).toBe('function');
+    expect(typeof desktop.window.cancelClose).toBe('function');
+    expect(typeof desktop.window.onCloseRequested).toBe('function');
+    expect(desktop.window.setDirtyState.length).toBe(1);
+    expect(desktop.window.onCloseRequested.length).toBe(1);
+  });
+
+  it('window 接口只映射固定通道且参数固定', () => {
+    void desktop.window.setDirtyState(true);
+    expect(electronMock.invoke).toHaveBeenCalledWith('window:dirty-changed', true);
+
+    electronMock.invoke.mockClear();
+    void desktop.window.requestClose();
+    expect(electronMock.invoke).toHaveBeenCalledWith('window:close-allowed');
+
+    electronMock.invoke.mockClear();
+    void desktop.window.cancelClose();
+    expect(electronMock.invoke).toHaveBeenCalledWith('window:close-cancelled');
+  });
+
+  it('onCloseRequested 订阅固定事件通道并返回可用的取消订阅函数', () => {
+    const callback = vi.fn();
+    const unsubscribe = desktop.window.onCloseRequested(callback);
+
+    expect(electronMock.on).toHaveBeenCalledWith('window:close-requested', expect.any(Function));
+    const listener = electronMock.on.mock.calls[0]?.[1];
+    listener?.();
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    expect(electronMock.removeListener).toHaveBeenCalledWith('window:close-requested', listener);
   });
 
   it('不暴露 ipcRenderer、通用 invoke 或任何可指定通道的接口', () => {
@@ -87,9 +175,10 @@ describe('preload 窄接口契约', () => {
     expect(json).not.toContain('invoke');
   });
 
-  it('desktop 与 document 命名空间均为冻结对象', () => {
+  it('desktop 与各命名空间均为冻结对象', () => {
     expect(Object.isFrozen(desktop)).toBe(true);
     expect(Object.isFrozen(desktop.document)).toBe(true);
     expect(Object.isFrozen(desktop.workspace)).toBe(true);
+    expect(Object.isFrozen(desktop.window)).toBe(true);
   });
 });
