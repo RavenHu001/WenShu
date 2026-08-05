@@ -21,6 +21,20 @@ const desktopApi: DesktopApi = Object.freeze({
     saveText: (request: SaveTextDocumentRequest) =>
       ipcRenderer.invoke('document:save-text', request),
   }),
+  // window 命名空间只提供窗口关闭协调的最小窄协议：
+  // 固定通道 + 固定参数形状，不暴露 ipcRenderer、通用事件总线或任意 send/on。
+  window: Object.freeze({
+    setDirtyState: (dirty: boolean) => ipcRenderer.invoke('window:dirty-changed', dirty),
+    requestClose: () => ipcRenderer.invoke('window:close-allowed'),
+    cancelClose: () => ipcRenderer.invoke('window:close-cancelled'),
+    onCloseRequested: (callback: () => void) => {
+      const listener = (): void => callback();
+      ipcRenderer.on('window:close-requested', listener);
+      return () => {
+        ipcRenderer.removeListener('window:close-requested', listener);
+      };
+    },
+  }),
 });
 
 // 只暴露可序列化的只读数据，不传递 ipcRenderer、Node 对象或通用调用器。

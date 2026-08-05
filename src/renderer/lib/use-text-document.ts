@@ -84,12 +84,15 @@ function fileNameFromRelativePath(relativePath: string): string {
 
 export interface TextDocumentController {
   readonly state: TextDocumentUiState;
-  /** 用户从文件树选择 TXT 时调用：发起受控读取并处理竞态。 */
+  /** 用户从文件树选择 TXT 时调用：发起受控读取并处理竞态。
+   *  未保存修改的"放弃/取消"确认由界面层（App）在调用前完成。 */
   readonly openTextFile: (relativePath: string) => void;
   /** 编辑器正文变化时调用；只有真正变化才递增修订编号并标记 dirty。 */
   readonly editContent: (content: string) => void;
   /** 保存按钮与 Ctrl+S 共用入口：未修改或已有在途保存时无操作。 */
   readonly save: () => void;
+  /** 冲突确认放弃后调用：丢弃本地修改并重新读取当前文档。 */
+  readonly reload: () => void;
   /** 工作区成功切换时调用：清除旧文档并使未完成结果失效。 */
   readonly invalidate: () => void;
 }
@@ -114,7 +117,7 @@ export function useTextDocument(): TextDocumentController {
     };
   }, []);
 
-  const openTextFile = useCallback((relativePath: string) => {
+  const readPath = useCallback((relativePath: string) => {
     const requestId = ++readRequestIdRef.current;
     const failedName = fileNameFromRelativePath(relativePath);
     setState((prev) => ({
@@ -164,6 +167,20 @@ export function useTextDocument(): TextDocumentController {
         }),
       );
   }, []);
+
+  const openTextFile = useCallback(
+    (relativePath: string) => {
+      readPath(relativePath);
+    },
+    [readPath],
+  );
+
+  const reload = useCallback(() => {
+    const path = currentPathRef.current;
+    if (path !== null) {
+      readPath(path);
+    }
+  }, [readPath]);
 
   const editContent = useCallback(
     (content: string) => {
@@ -270,5 +287,5 @@ export function useTextDocument(): TextDocumentController {
     setState(initialUiState);
   }, []);
 
-  return { state, openTextFile, editContent, save, invalidate };
+  return { state, openTextFile, editContent, save, reload, invalidate };
 }

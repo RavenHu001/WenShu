@@ -593,6 +593,9 @@ body {
 }
 
 .doc-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 10px 12px 0;
   padding: 8px 12px;
   color: #b34141;
@@ -601,6 +604,51 @@ body {
   border-radius: 5px;
   font-size: 11px;
   line-height: 1.5;
+}
+
+.doc-reload-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #b34141;
+}
+
+/* ---- 应用内确认对话框 ---------------------------------------------------- */
+
+.confirm-overlay {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  inset: 0;
+  place-items: center;
+  background: rgb(28 32 42 / 38%);
+}
+
+.confirm-dialog {
+  width: min(420px, calc(100vw - 48px));
+  padding: 20px 22px;
+  background: #ffffff;
+  border-radius: 9px;
+  box-shadow: 0 14px 44px rgb(23 28 45 / 28%);
+}
+
+.confirm-title {
+  color: #343a48;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.confirm-message {
+  margin-top: 10px;
+  color: #5b6170;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
 }
 
 .doc-error-panel {

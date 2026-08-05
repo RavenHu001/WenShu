@@ -20,6 +20,26 @@ import type {
 type ReadTextFn = (relativePath: string) => Promise<ReadTextDocumentResult>;
 type SaveTextFn = (request: SaveTextDocumentRequest) => Promise<SaveTextDocumentResult>;
 
+/** 窗口协调 API mock：可捕获关闭询问回调并手动触发。 */
+function makeWindowApi() {
+  let closeRequestedCallback: (() => void) | null = null;
+  const windowApi = {
+    setDirtyState: vi.fn(async () => undefined),
+    requestClose: vi.fn(async () => undefined),
+    cancelClose: vi.fn(async () => undefined),
+    onCloseRequested: vi.fn((callback: () => void) => {
+      closeRequestedCallback = callback;
+      return () => {
+        closeRequestedCallback = null;
+      };
+    }),
+    triggerCloseRequested: () => {
+      closeRequestedCallback?.();
+    },
+  };
+  return windowApi;
+}
+
 // CodeMirror 6 在 jsdom 中没有 ResizeObserver，提供最小桩
 class ResizeObserverMock {
   observe(): void {}
@@ -29,6 +49,14 @@ class ResizeObserverMock {
 
 beforeAll(() => {
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverMock;
+  // jsdom 未实现 Range 的几何测量，CodeMirror 测量文本尺寸时需要这些桩
+  if (typeof Range !== 'undefined' && typeof Range.prototype.getClientRects !== 'function') {
+    Range.prototype.getClientRects = (() => []) as unknown as () => DOMRectList;
+  }
+  if (typeof Range !== 'undefined' && typeof Range.prototype.getBoundingClientRect !== 'function') {
+    Range.prototype.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 }) as DOMRect;
+  }
 });
 
 function mockDesktop(
@@ -39,6 +67,7 @@ function mockDesktop(
     status: 'error',
     error: { code: 'WRITE_FAILED', message: '写入文件失败' },
   })),
+  windowApi: ReturnType<typeof makeWindowApi> = makeWindowApi(),
 ) {
   (window as unknown as Record<string, unknown>).desktop = {
     runtime: { platform: 'win32', electronVersion: '99.9.9' },
@@ -47,7 +76,14 @@ function mockDesktop(
       refresh: refresh ?? vi.fn(),
     },
     document: { readText, saveText },
+    window: {
+      setDirtyState: windowApi.setDirtyState,
+      requestClose: windowApi.requestClose,
+      cancelClose: windowApi.cancelClose,
+      onCloseRequested: windowApi.onCloseRequested,
+    },
   };
+  return windowApi;
 }
 
 function f(name: string, relativePath: string): WorkspaceEntry {
@@ -266,7 +302,9 @@ describe('中央文档区（WP4 编辑与保存）', () => {
     await insertAtEnd('X');
     expect(editorDoc()).toBe('内容:a.txtX');
 
+    // 有未保存修改：先确认放弃再打开新文件
     await openTextFile('b.txt');
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
     expect(editorDoc()).toBe('内容:b.txt');
     expect(document.querySelectorAll('.editor-tabs .tab').length).toBe(1);
 
@@ -777,5 +815,308 @@ describe('中央文档区（WP4 编辑与保存）', () => {
     await insertAtEnd('+two');
     expect(screen.getByLabelText('未保存')).toBeDefined();
     expect(editorDoc()).toBe('original+one+two');
+  });
+
+  it('冲突后取消重新读取：正文与冲突状态保留，不再发起读取', async () => {
+    const readText = vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', 'original'));
+    const saveText = vi.fn<SaveTextFn>(async () => ({
+      status: 'error',
+      error: { code: 'CONFLICT', message: '文件已被外部修改，保存被拒绝' },
+    }));
+    mockDesktop(
+      readText,
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await insertAtEnd('+local');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(screen.getByText('外部冲突')).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃本地修改并重新读取/)).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(editorDoc()).toBe('original+local');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+    expect(readText).toHaveBeenCalledTimes(1);
+  });
+
+  it('冲突后确认重新读取：放弃本地修改并载入磁盘版本', async () => {
+    const readText = vi
+      .fn<ReadTextFn>()
+      .mockResolvedValueOnce(loadedDoc('a.txt', 'original'))
+      .mockResolvedValueOnce(loadedDoc('a.txt', 'external version'));
+    const saveText = vi.fn<SaveTextFn>(async () => ({
+      status: 'error',
+      error: { code: 'CONFLICT', message: '文件已被外部修改，保存被拒绝' },
+    }));
+    mockDesktop(
+      readText,
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await insertAtEnd('+local');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    await userEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(readText).toHaveBeenCalledTimes(2);
+    expect(readText).toHaveBeenLastCalledWith('a.txt');
+    expect(editorDoc()).toBe('external version');
+    expect(screen.queryByLabelText('未保存')).toBeNull();
+    expect(screen.getByText('已保存')).toBeDefined();
+    expect(screen.queryByText('外部冲突')).toBeNull();
+  });
+
+  it('dirty 时打开其他 TXT：取消保留原文档且不发起读取', async () => {
+    const readText = vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath));
+    mockDesktop(
+      readText,
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    expect(readText).toHaveBeenCalledTimes(1);
+
+    await openTextFile('b.txt');
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 a.txt 的未保存修改，并打开 b.txt/)).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(readText).toHaveBeenCalledTimes(1);
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+  });
+
+  it('dirty 时打开其他 TXT：放弃后打开新文件并清除旧内容', async () => {
+    const readText = vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath));
+    mockDesktop(
+      readText,
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await openTextFile('b.txt');
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(readText).toHaveBeenCalledTimes(2);
+    expect(readText).toHaveBeenLastCalledWith('b.txt');
+    expect(editorDoc()).toBe('内容:b.txt');
+    expect(screen.queryByLabelText('未保存')).toBeNull();
+  });
+
+  it('dirty 时切换工作区：取消不打开原生目录选择器且保留文档', async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      open,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    expect(open).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(openBtn());
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 a.txt 的未保存修改，并切换工作区/)).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+  });
+
+  it('dirty 时切换工作区：放弃后才打开原生目录选择器', async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      open,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(open).toHaveBeenCalledTimes(2);
+    // 目录选择取消：文档仍保留
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+  });
+
+  it('clean 时打开文件夹直接进入原生目录选择器，无确认对话框', async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      open,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await userEvent.click(openBtn());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it('关闭询问：clean 状态直接放行，不弹确认', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      windowApi,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+    });
+
+    expect(windowApi.requestClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('关闭询问：dirty 状态弹确认；取消复位主进程状态且窗口保持', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      windowApi,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+    });
+
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 a.txt 的未保存修改，并关闭窗口/)).toBeDefined();
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(windowApi.cancelClose).toHaveBeenCalledTimes(1);
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+  });
+
+  it('关闭询问：放弃修改后只请求一次关闭', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      windowApi,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+      windowApi.triggerCloseRequested();
+    });
+    expect(screen.getAllByRole('dialog').length).toBe(1);
+
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(windowApi.requestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('保存在途时确认切换工作区：旧保存结果不会重新出现', async () => {
+    const saveResolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          saveResolvers.push(resolve);
+        }),
+    );
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
+      } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      open,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(screen.getByText('正在保存…')).toBeDefined();
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+    expect(screen.getByText('本地多文档工作台')).toBeDefined();
+
+    await act(async () => {
+      saveResolvers[0]!(savedDoc('a.txt', '内容:a.txt+edit', 'b'.repeat(64)));
+    });
+
+    // 旧保存结果不改变已切换的工作区状态
+    expect(screen.getByText('本地多文档工作台')).toBeDefined();
+    expect(screen.queryByLabelText('未保存')).toBeNull();
   });
 });

@@ -17,10 +17,13 @@ export function DocumentPane({
   state,
   onContentChange,
   onSave,
+  onReloadRequest,
 }: {
   readonly state: TextDocumentUiState;
   readonly onContentChange: (content: string) => void;
   readonly onSave: () => void;
+  /** 冲突状态下用户请求"放弃本地修改并重新读取"时调用（确认由 App 完成）。 */
+  readonly onReloadRequest: () => void;
 }): React.JSX.Element {
   const { status, tabName, document, content, dirty, saving, error } = state;
 
@@ -118,7 +121,16 @@ export function DocumentPane({
 
       {editable && (
         <div className="doc-pane-body">
-          {errorBannerText !== null && <div className="doc-error-banner">{errorBannerText}</div>}
+          {errorBannerText !== null && (
+            <div className="doc-error-banner">
+              <span>{errorBannerText}</span>
+              {status === 'conflict' && (
+                <button className="ws-btn doc-reload-btn" type="button" onClick={onReloadRequest}>
+                  重新读取
+                </button>
+              )}
+            </div>
+          )}
           <TextEditor content={content} onContentChange={onContentChange} onSaveRequest={onSave} />
         </div>
       )}
