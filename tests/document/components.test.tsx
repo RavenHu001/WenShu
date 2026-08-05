@@ -71,6 +71,9 @@ function loadedDoc(relativePath: string): ReadTextDocumentResult {
       relativePath,
       content: `内容:${relativePath}`,
       byteLength: 4,
+      revision: 'a'.repeat(64),
+      hasUtf8Bom: false,
+      lineEnding: 'none',
     },
   };
 }
@@ -109,7 +112,15 @@ describe('中央只读文档区（WP4）', () => {
     mockDesktop(
       vi.fn<ReadTextFn>(async () => ({
         status: 'loaded',
-        document: { name: 'a.txt', relativePath: 'a.txt', content: 'hello\n世界', byteLength: 10 },
+        document: {
+          name: 'a.txt',
+          relativePath: 'a.txt',
+          content: 'hello\n世界',
+          byteLength: 10,
+          revision: 'a'.repeat(64),
+          hasUtf8Bom: false,
+          lineEnding: 'lf',
+        },
       })),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
@@ -130,7 +141,15 @@ describe('中央只读文档区（WP4）', () => {
     mockDesktop(
       vi.fn<ReadTextFn>(async () => ({
         status: 'loaded',
-        document: { name: 'empty.txt', relativePath: 'empty.txt', content: '', byteLength: 0 },
+        document: {
+          name: 'empty.txt',
+          relativePath: 'empty.txt',
+          content: '',
+          byteLength: 0,
+          revision: 'a'.repeat(64),
+          hasUtf8Bom: false,
+          lineEnding: 'none',
+        },
       })),
       selectedOpen(snapshot({ entries: [f('empty.txt', 'empty.txt')] })),
     );

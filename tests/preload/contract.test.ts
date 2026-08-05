@@ -41,7 +41,15 @@ describe('preload 窄接口契约', () => {
   it('readText 只映射固定的 document:read-text 通道并原样传递相对路径', async () => {
     const loaded: ReadTextDocumentResult = {
       status: 'loaded',
-      document: { name: 'a.txt', relativePath: 'sub/a.txt', content: 'x', byteLength: 1 },
+      document: {
+        name: 'a.txt',
+        relativePath: 'sub/a.txt',
+        content: 'x',
+        byteLength: 1,
+        revision: 'a'.repeat(64),
+        hasUtf8Bom: false,
+        lineEnding: 'none',
+      },
     };
     electronMock.invoke.mockResolvedValue(loaded);
 
