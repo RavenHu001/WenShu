@@ -144,7 +144,7 @@ export function detectLineEnding(content: string): LineEnding {
 const UTF8_BOM = [0xef, 0xbb, 0xbf] as const;
 
 /** 原始字节是否以 UTF-8 BOM（EF BB BF）开头。 */
-function hasUtf8Bom(bytes: Uint8Array): boolean {
+export function hasUtf8Bom(bytes: Uint8Array): boolean {
   return (
     bytes.byteLength >= UTF8_BOM.length &&
     bytes[0] === UTF8_BOM[0] &&
