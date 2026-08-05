@@ -89,8 +89,9 @@ export interface TextDocumentController {
   readonly openTextFile: (relativePath: string) => void;
   /** 编辑器正文变化时调用；只有真正变化才递增修订编号并标记 dirty。 */
   readonly editContent: (content: string) => void;
-  /** 保存按钮与 Ctrl+S 共用入口：未修改或已有在途保存时无操作。 */
-  readonly save: () => void;
+  /** 保存按钮与 Ctrl+S 共用入口：未修改或已有在途保存时无操作。
+   *  传 `confirmMixedLineEndingNormalization: true` 表示用户已确认混合换行规范化。 */
+  readonly save: (confirmMixedLineEndingNormalization?: boolean) => void;
   /** 冲突确认放弃后调用：丢弃本地修改并重新读取当前文档。 */
   readonly reload: () => void;
   /** 工作区成功切换时调用：清除旧文档并使未完成结果失效。 */
@@ -209,74 +210,84 @@ export function useTextDocument(): TextDocumentController {
     [state],
   );
 
-  const save = useCallback(() => {
-    const path = currentPathRef.current;
-    const base = latestRef.current;
-    if (path === null || saveInFlightRef.current) {
-      return;
-    }
-    const target = state.document;
-    if (target === null) {
-      return;
-    }
-    // 未修改文档触发保存时不执行磁盘写入
-    if (state.status === 'loaded-clean') {
-      return;
-    }
-
-    saveInFlightRef.current = true;
-    const captured = { relativePath: path, content: base.content, editRevision: base.editRevision };
-    setState((prev) => ({ ...prev, status: 'saving', saving: true, error: null }));
-
-    const settle = (result: SaveTextDocumentResult): void => {
-      saveInFlightRef.current = false;
-      if (!mountedRef.current) {
+  const save = useCallback(
+    (confirmMixedLineEndingNormalization?: boolean) => {
+      const path = currentPathRef.current;
+      const base = latestRef.current;
+      if (path === null || saveInFlightRef.current) {
         return;
       }
-      setState((prev) => {
-        // 保存期间文档已被切换：旧结果整体忽略，不更新任何状态
-        if (prev.selectedRelativePath !== captured.relativePath) {
-          return prev;
+      const target = state.document;
+      if (target === null) {
+        return;
+      }
+      // 未修改文档触发保存时不执行磁盘写入
+      if (state.status === 'loaded-clean') {
+        return;
+      }
+
+      saveInFlightRef.current = true;
+      const captured = {
+        relativePath: path,
+        content: base.content,
+        editRevision: base.editRevision,
+      };
+      setState((prev) => ({ ...prev, status: 'saving', saving: true, error: null }));
+
+      const settle = (result: SaveTextDocumentResult): void => {
+        saveInFlightRef.current = false;
+        if (!mountedRef.current) {
+          return;
         }
-        if (result.status === 'saved') {
-          const savedDocument = result.document;
-          const stillClean = editRevisionRef.current === captured.editRevision;
+        setState((prev) => {
+          // 保存期间文档已被切换：旧结果整体忽略，不更新任何状态
+          if (prev.selectedRelativePath !== captured.relativePath) {
+            return prev;
+          }
+          if (result.status === 'saved') {
+            const savedDocument = result.document;
+            const stillClean = editRevisionRef.current === captured.editRevision;
+            return {
+              ...prev,
+              status: stillClean ? 'loaded-clean' : 'loaded-dirty',
+              saving: false,
+              document: savedDocument,
+              dirty: !stillClean,
+              error: null,
+              // 已保存基线版本更新，但正文保持用户当前输入
+              content: prev.content,
+            };
+          }
+          const conflict = result.error.code === 'CONFLICT';
           return {
             ...prev,
-            status: stillClean ? 'loaded-clean' : 'loaded-dirty',
+            status: conflict ? 'conflict' : 'save-error',
             saving: false,
-            document: savedDocument,
-            dirty: !stillClean,
-            error: null,
-            // 已保存基线版本更新，但正文保持用户当前输入
-            content: prev.content,
+            dirty: true,
+            error: result.error,
           };
-        }
-        const conflict = result.error.code === 'CONFLICT';
-        return {
-          ...prev,
-          status: conflict ? 'conflict' : 'save-error',
-          saving: false,
-          dirty: true,
-          error: result.error,
-        };
-      });
-    };
+        });
+      };
 
-    window.desktop.document
-      .saveText({
-        relativePath: captured.relativePath,
-        content: captured.content,
-        expectedRevision: target.revision,
-      })
-      .then(settle)
-      .catch(() =>
-        settle({
-          status: 'error',
-          error: { code: 'WRITE_FAILED', message: '写入文件失败' },
-        }),
-      );
-  }, [state.document, state.status]);
+      window.desktop.document
+        .saveText({
+          relativePath: captured.relativePath,
+          content: captured.content,
+          expectedRevision: target.revision,
+          ...(confirmMixedLineEndingNormalization === true
+            ? { confirmMixedLineEndingNormalization: true }
+            : {}),
+        })
+        .then(settle)
+        .catch(() =>
+          settle({
+            status: 'error',
+            error: { code: 'WRITE_FAILED', message: '写入文件失败' },
+          }),
+        );
+    },
+    [state.document, state.status],
+  );
 
   const invalidate = useCallback(() => {
     readRequestIdRef.current += 1;

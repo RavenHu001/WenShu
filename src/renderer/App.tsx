@@ -7,12 +7,13 @@ import { ConfirmDialog } from './components/common/ConfirmDialog';
 
 const activityItems = ['文', '搜', '设'];
 
-/** 待确认的"放弃未保存修改"过渡；全部为可能丢弃当前编辑内容的操作。 */
+/** 待确认的"放弃未保存修改"或"混合换行规范化"过渡。 */
 type PendingDiscard =
   | { readonly kind: 'open-file'; readonly relativePath: string }
   | { readonly kind: 'switch-workspace' }
   | { readonly kind: 'reload' }
-  | { readonly kind: 'close-window' };
+  | { readonly kind: 'close-window' }
+  | { readonly kind: 'mixed-line-endings' };
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
@@ -94,6 +95,17 @@ export const App = (): React.JSX.Element => {
     }
   }, [documentState.document]);
 
+  // 混合换行确认：保存被拒后弹出确认，用户确认才携带 confirm 重试
+  useEffect(() => {
+    if (
+      documentState.status === 'save-error' &&
+      documentState.error?.code === 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED'
+    ) {
+      pendingRef.current = { kind: 'mixed-line-endings' };
+      setPending(pendingRef.current);
+    }
+  }, [documentState.status, documentState.error]);
+
   const confirmPending = useCallback(() => {
     const current = pendingRef.current;
     if (current === null) {
@@ -110,8 +122,10 @@ export const App = (): React.JSX.Element => {
       reload();
     } else if (current.kind === 'close-window') {
       void window.desktop.window.requestClose();
+    } else if (current.kind === 'mixed-line-endings') {
+      save(true);
     }
-  }, [openTextFile, reload]);
+  }, [openTextFile, reload, save]);
 
   const cancelPending = useCallback(() => {
     const current = pendingRef.current;
@@ -140,6 +154,8 @@ export const App = (): React.JSX.Element => {
         return '文件已被外部修改。放弃本地修改并重新读取磁盘内容？';
       case 'close-window':
         return `放弃对 ${fileName} 的未保存修改，并关闭窗口？`;
+      case 'mixed-line-endings':
+        return '文件包含混合换行。保存时将按主要换行风格（LF 或 CRLF）统一规范化。确认保存？';
     }
   };
 
@@ -193,9 +209,9 @@ export const App = (): React.JSX.Element => {
 
       {pending !== null && (
         <ConfirmDialog
-          title="放弃未保存修改"
+          title={pending.kind === 'mixed-line-endings' ? '确认换行规范化' : '放弃未保存修改'}
           message={pendingMessage(pending)}
-          confirmLabel="放弃修改"
+          confirmLabel={pending.kind === 'mixed-line-endings' ? '确认保存' : '放弃修改'}
           cancelLabel="取消"
           onConfirm={confirmPending}
           onCancel={cancelPending}

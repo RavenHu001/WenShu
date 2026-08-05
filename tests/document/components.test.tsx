@@ -1075,6 +1075,75 @@ describe('中央文档区（WP4 编辑与保存）', () => {
     expect(windowApi.requestClose).toHaveBeenCalledTimes(1);
   });
 
+  it('混合换行保存：先被拒绝并弹出确认，确认后才带 confirm 重试', async () => {
+    const saveText = vi
+      .fn<SaveTextFn>()
+      .mockResolvedValueOnce({
+        status: 'error',
+        error: {
+          code: 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
+          message: '文件包含混合换行，需要确认规范化规则',
+        },
+      })
+      .mockImplementation(async (request) => savedDoc('a.txt', request.content, 'b'.repeat(64)));
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', 'original')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await insertAtEnd('+edit');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    // 保存被拒绝（未经确认不规范化），弹出确认对话框，正文保留
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(saveText.mock.calls[0]?.[0]).not.toHaveProperty('confirmMixedLineEndingNormalization');
+    expect(await screen.findByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/按主要换行风格/)).toBeDefined();
+    expect(editorDoc()).toBe('original+edit');
+
+    // 确认后才携带 confirm 重试并保存成功
+    await userEvent.click(screen.getByRole('button', { name: '确认保存' }));
+
+    expect(saveText).toHaveBeenCalledTimes(2);
+    expect(saveText.mock.calls[1]?.[0]?.confirmMixedLineEndingNormalization).toBe(true);
+    expect(screen.getByText('已保存')).toBeDefined();
+    expect(screen.queryByLabelText('未保存')).toBeNull();
+  });
+
+  it('混合换行保存：取消确认不重试，正文与未保存标记保留', async () => {
+    const saveText = vi.fn<SaveTextFn>(async () => ({
+      status: 'error',
+      error: {
+        code: 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
+        message: '文件包含混合换行，需要确认规范化规则',
+      },
+    }));
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', 'original')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await insertAtEnd('+edit');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(await screen.findByRole('dialog')).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(editorDoc()).toBe('original+edit');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+  });
+
   it('保存在途时确认切换工作区：旧保存结果不会重新出现', async () => {
     const saveResolvers: Array<(result: SaveTextDocumentResult) => void> = [];
     const saveText = vi.fn<SaveTextFn>(
