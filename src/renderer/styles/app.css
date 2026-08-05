@@ -146,6 +146,8 @@ body {
   display: grid;
   grid-template-rows: 38px minmax(0, 1fr);
   min-width: 0;
+  /* 关键：作为 grid 项不允许被超高编辑器内容撑开，否则滚动容器失效 */
+  min-height: 0;
   background: #ffffff;
 }
 
@@ -508,18 +510,21 @@ body {
 /* ---- 中央文档区 -------------------------------------------------------- */
 
 .doc-pane-body {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  /* 滚动由 CodeMirror 的 .cm-scroller 承担，错误横幅固定在顶部 */
+  overflow: hidden;
   background: #ffffff;
 }
 
 .doc-editor {
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .doc-editor .cm-editor {
   height: 100%;
-  min-height: 100%;
   color: #2f3542;
   background: #ffffff;
 }
