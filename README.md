@@ -2,7 +2,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Pre-alpha / 单 TXT 编辑与安全保存。** Task 1、Task 2、Task 3、Task 4 已完成。当前应用具备工作区选择、只读文件树浏览，从文件树选择 UTF-8 TXT 后在中央区域以单个标签页编辑，并通过保存按钮或 `Ctrl+S` 显式保存；保存执行工作区边界、符号链接、真实路径与内容版本校验，采用同目录临时文件、刷盘、关闭和安全替换流程。外部修改会触发冲突提示；打开其他文件、切换工作区和关闭窗口均有未保存保护。多标签页、自动保存和 DOCX 尚未实现。
+> **当前阶段：Pre-alpha / 单 TXT 编辑与安全保存。** Task 1、Task 2、Task 3、Task 4 已完成；[Task 5 多 TXT 标签页](./docs/TASK_005_MULTI_TXT_TABS.md)已完成规划、尚未实施。当前应用具备工作区选择、只读文件树浏览，从文件树选择 UTF-8 TXT 后在中央区域以单个标签页编辑，并通过保存按钮或 `Ctrl+S` 显式保存；保存执行工作区边界、符号链接、真实路径与内容版本校验，采用同目录临时文件、刷盘、关闭和安全替换流程。外部修改会触发冲突提示；打开其他文件、切换工作区和关闭窗口均有未保存保护。多标签页、自动保存和 DOCX 尚未实现。
 
 ## 当前能力
 
@@ -109,7 +109,8 @@
 - [x] [Task 2：工作区目录选择与只读文件树](./docs/TASK_002_WORKSPACE_READONLY.md)；
 - [x] [Task 3：UTF-8 TXT 受控读取与单只读标签页](./docs/TASK_003_TXT_READONLY.md)；
 - [x] [Task 4：单 TXT 基础编辑与安全保存](./docs/TASK_004_TXT_EDIT_SAFE_SAVE.md)；
-- [ ] 多标签页与工作区搜索；
+- [ ] [Task 5：多 TXT 标签页与独立编辑会话](./docs/TASK_005_MULTI_TXT_TABS.md)；
+- [ ] 工作区 TXT 搜索与当前文件查找替换；
 - [ ] 基础 DOCX 阅读、编辑和安全保存。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
@@ -127,6 +128,7 @@
 - [TASK-003 完成报告](./docs/TASK_003_COMPLETION_REPORT.md)
 - [TASK-004：单 TXT 基础编辑与安全保存](./docs/TASK_004_TXT_EDIT_SAFE_SAVE.md)
 - [TASK-004 完成报告](./docs/TASK_004_COMPLETION_REPORT.md)
+- [TASK-005：多 TXT 标签页与独立编辑会话](./docs/TASK_005_MULTI_TXT_TABS.md)
 
 ## 项目结构
 
