@@ -8,7 +8,7 @@
 - 前置任务：[TASK-003：UTF-8 TXT 受控读取与单只读标签页](./TASK_003_TXT_READONLY.md)
 - 前置完成报告：[TASK-003 完成报告](./TASK_003_COMPLETION_REPORT.md)
 - 完成报告：[TASK-004 完成报告](./TASK_004_COMPLETION_REPORT.md)
-- 后续建议任务：多标签页与工作区搜索
+- 后续直接任务：[TASK-005：多 TXT 标签页与独立编辑会话](./TASK_005_MULTI_TXT_TABS.md)
 - 项目基线：[PROJECT_BASELINE.md](./PROJECT_BASELINE.md)
 - 主要执行方式：按工作包顺序实施，逐包验收
 
@@ -685,4 +685,4 @@ saveText(request: SaveTextDocumentRequest): Promise<SaveTextDocumentResult>
 
 ## 十五、完成后的下一任务入口
 
-Task 4 完成后，建议下一任务实现多标签页，并复用本任务已经验证的文档版本、dirty、保存和未保存保护语义。多标签任务应重点设计标签唯一性、切换与关闭、每标签独立编辑状态、保存并发、关闭确认和工作区切换，不应同时加入 DOCX 或工作区全文搜索。
+Task 4 完成后的直接任务已规划为 [TASK-005：多 TXT 标签页与独立编辑会话](./TASK_005_MULTI_TXT_TABS.md)。该任务复用本任务已经验证的文档版本、dirty、保存和未保存保护语义，重点实现标签唯一性、切换与关闭、每标签独立 CodeMirror 会话、保存并发、确认目标绑定和工作区/窗口聚合保护，不同时加入 DOCX 或工作区全文搜索。
