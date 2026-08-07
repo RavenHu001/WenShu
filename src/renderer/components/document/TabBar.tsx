@@ -25,11 +25,12 @@ export function TabBar({
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         return (
-          <div className={isActive ? 'tab active' : 'tab'} key={tab.id}>
+          <div className={isActive ? 'tab active' : 'tab'} key={tab.id} role="presentation">
             <button
               type="button"
               role="tab"
               aria-selected={isActive}
+              aria-label={`${tab.relativePath}${tab.dirty ? '，未保存' : ''}`}
               className="tab-label"
               title={tab.relativePath}
               onClick={() => onActivate(tab.id)}
@@ -44,7 +45,7 @@ export function TabBar({
             <button
               type="button"
               className="tab-close-btn"
-              aria-label={`关闭 ${tab.name}`}
+              aria-label={`关闭 ${tab.relativePath}`}
               onClick={() => onCloseRequest(tab.id)}
             >
               ×

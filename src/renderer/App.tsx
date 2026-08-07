@@ -214,6 +214,24 @@ export const App = (): React.JSX.Element => {
     setPending(pendingRef.current);
   }, []);
 
+  // 保存统一入口：原始磁盘快照为 mixed 时，在 renderer 仍持有该稳定元数据，
+  // 必须先确认再调用保存 IPC；CodeMirror 内部会按 dominant 风格统一表示换行。
+  const handleSaveRequest = useCallback(
+    (tabId: string) => {
+      if (pendingRef.current !== null) {
+        return;
+      }
+      const tab = tabById(modelRef.current, tabId);
+      if (tab?.dirty && !tab.saving && tab.document?.lineEnding === 'mixed') {
+        pendingRef.current = { kind: 'mixed-line-endings', tabId };
+        setPending(pendingRef.current);
+        return;
+      }
+      saveTab(tabId);
+    },
+    [saveTab],
+  );
+
   const confirmPending = useCallback(() => {
     const current = pendingRef.current;
     if (current === null) {
@@ -332,7 +350,7 @@ export const App = (): React.JSX.Element => {
             onCloseTab={handleCloseTabRequest}
             onRetryRead={retryRead}
             onContentChange={editTab}
-            onSave={saveTab}
+            onSave={handleSaveRequest}
             onReloadRequest={handleReloadRequest}
           />
         </section>

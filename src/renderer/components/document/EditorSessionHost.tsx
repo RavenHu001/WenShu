@@ -29,6 +29,12 @@ export interface EditorSessionHostProps {
   readonly tabId: string;
   /** 外部正文（磁盘读取结果 / 已保存基线）；与编辑器当前内容不一致时视为外部替换。 */
   readonly content: string;
+  /**
+   * 编辑器内部使用的统一换行符。CodeMirror 的 Text 文档按行存储，必须通过
+   * `EditorState.lineSeparator` 与 `sliceDoc()` 显式保持 CRLF；混合换行由调用方
+   * 按既定 dominant 规则选择一种表示，原始 mixed 元数据仍保留在文档快照中。
+   */
+  readonly lineSeparator?: '\n' | '\r\n';
   /** 用户输入导致的正文变化回调。 */
   readonly onContentChange: (content: string) => void;
   /** Ctrl+S / Cmd+S 保存请求回调（目标标签由挂载中的宿主决定）。 */
@@ -49,18 +55,28 @@ function saveBinding(requestSave: () => void): KeyBinding {
 }
 
 /** 创建会话：编辑器状态的 updateListener 经 `session.notify` 上报最新内容。 */
-function createEditorState(doc: string, session: EditorSession): EditorState {
+function normalizeLineSeparators(doc: string, lineSeparator: '\n' | '\r\n'): string {
+  const lfNormalized = doc.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return lineSeparator === '\n' ? lfNormalized : lfNormalized.replace(/\n/g, '\r\n');
+}
+
+function createEditorState(
+  doc: string,
+  lineSeparator: '\n' | '\r\n',
+  session: EditorSession,
+): EditorState {
   const extensions: Extension[] = [
+    EditorState.lineSeparator.of(lineSeparator),
     history(),
     keymap.of([...defaultKeymap, ...historyKeymap, saveBinding(() => session.requestSave())]),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
-        session.notify(update.state.doc.toString());
+        session.notify(update.state.sliceDoc());
       }
     }),
   ];
-  return EditorState.create({ doc, extensions });
+  return EditorState.create({ doc: normalizeLineSeparators(doc, lineSeparator), extensions });
 }
 
 /**
@@ -69,6 +85,7 @@ function createEditorState(doc: string, session: EditorSession): EditorState {
  */
 function createSession(
   doc: string,
+  lineSeparator: '\n' | '\r\n',
   notify: (content: string) => void,
   requestSave: () => void,
 ): EditorSession {
@@ -79,13 +96,14 @@ function createSession(
     notify,
     requestSave,
   };
-  session.state = createEditorState(doc, session);
+  session.state = createEditorState(doc, lineSeparator, session);
   return session;
 }
 
 export function EditorSessionHost({
   tabId,
   content,
+  lineSeparator = '\n',
   onContentChange,
   onSaveRequest,
   sessions,
@@ -117,11 +135,16 @@ export function EditorSessionHost({
     const api = sessionsRef.current;
     const doc = contentRef.current;
     const existing = api.get(tabId);
-    const cachedValid = existing !== null && existing.state.doc.toString() === doc;
+    const expectedDoc = normalizeLineSeparators(doc, lineSeparator);
+    const cachedValid =
+      existing !== null &&
+      existing.state.sliceDoc() === expectedDoc &&
+      existing.state.lineBreak === lineSeparator;
     let session = existing;
     if (session === null || !cachedValid) {
       session = createSession(
         doc,
+        lineSeparator,
         (text) => contentChangeRef.current(text),
         () => saveRequestRef.current(),
       );
@@ -143,12 +166,16 @@ export function EditorSessionHost({
       view.destroy();
       viewRef.current = null;
     };
-  }, [tabId]);
+  }, [tabId, lineSeparator]);
 
   // 外部正文替换：编辑器内容与 content 不一致时重建状态并清空撤销历史
   useEffect(() => {
     const view = viewRef.current;
-    if (view === null || view.state.doc.toString() === content) {
+    const expectedDoc = normalizeLineSeparators(content, lineSeparator);
+    if (
+      view === null ||
+      (view.state.sliceDoc() === expectedDoc && view.state.lineBreak === lineSeparator)
+    ) {
       return;
     }
     const api = sessionsRef.current;
@@ -156,13 +183,14 @@ export function EditorSessionHost({
     if (session === null) {
       session = createSession(
         content,
+        lineSeparator,
         (text) => contentChangeRef.current(text),
         () => saveRequestRef.current(),
       );
       api.register(tabId, session);
     }
-    view.setState(createEditorState(content, session));
-  }, [content, tabId]);
+    view.setState(createEditorState(content, lineSeparator, session));
+  }, [content, lineSeparator, tabId]);
 
   return <div className="doc-editor" ref={containerRef} aria-label="TXT 编辑器" />;
 }

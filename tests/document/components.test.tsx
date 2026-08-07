@@ -16,6 +16,7 @@ import type {
   WorkspaceSnapshot,
 } from '../../src/shared/workspace';
 import type {
+  LineEnding,
   ReadTextDocumentResult,
   SaveTextDocumentRequest,
   SaveTextDocumentResult,
@@ -120,7 +121,11 @@ function openBtn(): HTMLButtonElement {
   return (buttons[0] ?? buttons[buttons.length - 1]) as HTMLButtonElement;
 }
 
-function loadedDoc(relativePath: string, content = `内容:${relativePath}`): ReadTextDocumentResult {
+function loadedDoc(
+  relativePath: string,
+  content = `内容:${relativePath}`,
+  lineEnding: LineEnding = 'none',
+): ReadTextDocumentResult {
   return {
     status: 'loaded',
     document: {
@@ -130,12 +135,17 @@ function loadedDoc(relativePath: string, content = `内容:${relativePath}`): Re
       byteLength: Buffer.byteLength(content, 'utf8'),
       revision: 'a'.repeat(64),
       hasUtf8Bom: false,
-      lineEnding: 'none',
+      lineEnding,
     },
   };
 }
 
-function savedDoc(relativePath: string, content: string, revision: string): SaveTextDocumentResult {
+function savedDoc(
+  relativePath: string,
+  content: string,
+  revision: string,
+  lineEnding: LineEnding = 'none',
+): SaveTextDocumentResult {
   return {
     status: 'saved',
     document: {
@@ -145,7 +155,7 @@ function savedDoc(relativePath: string, content: string, revision: string): Save
       byteLength: Buffer.byteLength(content, 'utf8'),
       revision,
       hasUtf8Bom: false,
-      lineEnding: 'none',
+      lineEnding,
     },
   };
 }
@@ -203,6 +213,11 @@ function editorView(): EditorView | null {
 /** 编辑器当前正文；无编辑器时返回空字符串。 */
 function editorDoc(): string {
   return editorView()?.state.doc.toString() ?? '';
+}
+
+/** 按编辑器配置的换行符序列化正文（用于验证 LF/CRLF 保存语义）。 */
+function serializedEditorDoc(): string {
+  return editorView()?.state.sliceDoc() ?? '';
 }
 
 /** 在编辑器末尾插入文本（模拟输入 / 粘贴）。 */
@@ -429,6 +444,9 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
     expect(tabNames()).toEqual(['a.txt', 'a.txt']);
     expect(tabByName('a.txt').getAttribute('title')).toBe('a.txt');
     expect(tabByName('sub/a.txt').getAttribute('title')).toBe('sub/a.txt');
+    expect(screen.getByRole('tab', { name: 'a.txt' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'sub/a.txt' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '关闭 sub/a.txt' })).toBeDefined();
     expect(editorDoc()).toBe('内容:sub/a.txt');
   });
 
@@ -942,6 +960,39 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
     expect(editorDoc()).toBe('内容:a.txt');
   });
 
+  it('CRLF 标签切换保留会话，保存请求继续使用 CRLF', async () => {
+    const saveText = vi.fn<SaveTextFn>(async (request) =>
+      savedDoc(request.relativePath, request.content, 'b'.repeat(64), 'crlf'),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) =>
+        relativePath === 'a.txt'
+          ? loadedDoc('a.txt', '第一行\r\n第二行', 'crlf')
+          : loadedDoc(relativePath),
+      ),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+编辑');
+    const anchor = editorView()?.state.selection.main.anchor;
+    expect(serializedEditorDoc()).toBe('第一行\r\n第二行+编辑');
+
+    await openTextFile('b.txt');
+    await clickTab('a.txt');
+    expect(editorView()?.state.selection.main.anchor).toBe(anchor);
+    expect(serializedEditorDoc()).toBe('第一行\r\n第二行+编辑');
+
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(saveText.mock.calls[0]?.[0]?.content).toBe('第一行\r\n第二行+编辑');
+  });
+
   it('关闭标签清理对应缓存，再次打开从磁盘创建新状态', async () => {
     mockDesktop(
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
@@ -1412,6 +1463,37 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     expect(screen.getByText('已保存')).toBeDefined();
   });
 
+  it('磁盘快照为混合换行时先确认，再按 dominant 风格提交规范化正文', async () => {
+    const saveText = vi.fn<SaveTextFn>(async (request) =>
+      savedDoc(request.relativePath, request.content, 'b'.repeat(64), 'crlf'),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', '一\r\n二\n三', 'mixed')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+编辑');
+    expect(serializedEditorDoc()).toBe('一\r\n二\r\n三+编辑');
+
+    await clickSaveButton();
+    expect(saveText).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '确认保存' }));
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(saveText.mock.calls[0]?.[0]).toMatchObject({
+      relativePath: 'a.txt',
+      content: '一\r\n二\r\n三+编辑',
+      confirmMixedLineEndingNormalization: true,
+    });
+  });
+
   it('混合换行取消：不重试，原标签保持保存失败', async () => {
     const saveText = vi.fn<SaveTextFn>(async () => ({
       status: 'error',
@@ -1484,6 +1566,47 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     expect(screen.queryByLabelText('未保存')).toBeNull();
     expect(screen.queryByText('外部冲突')).toBeNull();
     expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('冲突重新读取在请求完成前禁用编辑，避免迟到结果覆盖新输入', async () => {
+    let resolveReload!: (result: ReadTextDocumentResult) => void;
+    const readText = vi
+      .fn<ReadTextFn>()
+      .mockResolvedValueOnce(loadedDoc('a.txt', 'original'))
+      .mockImplementationOnce(
+        () =>
+          new Promise<ReadTextDocumentResult>((resolve) => {
+            resolveReload = resolve;
+          }),
+      );
+    const saveText = vi.fn<SaveTextFn>(async () => ({
+      status: 'error',
+      error: { code: 'CONFLICT', message: '文件已被外部修改，保存被拒绝' },
+    }));
+    mockDesktop(
+      readText,
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+local');
+    await clickSaveButton();
+    await userEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(screen.getByText('正在读取 a.txt…')).toBeDefined();
+    expect(editorView()).toBeNull();
+
+    await act(async () => {
+      resolveReload(loadedDoc('a.txt', '磁盘新版本'));
+    });
+    expect(editorDoc()).toBe('磁盘新版本');
+    expect(screen.queryByLabelText('未保存')).toBeNull();
   });
 
   it('saving 标签存在时切换工作区被安全阻止，等待保存完成后保留全部标签', async () => {
@@ -1906,6 +2029,7 @@ describe('controller 竞态防御（WP5，第 8.6 节）', () => {
     return (
       <>
         <span data-testid="tab-count">{model.state.tabs.length}</span>
+        <span data-testid="tab-status">{model.state.tabs[0]?.status ?? 'none'}</span>
         <button type="button" onClick={() => openTextFile('a.txt')}>
           打开A
         </button>
@@ -1959,5 +2083,31 @@ describe('controller 竞态防御（WP5，第 8.6 节）', () => {
     });
 
     expect(screen.getByTestId('tab-count').textContent).toBe('0');
+  });
+
+  it('controller 纵深门禁拒绝未确认的 mixed 换行保存', async () => {
+    const saveText = vi.fn<SaveTextFn>();
+    (window as unknown as Record<string, unknown>).desktop = {
+      runtime: { platform: 'win32', electronVersion: '99.9.9' },
+      workspace: { open: vi.fn(), refresh: vi.fn() },
+      document: {
+        readText: vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', '一\r\n二\n三', 'mixed')),
+        saveText,
+      },
+      window: {
+        setDirtyState: vi.fn(async () => undefined),
+        requestClose: vi.fn(async () => undefined),
+        cancelClose: vi.fn(async () => undefined),
+        onCloseRequested: vi.fn(() => () => {}),
+      },
+    };
+    render(<ControllerHarness />);
+
+    await userEvent.click(screen.getByRole('button', { name: '打开A' }));
+    await userEvent.click(screen.getByRole('button', { name: '编辑A' }));
+    await userEvent.click(screen.getByRole('button', { name: '保存A' }));
+
+    expect(saveText).not.toHaveBeenCalled();
+    expect(screen.getByTestId('tab-status').textContent).toBe('save-error');
   });
 });

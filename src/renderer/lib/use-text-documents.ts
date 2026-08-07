@@ -44,6 +44,11 @@ import {
   updateTabRuntime,
 } from './text-document-tabs';
 
+const MIXED_LINE_ENDINGS_ERROR = {
+  code: 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
+  message: '文件包含混合换行，需要确认规范化规则',
+} as const;
+
 export interface TextDocumentsController {
   readonly model: TextTabsModel;
   /** 从文件树选择 TXT：打开或激活对应标签，并在新标签上发起读取。 */
@@ -108,6 +113,9 @@ export function useTextDocuments(): TextDocumentsController {
 
   const commitReadResult = useCallback(
     (result: ReadTextDocumentResult, tabId: string, requestId: number, epoch: number) => {
+      if (!mountedRef.current) {
+        return;
+      }
       const current = modelRef.current;
       const tab = tabById(current, tabId);
       const entry = current.runtime.get(tabId);
@@ -225,10 +233,16 @@ export function useTextDocuments(): TextDocumentsController {
       }
       const requestId = ++readRequestCounterRef.current;
       const entry = current.runtime.get(tabId);
+      // 重试/重新读取期间进入不可编辑 loading 状态，防止请求完成后覆盖期间的新输入。
+      const reading = updateTab(current, tabId, (target) => ({
+        ...target,
+        status: 'loading',
+        error: null,
+      }));
       const next =
         entry === undefined
-          ? withReadRequest(current, tabId, requestId, tab.content)
-          : updateTabRuntime(current, tabId, (runtimeEntry) => ({
+          ? withReadRequest(reading, tabId, requestId, tab.content)
+          : updateTabRuntime(reading, tabId, (runtimeEntry) => ({
               ...runtimeEntry,
               readRequestId: requestId,
             }));
@@ -245,6 +259,9 @@ export function useTextDocuments(): TextDocumentsController {
       captured: { editRevision: number },
       epoch: number,
     ) => {
+      if (!mountedRef.current) {
+        return;
+      }
       const current = modelRef.current;
       const tab = tabById(current, tabId);
       const entry = current.runtime.get(tabId);
@@ -308,6 +325,20 @@ export function useTextDocuments(): TextDocumentsController {
       if (tab.status === 'loaded-clean') {
         return;
       }
+      // UI 会在正常入口提前确认；controller 仍保留这一门禁，避免快捷键与 React
+      // 状态同步交界处的极短竞态绕过 mixed 换行确认并直接写盘。
+      if (target.lineEnding === 'mixed' && confirmMixedLineEndingNormalization !== true) {
+        commit(
+          updateTab(current, tabId, (targetTab) => ({
+            ...targetTab,
+            status: 'save-error',
+            dirty: true,
+            saving: false,
+            error: MIXED_LINE_ENDINGS_ERROR,
+          })),
+        );
+        return;
+      }
       const captured = {
         relativePath: tab.relativePath,
         content: entry.latestContent,
@@ -359,11 +390,19 @@ export function useTextDocuments(): TextDocumentsController {
         return;
       }
       const requestId = ++readRequestCounterRef.current;
+      const reading = updateTab(current, tabId, (target) => ({
+        ...target,
+        status: 'loading',
+        error: null,
+      }));
+      const entry = current.runtime.get(tabId);
       commit(
-        updateTabRuntime(current, tabId, (runtimeEntry) => ({
-          ...runtimeEntry,
-          readRequestId: requestId,
-        })),
+        entry === undefined
+          ? withReadRequest(reading, tabId, requestId, tab.content)
+          : updateTabRuntime(reading, tabId, (runtimeEntry) => ({
+              ...runtimeEntry,
+              readRequestId: requestId,
+            })),
       );
       readPath(tab.relativePath, tabId, requestId);
     },

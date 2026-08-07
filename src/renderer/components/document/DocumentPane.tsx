@@ -115,6 +115,31 @@ function saveStatusLabel(tab: TextDocumentTabState): string {
   }
 }
 
+/** 与主进程 mixed 换行规范化规则一致：CR 系占优或平局时使用 CRLF。 */
+function editorLineSeparator(tab: TextDocumentTabState): '\n' | '\r\n' {
+  const document = tab.document;
+  if (document?.lineEnding === 'crlf') {
+    return '\r\n';
+  }
+  if (document?.lineEnding !== 'mixed') {
+    return '\n';
+  }
+  let crStyle = 0;
+  let lfStyle = 0;
+  for (let index = 0; index < document.content.length; index += 1) {
+    const code = document.content.charCodeAt(index);
+    if (code === 0x0d) {
+      crStyle += 1;
+      if (index + 1 < document.content.length && document.content.charCodeAt(index + 1) === 0x0a) {
+        index += 1;
+      }
+    } else if (code === 0x0a) {
+      lfStyle += 1;
+    }
+  }
+  return lfStyle > crStyle ? '\n' : '\r\n';
+}
+
 function WelcomePanel(): React.JSX.Element {
   return (
     <div className="welcome-panel">
@@ -199,6 +224,7 @@ function TabBody({
         key={tab.id}
         tabId={tab.id}
         content={tab.content}
+        lineSeparator={editorLineSeparator(tab)}
         sessions={sessions}
         onContentChange={(content) => onContentChange(tab.id, content)}
         onSaveRequest={() => onSave(tab.id)}
