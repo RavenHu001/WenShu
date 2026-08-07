@@ -143,8 +143,8 @@ body {
 }
 
 .editor-area {
-  display: grid;
-  grid-template-rows: 38px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   /* 关键：作为 grid 项不允许被超高编辑器内容撑开，否则滚动容器失效 */
   min-height: 0;
@@ -153,6 +153,7 @@ body {
 
 .editor-tabs {
   display: flex;
+  flex-shrink: 0;
   align-items: stretch;
   min-height: 34px;
   overflow-x: auto;
@@ -234,6 +235,7 @@ body {
 
 .welcome-panel {
   display: grid;
+  flex: 1 1 auto;
   min-height: 0;
   padding: 54px;
   overflow: auto;
@@ -557,6 +559,7 @@ body {
 
 .doc-pane-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   /* 滚动由 CodeMirror 的 .cm-scroller 承担，错误横幅固定在顶部 */
@@ -608,6 +611,7 @@ body {
 /* WP4：保存工具条（位于标签栏与正文之间，展示活动标签的保存状态） */
 .doc-toolbar-row {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
   min-height: 34px;
