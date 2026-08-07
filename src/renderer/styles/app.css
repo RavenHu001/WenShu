@@ -605,23 +605,6 @@ body {
   font-size: 13px;
 }
 
-/* WP2 只读正文显示；WP3 由 CodeMirror 会话宿主替换 */
-.doc-readonly-content {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin: 0;
-  padding: 18px 22px;
-  overflow: auto;
-  color: #2f3542;
-  background: #ffffff;
-  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-  user-select: text;
-}
-
 .doc-toolbar {
   display: flex;
   align-items: center;

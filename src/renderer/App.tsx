@@ -15,7 +15,7 @@ type PendingDiscard =
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
-  const { model, openTextFile, activateTab, closeTab, retryRead, invalidateWorkspace } =
+  const { model, openTextFile, activateTab, editTab, closeTab, retryRead, invalidateWorkspace } =
     useTextDocuments();
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
@@ -101,9 +101,9 @@ export const App = (): React.JSX.Element => {
       current.dirtyTabCount === 1 ? '1 个未保存标签' : `${current.dirtyTabCount} 个未保存标签`;
     switch (current.kind) {
       case 'switch-workspace':
-        return `放弃对 ${label} 的修改，并切换工作区？`;
+        return `放弃对 ${label}的修改，并切换工作区？`;
       case 'close-window':
-        return `放弃对 ${label} 的修改，并关闭窗口？`;
+        return `放弃对 ${label}的修改，并关闭窗口？`;
     }
   };
 
@@ -149,6 +149,7 @@ export const App = (): React.JSX.Element => {
             onActivateTab={activateTab}
             onCloseTab={closeTab}
             onRetryRead={retryRead}
+            onContentChange={editTab}
           />
         </section>
       </main>

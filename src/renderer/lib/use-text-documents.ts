@@ -18,7 +18,9 @@
  *
  * - 不持有工作区根路径或绝对路径；标签只使用规范相对路径；
  * - 不新增 IPC / preload 能力，复用 `document.readText` 固定窄协议；
- * - 编辑（CodeMirror 会话）与保存流程分别由 WP3、WP4 接入；
+ * - `editTab` 经 WP1 纯转移更新目标标签（dirty / 编辑修订号 / latestContent），
+ *   由 WP3 编辑器宿主上报正文变化；
+ * - 保存流程由 WP4 接入；
  * - 组件卸载后不再提交任何异步结果。
  */
 
@@ -31,6 +33,7 @@ import {
   asyncResultStillValid,
   closeTab as closeTabState,
   createEmptyModel,
+  editTab as editTabState,
   invalidateWorkspace as invalidateTabsModel,
   openTab,
   tabById,
@@ -44,6 +47,8 @@ export interface TextDocumentsController {
   readonly openTextFile: (relativePath: string) => void;
   /** 点击标签切换活动标签。 */
   readonly activateTab: (tabId: string) => void;
+  /** 编辑器正文变化：只更新目标标签（正文实际变化才标记 dirty 并递增修订号）。 */
+  readonly editTab: (tabId: string, content: string) => void;
   /** 关闭标签（未保存确认由界面层完成，见 WP5）。 */
   readonly closeTab: (tabId: string) => void;
   /** 错误标签重试：发起新一轮读取并作废旧请求。 */
@@ -186,6 +191,13 @@ export function useTextDocuments(): TextDocumentsController {
     [commit],
   );
 
+  const editTab = useCallback(
+    (tabId: string, content: string) => {
+      commit(editTabState(modelRef.current, tabId, content));
+    },
+    [commit],
+  );
+
   const closeTab = useCallback(
     (tabId: string) => {
       commit(closeTabState(modelRef.current, tabId));
@@ -220,5 +232,13 @@ export function useTextDocuments(): TextDocumentsController {
     commit(invalidateTabsModel());
   }, [commit]);
 
-  return { model, openTextFile, activateTab, closeTab, retryRead, invalidateWorkspace };
+  return {
+    model,
+    openTextFile,
+    activateTab,
+    editTab,
+    closeTab,
+    retryRead,
+    invalidateWorkspace,
+  };
 }

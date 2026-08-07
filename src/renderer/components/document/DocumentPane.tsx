@@ -1,14 +1,19 @@
 /**
- * 中央文档区 —— TASK-005 WP2：多标签渲染。
+ * 中央文档区 —— TASK-005 WP3：多标签渲染与每标签 CodeMirror 会话。
  *
  * - 标签栏与正文使用同一份 activeTabId 快照，避免标签标题与正文错位；
  * - 无标签时显示欢迎页（不创建伪文档标签）；
- * - 活动标签正文按状态渲染：loading 提示、read-error 错误面板/横幅、正文显示；
- * - WP2 阶段正文为只读显示；CodeMirror 每标签会话由 WP3 接入，
- *   保存工具条与冲突流程由 WP4 接入。
+ * - 活动标签正文按状态渲染：loading 提示、read-error 错误面板/横幅、
+ *   CodeMirror 编辑器宿主（每标签会话缓存，见 use-editor-sessions.ts）；
+ * - 编辑器只挂载活动标签，切换时卸载/挂载并由会话缓存保存与恢复
+ *   光标、选区、滚动位置与撤销历史；
+ * - 保存工具条与冲突流程由 WP4 接入。
  */
 
+import { useMemo } from 'react';
 import { TabBar } from './TabBar';
+import { EditorSessionHost } from './EditorSessionHost';
+import { useEditorSessions } from '../../lib/use-editor-sessions';
 import type { TextDocumentTabState } from '../../lib/text-document-tabs';
 
 export function DocumentPane({
@@ -17,6 +22,7 @@ export function DocumentPane({
   onActivateTab,
   onCloseTab,
   onRetryRead,
+  onContentChange,
 }: {
   readonly tabs: readonly TextDocumentTabState[];
   readonly activeTabId: string | null;
@@ -24,7 +30,11 @@ export function DocumentPane({
   readonly onCloseTab: (tabId: string) => void;
   /** read-error 标签的重试入口（目标标签绑定 tabId）。 */
   readonly onRetryRead: (tabId: string) => void;
+  /** 编辑器正文变化：目标标签绑定 tabId。 */
+  readonly onContentChange: (tabId: string, content: string) => void;
 }): React.JSX.Element {
+  const liveTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
+  const sessions = useEditorSessions(liveTabIds);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
 
   return (
@@ -38,7 +48,12 @@ export function DocumentPane({
       {activeTab === null ? (
         <WelcomePanel />
       ) : (
-        <TabBody tab={activeTab} onRetryRead={onRetryRead} />
+        <TabBody
+          tab={activeTab}
+          sessions={sessions}
+          onRetryRead={onRetryRead}
+          onContentChange={onContentChange}
+        />
       )}
     </>
   );
@@ -62,10 +77,14 @@ function WelcomePanel(): React.JSX.Element {
 
 function TabBody({
   tab,
+  sessions,
   onRetryRead,
+  onContentChange,
 }: {
   readonly tab: TextDocumentTabState;
+  readonly sessions: ReturnType<typeof useEditorSessions>;
   readonly onRetryRead: (tabId: string) => void;
+  readonly onContentChange: (tabId: string, content: string) => void;
 }): React.JSX.Element {
   if (tab.status === 'loading') {
     return <div className="doc-pane-body doc-loading">正在读取 {tab.name}…</div>;
@@ -104,7 +123,13 @@ function TabBody({
           </button>
         </div>
       )}
-      <pre className="doc-readonly-content">{tab.content}</pre>
+      <EditorSessionHost
+        key={tab.id}
+        tabId={tab.id}
+        content={tab.content}
+        sessions={sessions}
+        onContentChange={(content) => onContentChange(tab.id, content)}
+      />
     </div>
   );
 }
