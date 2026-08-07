@@ -8,6 +8,7 @@ import { undo } from '@codemirror/commands';
 import { App } from '../../src/renderer/App';
 import { EditorSessionHost } from '../../src/renderer/components/document/EditorSessionHost';
 import { useEditorSessions } from '../../src/renderer/lib/use-editor-sessions';
+import { useTextDocuments } from '../../src/renderer/lib/use-text-documents';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -954,6 +955,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
     expect(editorDoc()).toBe('内容:a.txt+X');
 
     await userEvent.click(screen.getByRole('button', { name: '关闭 a.txt' }));
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
     await openTextFile('a.txt');
     expect(editorDoc()).toBe('内容:a.txt');
 
@@ -1484,7 +1486,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     expect(screen.getByText('已保存')).toBeDefined();
   });
 
-  it('工作区失效后的迟到保存结果不更新新会话', async () => {
+  it('saving 标签存在时切换工作区被安全阻止，等待保存完成后保留全部标签', async () => {
     const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
     const saveText = vi.fn<SaveTextFn>(
       () =>
@@ -1492,18 +1494,19 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
           resolvers.push(resolve);
         }),
     );
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
+      } as OpenWorkspaceResult);
     mockDesktop(
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          status: 'selected',
-          workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
-        } as OpenWorkspaceResult)
-        .mockResolvedValueOnce({
-          status: 'selected',
-          workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
-        } as OpenWorkspaceResult),
+      open,
       undefined,
       undefined,
       saveText,
@@ -1515,16 +1518,446 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     await clickSaveButton();
     expect(saveText).toHaveBeenCalledTimes(1);
 
+    // saving 标签存在：切换工作区被阻止，不打开目录选择器
+    await userEvent.click(openBtn());
+    expect(screen.getByText('等待保存完成')).toBeDefined();
+    await userEvent.click(screen.getByRole('button', { name: '知道了' }));
+    expect(open).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+edit', 'b'.repeat(64)));
+    });
+    expect(tabCount()).toBe(1);
+    expect(tabIsActive('a.txt')).toBe(true);
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+});
+
+describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
+  afterEach(() => {
+    cleanup();
+    delete (window as unknown as Record<string, unknown>).desktop;
+  });
+
+  it('dirty 标签关闭：取消分支保留标签、正文与未保存标记', async () => {
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    await userEvent.click(screen.getByRole('button', { name: '关闭 a.txt' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 a.txt 的未保存修改并关闭标签/)).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(tabCount()).toBe(1);
+    expect(tabIsActive('a.txt')).toBe(true);
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+  });
+
+  it('dirty 标签关闭：放弃分支关闭标签并激活相邻标签', async () => {
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await openTextFile('b.txt');
+    await insertAtEnd('+edit');
+    await userEvent.click(screen.getByRole('button', { name: '关闭 b.txt' }));
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(tabNames()).toEqual(['a.txt']);
+    expect(tabIsActive('a.txt')).toBe(true);
+    expect(editorDoc()).toBe('内容:a.txt');
+    expect(screen.queryByLabelText('未保存')).toBeNull();
+  });
+
+  it('非活动 dirty 标签的关闭按钮：确认目标不因活动标签变化而错位', async () => {
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+    await clickTab('a.txt');
+    // 在 B 未激活的状态下点击 B 的关闭按钮
+    await userEvent.click(screen.getByRole('button', { name: '关闭 b.txt' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 b.txt 的未保存修改并关闭标签/)).toBeDefined();
+
+    // 对话框打开期间切换到 B：确认目标仍为 B
+    await clickTab('b.txt');
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(tabNames()).toEqual(['a.txt']);
+    expect(tabIsActive('a.txt')).toBe(true);
+  });
+
+  it('Ctrl+W 与关闭按钮走同一关闭入口：clean 直接关闭，dirty 弹确认', async () => {
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    async function pressCtrlW(): Promise<void> {
+      await act(async () => {
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', ctrlKey: true, bubbles: true }),
+        );
+      });
+    }
+
+    // clean 标签：Ctrl+W 直接关闭
+    await openTextFile('a.txt');
+    await pressCtrlW();
+    expect(tabCount()).toBe(0);
+
+    // dirty 标签：Ctrl+W 弹确认，取消保留
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    await pressCtrlW();
+    expect(screen.getByRole('dialog')).toBeDefined();
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(tabCount()).toBe(1);
+
+    // 再次 Ctrl+W，放弃后关闭
+    await pressCtrlW();
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+    expect(tabCount()).toBe(0);
+    expect(screen.getByText('本地多文档工作台')).toBeDefined();
+  });
+
+  it('多个 dirty 标签切换工作区：聚合确认后取消目录选择仍保留全部标签', async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      open,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+
+    await userEvent.click(openBtn());
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 2 个未保存标签的修改，并切换工作区/)).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+    expect(open).toHaveBeenCalledTimes(2);
+
+    // 目录选择取消：全部标签与 dirty 保留
+    expect(tabCount()).toBe(2);
+    expect(screen.getAllByLabelText('未保存')).toHaveLength(2);
+    await clickTab('a.txt');
+    expect(editorDoc()).toBe('内容:a.txt+a');
+  });
+
+  it('取消聚合确认不打开目录选择器', async () => {
+    const open = vi.fn().mockResolvedValueOnce({
+      status: 'selected',
+      workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+    } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      open,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(tabCount()).toBe(1);
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+  });
+
+  it('只有工作区成功切换才清空标签', async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
+      } as OpenWorkspaceResult);
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      open,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
     await userEvent.click(openBtn());
     await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    // 新工作区选择成功：标签清空，回到欢迎页
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(tabCount()).toBe(0);
     expect(screen.getByText('本地多文档工作台')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'c.txt' })).toBeDefined();
+  });
+
+  it('window.setDirtyState 等于全部标签 dirty 的聚合值', async () => {
+    const windowApi = makeWindowApi();
+    const saveText = vi.fn<SaveTextFn>(async (request) =>
+      savedDoc(request.relativePath, request.content, 'b'.repeat(64)),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      windowApi,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await openTextFile('b.txt');
+    expect(windowApi.setDirtyState).toHaveBeenLastCalledWith(false);
+
+    await insertAtEnd('+a');
+    expect(windowApi.setDirtyState).toHaveBeenLastCalledWith(true);
+    await openTextFile('a.txt');
+    await insertAtEnd('+b');
+    expect(windowApi.setDirtyState).toHaveBeenLastCalledWith(true);
+
+    await clickTab('b.txt');
+    await clickSaveButton();
+    expect(windowApi.setDirtyState).toHaveBeenLastCalledWith(true);
+    await clickTab('a.txt');
+    await clickSaveButton();
+    expect(windowApi.setDirtyState).toHaveBeenLastCalledWith(false);
+  });
+
+  it('窗口关闭提示包含未保存标签数量：放弃后请求关闭，取消后复位', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      windowApi,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+    });
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 2 个未保存标签的修改，并关闭窗口/)).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(windowApi.cancelClose).toHaveBeenCalledTimes(1);
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+    });
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+    expect(windowApi.requestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('saving 标签关闭被安全阻止：提示等待保存完成，标签保留', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    await clickSaveButton();
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭 a.txt' }));
+    expect(screen.getByText('等待保存完成')).toBeDefined();
+    expect(screen.getByText(/a.txt 正在保存/)).toBeDefined();
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: '知道了' }));
+    expect(tabCount()).toBe(1);
+    expect(screen.getByText('正在保存…')).toBeDefined();
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+edit', 'b'.repeat(64)));
+    });
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('saving 标签存在时窗口关闭被安全阻止：复位主进程且不请求关闭', async () => {
+    const windowApi = makeWindowApi();
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      windowApi,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    await clickSaveButton();
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+    });
+    expect(screen.getByText('等待保存完成')).toBeDefined();
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: '知道了' }));
+    expect(windowApi.cancelClose).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+edit', 'b'.repeat(64)));
+    });
+  });
+
+  it('关闭确认打开时收到窗口关闭询问：不覆盖原确认目标并复位主进程', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      windowApi,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭 a.txt' }));
+    expect(screen.getByText(/放弃对 a.txt 的未保存修改并关闭标签/)).toBeDefined();
+
+    await act(async () => {
+      windowApi.triggerCloseRequested();
+    });
+    expect(windowApi.cancelClose).toHaveBeenCalledTimes(1);
+    // 原确认对话框保持不变
+    expect(screen.getByText(/放弃对 a.txt 的未保存修改并关闭标签/)).toBeDefined();
+    expect(screen.queryByText(/并关闭窗口/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(tabCount()).toBe(1);
+    expect(editorDoc()).toBe('内容:a.txt+edit');
+  });
+});
+
+describe('controller 竞态防御（WP5，第 8.6 节）', () => {
+  afterEach(() => {
+    cleanup();
+    delete (window as unknown as Record<string, unknown>).desktop;
+  });
+
+  /** 直接暴露 controller 命令，绕过 UI 确认流程测试迟到结果防御。 */
+  function ControllerHarness(): React.JSX.Element {
+    const { model, openTextFile, editTab, saveTab, invalidateWorkspace } = useTextDocuments();
+    return (
+      <>
+        <span data-testid="tab-count">{model.state.tabs.length}</span>
+        <button type="button" onClick={() => openTextFile('a.txt')}>
+          打开A
+        </button>
+        <button type="button" onClick={() => editTab('a.txt', '内容:a.txt+edit')}>
+          编辑A
+        </button>
+        <button type="button" onClick={() => saveTab('a.txt')}>
+          保存A
+        </button>
+        <button type="button" onClick={() => invalidateWorkspace()}>
+          失效工作区
+        </button>
+      </>
+    );
+  }
+
+  it('工作区失效后的迟到保存结果不更新新会话', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    (window as unknown as Record<string, unknown>).desktop = {
+      runtime: { platform: 'win32', electronVersion: '99.9.9' },
+      workspace: { open: vi.fn(), refresh: vi.fn() },
+      document: {
+        readText: vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+        saveText,
+      },
+      window: {
+        setDirtyState: vi.fn(async () => undefined),
+        requestClose: vi.fn(async () => undefined),
+        cancelClose: vi.fn(async () => undefined),
+        onCloseRequested: vi.fn(() => () => {}),
+      },
+    };
+    render(<ControllerHarness />);
+
+    await userEvent.click(screen.getByRole('button', { name: '打开A' }));
+    await userEvent.click(screen.getByRole('button', { name: '编辑A' }));
+    await userEvent.click(screen.getByRole('button', { name: '保存A' }));
+    expect(saveText).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole('button', { name: '失效工作区' }));
+    expect(screen.getByTestId('tab-count').textContent).toBe('0');
 
     await act(async () => {
       resolvers[0]!(savedDoc('a.txt', '内容:a.txt+edit', 'b'.repeat(64)));
     });
 
-    expect(screen.getByText('本地多文档工作台')).toBeDefined();
-    expect(tabCount()).toBe(0);
-    expect(screen.getByRole('button', { name: 'c.txt' })).toBeDefined();
+    expect(screen.getByTestId('tab-count').textContent).toBe('0');
   });
 });
