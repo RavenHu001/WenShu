@@ -1,13 +1,14 @@
 /**
- * 中央文档区 —— TASK-005 WP3：多标签渲染与每标签 CodeMirror 会话。
+ * 中央文档区 —— TASK-005 WP4：多标签渲染、每标签 CodeMirror 会话与保存工具条。
  *
  * - 标签栏与正文使用同一份 activeTabId 快照，避免标签标题与正文错位；
  * - 无标签时显示欢迎页（不创建伪文档标签）；
  * - 活动标签正文按状态渲染：loading 提示、read-error 错误面板/横幅、
  *   CodeMirror 编辑器宿主（每标签会话缓存，见 use-editor-sessions.ts）；
+ * - 保存工具条（保存按钮与状态文本）、保存失败/冲突横幅与重新读取入口
+ *   全部从目标标签状态派生，目标标签绑定 tabId；
  * - 编辑器只挂载活动标签，切换时卸载/挂载并由会话缓存保存与恢复
- *   光标、选区、滚动位置与撤销历史；
- * - 保存工具条与冲突流程由 WP4 接入。
+ *   光标、选区、滚动位置与撤销历史。
  */
 
 import { useMemo } from 'react';
@@ -23,6 +24,8 @@ export function DocumentPane({
   onCloseTab,
   onRetryRead,
   onContentChange,
+  onSave,
+  onReloadRequest,
 }: {
   readonly tabs: readonly TextDocumentTabState[];
   readonly activeTabId: string | null;
@@ -32,10 +35,15 @@ export function DocumentPane({
   readonly onRetryRead: (tabId: string) => void;
   /** 编辑器正文变化：目标标签绑定 tabId。 */
   readonly onContentChange: (tabId: string, content: string) => void;
+  /** 保存按钮与 Ctrl+S 共用入口：只保存活动标签（目标标签绑定 tabId）。 */
+  readonly onSave: (tabId: string) => void;
+  /** 冲突状态下请求"放弃本地修改并重新读取"（确认由 App 绑定 tabId 完成）。 */
+  readonly onReloadRequest: (tabId: string) => void;
 }): React.JSX.Element {
   const liveTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
   const sessions = useEditorSessions(liveTabIds);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+  const editable = activeTab !== null && isEditable(activeTab);
 
   return (
     <>
@@ -45,6 +53,23 @@ export function DocumentPane({
         onActivate={onActivateTab}
         onCloseRequest={onCloseTab}
       />
+      {activeTab !== null && editable && (
+        <div className="doc-toolbar-row">
+          <button
+            className="doc-save-btn"
+            type="button"
+            disabled={!activeTab.dirty || activeTab.saving}
+            onClick={() => onSave(activeTab.id)}
+          >
+            保存
+          </button>
+          {saveStatusLabel(activeTab) !== '' && (
+            <span className={`doc-save-status${activeTab.saving ? ' is-saving' : ''}`}>
+              {saveStatusLabel(activeTab)}
+            </span>
+          )}
+        </div>
+      )}
       {activeTab === null ? (
         <WelcomePanel />
       ) : (
@@ -53,10 +78,41 @@ export function DocumentPane({
           sessions={sessions}
           onRetryRead={onRetryRead}
           onContentChange={onContentChange}
+          onReloadRequest={onReloadRequest}
+          onSave={onSave}
         />
       )}
     </>
   );
+}
+
+/** 可编辑状态：沿用 TASK-004 的判定（read-error 仅在有成功快照时可编辑）。 */
+function isEditable(tab: TextDocumentTabState): boolean {
+  return (
+    tab.status === 'loaded-clean' ||
+    tab.status === 'loaded-dirty' ||
+    tab.status === 'saving' ||
+    tab.status === 'save-error' ||
+    tab.status === 'conflict' ||
+    (tab.status === 'read-error' && tab.document !== null)
+  );
+}
+
+function saveStatusLabel(tab: TextDocumentTabState): string {
+  switch (tab.status) {
+    case 'loaded-clean':
+      return '已保存';
+    case 'loaded-dirty':
+      return '未保存';
+    case 'saving':
+      return '正在保存…';
+    case 'save-error':
+      return '保存失败';
+    case 'conflict':
+      return '外部冲突';
+    default:
+      return '';
+  }
 }
 
 function WelcomePanel(): React.JSX.Element {
@@ -80,11 +136,15 @@ function TabBody({
   sessions,
   onRetryRead,
   onContentChange,
+  onReloadRequest,
+  onSave,
 }: {
   readonly tab: TextDocumentTabState;
   readonly sessions: ReturnType<typeof useEditorSessions>;
   readonly onRetryRead: (tabId: string) => void;
   readonly onContentChange: (tabId: string, content: string) => void;
+  readonly onReloadRequest: (tabId: string) => void;
+  readonly onSave: (tabId: string) => void;
 }): React.JSX.Element {
   if (tab.status === 'loading') {
     return <div className="doc-pane-body doc-loading">正在读取 {tab.name}…</div>;
@@ -104,23 +164,35 @@ function TabBody({
     );
   }
 
-  const errorBannerText =
-    tab.status === 'read-error' && tab.error !== null
-      ? `读取 ${tab.name} 失败：${tab.error.message}`
-      : null;
+  const errorBanner =
+    tab.status === 'conflict'
+      ? {
+          text: `保存失败：${tab.error?.message ?? ''}`,
+          action: { label: '重新读取', target: onReloadRequest },
+        }
+      : tab.status === 'save-error'
+        ? { text: `保存失败：${tab.error?.message ?? ''}`, action: null }
+        : tab.status === 'read-error'
+          ? {
+              text: `读取 ${tab.name} 失败：${tab.error?.message ?? ''}`,
+              action: { label: '重试', target: onRetryRead },
+            }
+          : null;
 
   return (
     <div className="doc-pane-body">
-      {errorBannerText !== null && (
+      {errorBanner !== null && (
         <div className="doc-error-banner">
-          <span>{errorBannerText}</span>
-          <button
-            className="ws-btn doc-reload-btn"
-            type="button"
-            onClick={() => onRetryRead(tab.id)}
-          >
-            重试
-          </button>
+          <span>{errorBanner.text}</span>
+          {errorBanner.action !== null && (
+            <button
+              className="ws-btn doc-reload-btn"
+              type="button"
+              onClick={() => errorBanner.action.target(tab.id)}
+            >
+              {errorBanner.action.label}
+            </button>
+          )}
         </div>
       )}
       <EditorSessionHost
@@ -129,6 +201,7 @@ function TabBody({
         content={tab.content}
         sessions={sessions}
         onContentChange={(content) => onContentChange(tab.id, content)}
+        onSaveRequest={() => onSave(tab.id)}
       />
     </div>
   );

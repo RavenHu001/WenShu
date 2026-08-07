@@ -14,9 +14,14 @@ import type {
   WorkspaceEntry,
   WorkspaceSnapshot,
 } from '../../src/shared/workspace';
-import type { ReadTextDocumentResult } from '../../src/shared/document';
+import type {
+  ReadTextDocumentResult,
+  SaveTextDocumentRequest,
+  SaveTextDocumentResult,
+} from '../../src/shared/document';
 
 type ReadTextFn = (relativePath: string) => Promise<ReadTextDocumentResult>;
+type SaveTextFn = (request: SaveTextDocumentRequest) => Promise<SaveTextDocumentResult>;
 
 /** 窗口协调 API mock：可捕获关闭询问回调并手动触发。 */
 function makeWindowApi() {
@@ -62,6 +67,10 @@ function mockDesktop(
   open?: () => Promise<OpenWorkspaceResult>,
   refresh?: () => Promise<RefreshWorkspaceResult>,
   windowApi: ReturnType<typeof makeWindowApi> = makeWindowApi(),
+  saveText: SaveTextFn = async () => ({
+    status: 'error',
+    error: { code: 'WRITE_FAILED', message: '写入文件失败' },
+  }),
 ) {
   (window as unknown as Record<string, unknown>).desktop = {
     runtime: { platform: 'win32', electronVersion: '99.9.9' },
@@ -69,7 +78,7 @@ function mockDesktop(
       open: open ?? vi.fn(),
       refresh: refresh ?? vi.fn(),
     },
-    document: { readText, saveText: vi.fn() },
+    document: { readText, saveText },
     window: {
       setDirtyState: windowApi.setDirtyState,
       requestClose: windowApi.requestClose,
@@ -119,6 +128,21 @@ function loadedDoc(relativePath: string, content = `内容:${relativePath}`): Re
       content,
       byteLength: Buffer.byteLength(content, 'utf8'),
       revision: 'a'.repeat(64),
+      hasUtf8Bom: false,
+      lineEnding: 'none',
+    },
+  };
+}
+
+function savedDoc(relativePath: string, content: string, revision: string): SaveTextDocumentResult {
+  return {
+    status: 'saved',
+    document: {
+      name: relativePath.split('/').pop() ?? relativePath,
+      relativePath,
+      content,
+      byteLength: Buffer.byteLength(content, 'utf8'),
+      revision,
       hasUtf8Bom: false,
       lineEnding: 'none',
     },
@@ -221,6 +245,30 @@ async function placeCursorAt(position: number): Promise<void> {
     }
     view.dispatch({ selection: { anchor: position } });
   });
+}
+
+/** 向编辑器派发 Ctrl+S 键盘事件，走 CodeMirror keymap 的保存快捷键路径。 */
+async function pressCtrlS(): Promise<void> {
+  await act(async () => {
+    const content = document.querySelector('.cm-content') as HTMLElement | null;
+    if (content === null) {
+      throw new Error('no editor');
+    }
+    content.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 's',
+        code: 'KeyS',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+}
+
+/** 点击保存工具条按钮。 */
+async function clickSaveButton(): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: '保存' }));
 }
 
 /** 文件树当前高亮的文件名。 */
@@ -968,6 +1016,7 @@ describe('编辑器宿主会话边界（WP3，第 8.4 节）', () => {
           content={content}
           sessions={sessions}
           onContentChange={setContent}
+          onSaveRequest={() => {}}
         />
         <button type="button" onClick={() => setTabId('b.txt')}>
           切到B
@@ -1015,5 +1064,467 @@ describe('编辑器宿主会话边界（WP3，第 8.4 节）', () => {
     expect(editorDoc()).toBe('v2+Y');
     await undoEdit();
     expect(editorDoc()).toBe('v2');
+  });
+});
+
+describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () => {
+  afterEach(() => {
+    cleanup();
+    delete (window as unknown as Record<string, unknown>).desktop;
+  });
+
+  it('保存按钮与 Ctrl+S 只保存活动标签，clean 标签不调用保存 IPC', async () => {
+    const saveText = vi.fn<SaveTextFn>(async (request) =>
+      savedDoc(request.relativePath, request.content, 'b'.repeat(64)),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+x');
+    await openTextFile('b.txt');
+    // B 为 clean：保存按钮禁用，Ctrl+S 也不发起写入
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true);
+    await pressCtrlS();
+    expect(saveText).not.toHaveBeenCalled();
+
+    // 活动标签 A 通过 Ctrl+S 保存
+    await clickTab('a.txt');
+    await pressCtrlS();
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(saveText.mock.calls[0]?.[0]).toEqual({
+      relativePath: 'a.txt',
+      content: '内容:a.txt+x',
+      expectedRevision: 'a'.repeat(64),
+    });
+
+    // 再次通过保存按钮发起同一流程
+    await insertAtEnd('+y');
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(2);
+    expect(saveText.mock.calls[1]?.[0]?.relativePath).toBe('a.txt');
+  });
+
+  it('保存期间显示正在保存，同一标签重复保存被抑制', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+x');
+
+    await clickSaveButton();
+    expect(screen.getByText('正在保存…')).toBeDefined();
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await clickSaveButton();
+    await pressCtrlS();
+    expect(saveText).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+x', 'b'.repeat(64)));
+    });
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('A、B 可各有一个保存请求在途', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(1);
+
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+a', 'c'.repeat(64)));
+      resolvers[1]!(savedDoc('b.txt', '内容:b.txt+b', 'd'.repeat(64)));
+    });
+
+    await clickTab('a.txt');
+    expect(screen.getByText('已保存')).toBeDefined();
+    await clickTab('b.txt');
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('A 保存结果不改变 B 的正文、状态与 revision', async () => {
+    const saveText = vi
+      .fn<SaveTextFn>()
+      .mockImplementationOnce(async (request) =>
+        savedDoc(request.relativePath, request.content, 'b'.repeat(64)),
+      )
+      .mockImplementation(async (request) =>
+        savedDoc(request.relativePath, request.content, 'e'.repeat(64)),
+      );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await clickSaveButton();
+
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+    // B 仍为未保存，正文与 revision 不受 A 保存影响
+    expect(screen.getByText('未保存')).toBeDefined();
+    expect(editorDoc()).toBe('内容:b.txt+b');
+
+    await clickSaveButton();
+    expect(saveText.mock.calls[1]?.[0]).toEqual({
+      relativePath: 'b.txt',
+      content: '内容:b.txt+b',
+      expectedRevision: 'a'.repeat(64),
+    });
+  });
+
+  it('A 保存期间继续编辑：旧成功结果不清除 A 的新 dirty，基线版本已更新', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', 'original')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await insertAtEnd('+first');
+    await clickSaveButton();
+    expect(saveText.mock.calls[0]?.[0]?.content).toBe('original+first');
+
+    await insertAtEnd('+second');
+    expect(screen.getByText('正在保存…')).toBeDefined();
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', 'original+first', 'b'.repeat(64)));
+    });
+
+    expect(screen.getByText('未保存')).toBeDefined();
+    expect(editorDoc()).toBe('original+first+second');
+
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(2);
+    expect(saveText.mock.calls[1]?.[0]?.expectedRevision).toBe('b'.repeat(64));
+    expect(saveText.mock.calls[1]?.[0]?.content).toBe('original+first+second');
+  });
+
+  it('用户切到 B 后 A 保存完成：结果提交到 A 且不抢占活动标签', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await clickSaveButton();
+    await openTextFile('b.txt');
+    expect(tabIsActive('b.txt')).toBe(true);
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+a', 'c'.repeat(64)));
+    });
+
+    // 活动标签仍是 B；A 的 dirty 已被清除
+    expect(tabIsActive('b.txt')).toBe(true);
+    expect(screen.getByText('已保存')).toBeDefined();
+    await clickTab('a.txt');
+    expect(screen.queryByLabelText('未保存')).toBeNull();
+    expect(editorDoc()).toBe('内容:a.txt+a');
+  });
+
+  it('保存失败只影响目标标签，其他标签仍可正常保存', async () => {
+    const saveText = vi
+      .fn<SaveTextFn>()
+      .mockImplementationOnce(async () => ({
+        status: 'error',
+        error: { code: 'WRITE_FAILED', message: '写入文件失败' },
+      }))
+      .mockImplementation(async (request) =>
+        savedDoc(request.relativePath, request.content, 'b'.repeat(64)),
+      );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await clickSaveButton();
+
+    expect(screen.getByText('保存失败')).toBeDefined();
+    expect(screen.getByText('保存失败：写入文件失败')).toBeDefined();
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+    expect(editorDoc()).toBe('内容:a.txt+a');
+
+    // B 不受影响，可正常保存
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+    await clickSaveButton();
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('冲突只影响目标标签，B 仍可保存', async () => {
+    const saveText = vi
+      .fn<SaveTextFn>()
+      .mockImplementationOnce(async () => ({
+        status: 'error',
+        error: { code: 'CONFLICT', message: '文件已被外部修改，保存被拒绝' },
+      }))
+      .mockImplementation(async (request) =>
+        savedDoc(request.relativePath, request.content, 'b'.repeat(64)),
+      );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+a');
+    await clickSaveButton();
+
+    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(screen.getByText('保存失败：文件已被外部修改，保存被拒绝')).toBeDefined();
+    expect(screen.getByRole('button', { name: '重新读取' })).toBeDefined();
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+    expect(editorDoc()).toBe('内容:a.txt+a');
+
+    await openTextFile('b.txt');
+    await insertAtEnd('+b');
+    await clickSaveButton();
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('混合换行确认绑定原标签：切换标签后确认仍只保存原标签', async () => {
+    const saveText = vi
+      .fn<SaveTextFn>()
+      .mockResolvedValueOnce({
+        status: 'error',
+        error: {
+          code: 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
+          message: '文件包含混合换行，需要确认规范化规则',
+        },
+      })
+      .mockImplementation(async (request) => savedDoc('a.txt', request.content, 'b'.repeat(64)));
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(saveText.mock.calls[0]?.[0]).not.toHaveProperty('confirmMixedLineEndingNormalization');
+    expect(await screen.findByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/按主要换行风格/)).toBeDefined();
+
+    // 对话框打开时切换标签，确认目标不变
+    await openTextFile('b.txt');
+    await userEvent.click(screen.getByRole('button', { name: '确认保存' }));
+
+    expect(saveText).toHaveBeenCalledTimes(2);
+    expect(saveText.mock.calls[1]?.[0]?.relativePath).toBe('a.txt');
+    expect(saveText.mock.calls[1]?.[0]?.confirmMixedLineEndingNormalization).toBe(true);
+
+    await clickTab('a.txt');
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('混合换行取消：不重试，原标签保持保存失败', async () => {
+    const saveText = vi.fn<SaveTextFn>(async () => ({
+      status: 'error',
+      error: {
+        code: 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
+        message: '文件包含混合换行，需要确认规范化规则',
+      },
+    }));
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', 'original')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+
+    await insertAtEnd('+edit');
+    await clickSaveButton();
+    expect(await screen.findByRole('dialog')).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(saveText).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('保存失败')).toBeDefined();
+    expect(editorDoc()).toBe('original+edit');
+    expect(screen.getByLabelText('未保存')).toBeDefined();
+  });
+
+  it('冲突重新读取绑定原标签：确认后只替换目标标签', async () => {
+    const readText = vi
+      .fn<ReadTextFn>()
+      .mockResolvedValueOnce(loadedDoc('a.txt', 'original'))
+      .mockResolvedValueOnce(loadedDoc('b.txt'))
+      .mockResolvedValueOnce(loadedDoc('a.txt', '磁盘新版本'));
+    const saveText = vi.fn<SaveTextFn>(async () => ({
+      status: 'error',
+      error: { code: 'CONFLICT', message: '文件已被外部修改，保存被拒绝' },
+    }));
+    mockDesktop(
+      readText,
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+
+    await openTextFile('a.txt');
+    await insertAtEnd('+local');
+    await clickSaveButton();
+    expect(screen.getByText('外部冲突')).toBeDefined();
+
+    await userEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText(/放弃对 a.txt 的本地修改/)).toBeDefined();
+
+    // 对话框打开时切换到 B，确认仍只重读 A
+    await openTextFile('b.txt');
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+
+    expect(readText).toHaveBeenCalledTimes(3);
+    expect(readText).toHaveBeenLastCalledWith('a.txt');
+
+    await clickTab('a.txt');
+    expect(editorDoc()).toBe('磁盘新版本');
+    expect(screen.queryByLabelText('未保存')).toBeNull();
+    expect(screen.queryByText('外部冲突')).toBeNull();
+    expect(screen.getByText('已保存')).toBeDefined();
+  });
+
+  it('工作区失效后的迟到保存结果不更新新会话', async () => {
+    const resolvers: Array<(result: SaveTextDocumentResult) => void> = [];
+    const saveText = vi.fn<SaveTextFn>(
+      () =>
+        new Promise<SaveTextDocumentResult>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    mockDesktop(
+      vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'selected',
+          workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+        } as OpenWorkspaceResult)
+        .mockResolvedValueOnce({
+          status: 'selected',
+          workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
+        } as OpenWorkspaceResult),
+      undefined,
+      undefined,
+      saveText,
+    );
+    render(<App />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+edit');
+    await clickSaveButton();
+    expect(saveText).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+    expect(screen.getByText('本地多文档工作台')).toBeDefined();
+
+    await act(async () => {
+      resolvers[0]!(savedDoc('a.txt', '内容:a.txt+edit', 'b'.repeat(64)));
+    });
+
+    expect(screen.getByText('本地多文档工作台')).toBeDefined();
+    expect(tabCount()).toBe(0);
+    expect(screen.getByRole('button', { name: 'c.txt' })).toBeDefined();
   });
 });

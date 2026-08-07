@@ -14,13 +14,13 @@
  *
  * ## 配置范围（TASK-004 第 4.2 节）
  *
- * 仅纯文本编辑、原生选择复制剪切粘贴、撤销重做；不加入语法高亮、查找替换、
- * 自动补全或复杂快捷键体系。保存快捷键由 WP4 接入。
+ * 仅纯文本编辑、原生选择复制剪切粘贴、撤销重做与保存快捷键（Mod-s）；
+ * 不加入语法高亮、查找替换、自动补全或复杂快捷键体系。
  */
 
 import { useEffect, useRef } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorView, keymap, type KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import type { EditorSession, EditorSessions } from '../../lib/use-editor-sessions';
 
@@ -31,15 +31,28 @@ export interface EditorSessionHostProps {
   readonly content: string;
   /** 用户输入导致的正文变化回调。 */
   readonly onContentChange: (content: string) => void;
+  /** Ctrl+S / Cmd+S 保存请求回调（目标标签由挂载中的宿主决定）。 */
+  readonly onSaveRequest: () => void;
   /** 每标签会话缓存。 */
   readonly sessions: EditorSessions;
+}
+
+/** 保存快捷键绑定：run 必须返回 true，表示快捷键已被处理。 */
+function saveBinding(requestSave: () => void): KeyBinding {
+  return {
+    key: 'Mod-s',
+    run: () => {
+      requestSave();
+      return true;
+    },
+  };
 }
 
 /** 创建会话：编辑器状态的 updateListener 经 `session.notify` 上报最新内容。 */
 function createEditorState(doc: string, session: EditorSession): EditorState {
   const extensions: Extension[] = [
     history(),
-    keymap.of([...defaultKeymap, ...historyKeymap]),
+    keymap.of([...defaultKeymap, ...historyKeymap, saveBinding(() => session.requestSave())]),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
@@ -52,14 +65,19 @@ function createEditorState(doc: string, session: EditorSession): EditorState {
 
 /**
  * 新建会话：先占位再赋状态，使 updateListener 能够引用会话对象本身；
- * 之后宿主挂载会把 `notify` 绑定到最新内容回调。
+ * 之后宿主挂载会把 `notify` / `requestSave` 绑定到最新回调。
  */
-function createSession(doc: string, notify: (content: string) => void): EditorSession {
+function createSession(
+  doc: string,
+  notify: (content: string) => void,
+  requestSave: () => void,
+): EditorSession {
   const session: EditorSession = {
     // 立即在下一行赋值为真实状态：仅供 updateListener 引用会话对象
     state: undefined as unknown as EditorState,
     scrollAnchor: null,
     notify,
+    requestSave,
   };
   session.state = createEditorState(doc, session);
   return session;
@@ -69,16 +87,19 @@ export function EditorSessionHost({
   tabId,
   content,
   onContentChange,
+  onSaveRequest,
   sessions,
 }: EditorSessionHostProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const contentChangeRef = useRef(onContentChange);
+  const saveRequestRef = useRef(onSaveRequest);
   const contentRef = useRef(content);
   const sessionsRef = useRef(sessions);
 
   useEffect(() => {
     contentChangeRef.current = onContentChange;
+    saveRequestRef.current = onSaveRequest;
   });
   useEffect(() => {
     contentRef.current = content;
@@ -99,11 +120,16 @@ export function EditorSessionHost({
     const cachedValid = existing !== null && existing.state.doc.toString() === doc;
     let session = existing;
     if (session === null || !cachedValid) {
-      session = createSession(doc, (text) => contentChangeRef.current(text));
+      session = createSession(
+        doc,
+        (text) => contentChangeRef.current(text),
+        () => saveRequestRef.current(),
+      );
       api.register(tabId, session);
     }
-    // 重新绑定通知出口：切换标签重新挂载后仍指向当前内容回调
+    // 重新绑定出口：切换标签重新挂载后仍指向当前内容/保存回调
     session.notify = (text) => contentChangeRef.current(text);
+    session.requestSave = () => saveRequestRef.current();
     const view = new EditorView({ state: session.state, parent: container });
     if (cachedValid && session.scrollAnchor !== null) {
       // 恢复滚动位置：scrollSnapshot() 返回的是滚动效果，经 dispatch 应用
@@ -128,7 +154,11 @@ export function EditorSessionHost({
     const api = sessionsRef.current;
     let session = api.get(tabId);
     if (session === null) {
-      session = createSession(content, (text) => contentChangeRef.current(text));
+      session = createSession(
+        content,
+        (text) => contentChangeRef.current(text),
+        () => saveRequestRef.current(),
+      );
       api.register(tabId, session);
     }
     view.setState(createEditorState(content, session));

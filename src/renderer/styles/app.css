@@ -605,6 +605,17 @@ body {
   font-size: 13px;
 }
 
+/* WP4：保存工具条（位于标签栏与正文之间，展示活动标签的保存状态） */
+.doc-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 14px;
+  background: #f3f4f7;
+  border-bottom: 1px solid #e1e4ea;
+}
+
 .doc-toolbar {
   display: flex;
   align-items: center;

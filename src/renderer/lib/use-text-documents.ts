@@ -17,15 +17,17 @@
  * ## 边界
  *
  * - 不持有工作区根路径或绝对路径；标签只使用规范相对路径；
- * - 不新增 IPC / preload 能力，复用 `document.readText` 固定窄协议；
+ * - 不新增 IPC / preload 能力，复用 `document.readText` / `document.saveText`
+ *   固定窄协议，不改动 Task 4 安全保存、revision 冲突与混合换行协议；
  * - `editTab` 经 WP1 纯转移更新目标标签（dirty / 编辑修订号 / latestContent），
  *   由 WP3 编辑器宿主上报正文变化；
- * - 保存流程由 WP4 接入；
+ * - `saveTab` / `reloadTab`（WP4）以目标标签运行时状态实现每标签保存竞态与
+ *   绑定 tabId 的冲突重读；混合换行确认与冲突确认由界面层绑定 tabId 完成；
  * - 组件卸载后不再提交任何异步结果。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReadTextDocumentResult } from '../../shared/document';
+import type { ReadTextDocumentResult, SaveTextDocumentResult } from '../../shared/document';
 import type { TextTabsModel } from './text-document-tabs';
 import {
   activeTab,
@@ -36,6 +38,7 @@ import {
   editTab as editTabState,
   invalidateWorkspace as invalidateTabsModel,
   openTab,
+  saveCompletionClearsDirty,
   tabById,
   updateTab,
   updateTabRuntime,
@@ -49,6 +52,14 @@ export interface TextDocumentsController {
   readonly activateTab: (tabId: string) => void;
   /** 编辑器正文变化：只更新目标标签（正文实际变化才标记 dirty 并递增修订号）。 */
   readonly editTab: (tabId: string, content: string) => void;
+  /**
+   * 保存目标标签：未修改或已有在途保存时无操作；保存请求捕获目标标签、
+   * 正文、编辑修订号与已保存 revision；成功只有修订号仍匹配时才清除 dirty。
+   * 传 `confirmMixedLineEndingNormalization: true` 表示用户已确认混合换行规范化。
+   */
+  readonly saveTab: (tabId: string, confirmMixedLineEndingNormalization?: boolean) => void;
+  /** 冲突确认放弃后调用：丢弃本地修改并重新读取目标标签。 */
+  readonly reloadTab: (tabId: string) => void;
   /** 关闭标签（未保存确认由界面层完成，见 WP5）。 */
   readonly closeTab: (tabId: string) => void;
   /** 错误标签重试：发起新一轮读取并作废旧请求。 */
@@ -227,6 +238,138 @@ export function useTextDocuments(): TextDocumentsController {
     [commit, readPath],
   );
 
+  const commitSaveResult = useCallback(
+    (
+      result: SaveTextDocumentResult,
+      tabId: string,
+      captured: { editRevision: number },
+      epoch: number,
+    ) => {
+      const current = modelRef.current;
+      const tab = tabById(current, tabId);
+      const entry = current.runtime.get(tabId);
+      // 不变量 6：工作区会话、目标标签、在途保存一致才允许提交
+      const valid = asyncResultStillValid({
+        workspaceSessionValid: epochRef.current === epoch,
+        tabExists: tab !== null,
+        requestIdCurrent: entry !== undefined && entry.saveInFlight,
+      });
+      if (!valid || tab === null || entry === undefined) {
+        return;
+      }
+      if (result.status === 'saved') {
+        const savedDocument = result.document;
+        // 不变量 5：只有当前编辑修订号仍等于捕获值时才清除 dirty
+        const stillClean = saveCompletionClearsDirty(captured.editRevision, entry.editRevision);
+        commit(
+          updateTabRuntime(
+            updateTab(current, tabId, (target) => ({
+              ...target,
+              status: stillClean ? 'loaded-clean' : 'loaded-dirty',
+              saving: false,
+              document: savedDocument,
+              dirty: !stillClean,
+              error: null,
+            })),
+            tabId,
+            (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: false }),
+          ),
+        );
+      } else {
+        const conflict = result.error.code === 'CONFLICT';
+        commit(
+          updateTabRuntime(
+            updateTab(current, tabId, (target) => ({
+              ...target,
+              status: conflict ? 'conflict' : 'save-error',
+              saving: false,
+              dirty: true,
+              error: result.error,
+            })),
+            tabId,
+            (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: false }),
+          ),
+        );
+      }
+    },
+    [commit],
+  );
+
+  const saveTab = useCallback(
+    (tabId: string, confirmMixedLineEndingNormalization?: boolean) => {
+      const current = modelRef.current;
+      const tab = tabById(current, tabId);
+      const entry = current.runtime.get(tabId);
+      const target = tab?.document ?? null;
+      // 目标不存在、无运行时条目、已有在途保存或未修改时都不发起写入
+      if (tab === null || entry === undefined || entry.saveInFlight || target === null) {
+        return;
+      }
+      if (tab.status === 'loaded-clean') {
+        return;
+      }
+      const captured = {
+        relativePath: tab.relativePath,
+        content: entry.latestContent,
+        editRevision: entry.editRevision,
+        expectedRevision: target.revision,
+        confirmMixedLineEndingNormalization:
+          confirmMixedLineEndingNormalization === true ? true : undefined,
+      };
+      const epoch = epochRef.current;
+      commit(
+        updateTabRuntime(
+          updateTab(current, tabId, (targetTab) => ({
+            ...targetTab,
+            status: 'saving',
+            saving: true,
+            error: null,
+          })),
+          tabId,
+          (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: true }),
+        ),
+      );
+      window.desktop.document
+        .saveText({
+          relativePath: captured.relativePath,
+          content: captured.content,
+          expectedRevision: captured.expectedRevision,
+          ...(captured.confirmMixedLineEndingNormalization !== undefined
+            ? { confirmMixedLineEndingNormalization: true }
+            : {}),
+        })
+        .then((result) => commitSaveResult(result, tabId, captured, epoch))
+        .catch(() =>
+          commitSaveResult(
+            { status: 'error', error: { code: 'WRITE_FAILED', message: '写入文件失败' } },
+            tabId,
+            captured,
+            epoch,
+          ),
+        );
+    },
+    [commit, commitSaveResult],
+  );
+
+  const reloadTab = useCallback(
+    (tabId: string) => {
+      const current = modelRef.current;
+      const tab = tabById(current, tabId);
+      if (tab === null) {
+        return;
+      }
+      const requestId = ++readRequestCounterRef.current;
+      commit(
+        updateTabRuntime(current, tabId, (runtimeEntry) => ({
+          ...runtimeEntry,
+          readRequestId: requestId,
+        })),
+      );
+      readPath(tab.relativePath, tabId, requestId);
+    },
+    [commit, readPath],
+  );
+
   const invalidateWorkspace = useCallback(() => {
     epochRef.current += 1;
     commit(invalidateTabsModel());
@@ -237,6 +380,8 @@ export function useTextDocuments(): TextDocumentsController {
     openTextFile,
     activateTab,
     editTab,
+    saveTab,
+    reloadTab,
     closeTab,
     retryRead,
     invalidateWorkspace,

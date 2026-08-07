@@ -37,6 +37,8 @@ export interface EditorSession {
    * 所有为该标签创建的编辑器状态都经它上报，保证不残留旧组件闭包。
    */
   notify: (content: string) => void;
+  /** 保存请求出口（Ctrl+S，可变）：宿主挂载时绑定当前保存回调。 */
+  requestSave: () => void;
 }
 
 /** 会话缓存操作：只暴露 Map 的最小子集。 */
@@ -91,6 +93,7 @@ export function useEditorSessions(liveTabIds: readonly string[]): EditorSessions
         state: view.state,
         scrollAnchor: view.scrollSnapshot(),
         notify: existing?.notify ?? (() => {}),
+        requestSave: existing?.requestSave ?? (() => {}),
       });
     },
     drop: (tabId) => {

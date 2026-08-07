@@ -1,22 +1,45 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
 import { useTextDocuments } from './lib/use-text-documents';
-import { activeTab, dirtyTabCount, hasDirtyTabs } from './lib/text-document-tabs';
+import {
+  activeTab,
+  dirtyTabCount,
+  hasDirtyTabs,
+  tabById,
+  type TextDocumentTabState,
+} from './lib/text-document-tabs';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 import { DocumentPane } from './components/document/DocumentPane';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 
 const activityItems = ['文', '搜', '设'];
 
-/** 待确认的"放弃未保存修改"过渡（WP2：工作区切换与窗口关闭；关闭标签确认见 WP5）。 */
+const MIXED_LINE_ENDINGS_CODE = 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED';
+
+/**
+ * 待确认的过渡：全部携带稳定目标（tabId 或聚合数量），
+ * 确认时不得重新查询"当前活动标签"来决定目标（TASK-005 第 6.4 节）。
+ * 关闭标签确认由 WP5 接入。
+ */
 type PendingDiscard =
   | { readonly kind: 'switch-workspace'; readonly dirtyTabCount: number }
-  | { readonly kind: 'close-window'; readonly dirtyTabCount: number };
+  | { readonly kind: 'close-window'; readonly dirtyTabCount: number }
+  | { readonly kind: 'reload'; readonly tabId: string }
+  | { readonly kind: 'mixed-line-endings'; readonly tabId: string };
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
-  const { model, openTextFile, activateTab, editTab, closeTab, retryRead, invalidateWorkspace } =
-    useTextDocuments();
+  const {
+    model,
+    openTextFile,
+    activateTab,
+    editTab,
+    saveTab,
+    reloadTab,
+    closeTab,
+    retryRead,
+    invalidateWorkspace,
+  } = useTextDocuments();
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
   const pendingRef = useRef<PendingDiscard | null>(null);
@@ -26,6 +49,8 @@ export const App = (): React.JSX.Element => {
   const dirtyRef = useRef(false);
   /** 最新未保存标签数量，供关闭窗口确认文案使用。 */
   const dirtyCountRef = useRef(0);
+  /** 上一次渲染的标签快照：识别"新进入混合换行保存错误"的转移。 */
+  const prevTabsRef = useRef<readonly TextDocumentTabState[]>([]);
 
   const dirtyCount = dirtyTabCount(model);
   const hasDirty = hasDirtyTabs(model);
@@ -65,6 +90,37 @@ export const App = (): React.JSX.Element => {
     return true;
   }, [model]);
 
+  // 混合换行确认：保存被拒后弹出确认（绑定发起保存的 tabId；只在状态转移时触发一次）
+  useEffect(() => {
+    const prev = prevTabsRef.current;
+    prevTabsRef.current = model.state.tabs;
+    if (pendingRef.current !== null) {
+      return;
+    }
+    for (const tab of model.state.tabs) {
+      const wasMixed = prev.some(
+        (previous) =>
+          previous.id === tab.id &&
+          previous.status === 'save-error' &&
+          previous.error?.code === MIXED_LINE_ENDINGS_CODE,
+      );
+      if (!wasMixed && tab.status === 'save-error' && tab.error?.code === MIXED_LINE_ENDINGS_CODE) {
+        pendingRef.current = { kind: 'mixed-line-endings', tabId: tab.id };
+        setPending(pendingRef.current);
+        break;
+      }
+    }
+  }, [model.state.tabs]);
+
+  // 冲突重新读取请求：确认目标绑定发起请求的 tabId
+  const handleReloadRequest = useCallback((tabId: string) => {
+    if (pendingRef.current !== null) {
+      return;
+    }
+    pendingRef.current = { kind: 'reload', tabId };
+    setPending(pendingRef.current);
+  }, []);
+
   const confirmPending = useCallback(() => {
     const current = pendingRef.current;
     if (current === null) {
@@ -77,8 +133,12 @@ export const App = (): React.JSX.Element => {
       guardResolveRef.current = null;
     } else if (current.kind === 'close-window') {
       void window.desktop.window.requestClose();
+    } else if (current.kind === 'reload') {
+      reloadTab(current.tabId);
+    } else if (current.kind === 'mixed-line-endings') {
+      saveTab(current.tabId, true);
     }
-  }, []);
+  }, [reloadTab, saveTab]);
 
   const cancelPending = useCallback(() => {
     const current = pendingRef.current;
@@ -97,13 +157,23 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   const pendingMessage = (current: PendingDiscard): string => {
-    const label =
-      current.dirtyTabCount === 1 ? '1 个未保存标签' : `${current.dirtyTabCount} 个未保存标签`;
     switch (current.kind) {
-      case 'switch-workspace':
+      case 'switch-workspace': {
+        const label =
+          current.dirtyTabCount === 1 ? '1 个未保存标签' : `${current.dirtyTabCount} 个未保存标签`;
         return `放弃对 ${label}的修改，并切换工作区？`;
-      case 'close-window':
+      }
+      case 'close-window': {
+        const label =
+          current.dirtyTabCount === 1 ? '1 个未保存标签' : `${current.dirtyTabCount} 个未保存标签`;
         return `放弃对 ${label}的修改，并关闭窗口？`;
+      }
+      case 'reload': {
+        const name = tabById(model, current.tabId)?.name ?? '当前文件';
+        return `文件已被外部修改。放弃对 ${name} 的本地修改并重新读取磁盘内容？`;
+      }
+      case 'mixed-line-endings':
+        return '文件包含混合换行。保存时将按主要换行风格（LF 或 CRLF）统一规范化。确认保存？';
     }
   };
 
@@ -150,6 +220,8 @@ export const App = (): React.JSX.Element => {
             onCloseTab={closeTab}
             onRetryRead={retryRead}
             onContentChange={editTab}
+            onSave={saveTab}
+            onReloadRequest={handleReloadRequest}
           />
         </section>
       </main>
@@ -161,9 +233,9 @@ export const App = (): React.JSX.Element => {
 
       {pending !== null && (
         <ConfirmDialog
-          title="放弃未保存修改"
+          title={pending.kind === 'mixed-line-endings' ? '确认换行规范化' : '放弃未保存修改'}
           message={pendingMessage(pending)}
-          confirmLabel="放弃修改"
+          confirmLabel={pending.kind === 'mixed-line-endings' ? '确认保存' : '放弃修改'}
           cancelLabel="取消"
           onConfirm={confirmPending}
           onCancel={cancelPending}
