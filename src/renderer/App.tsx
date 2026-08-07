@@ -1,30 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
-import { useTextDocument } from './lib/use-text-document';
+import { useTextDocuments } from './lib/use-text-documents';
+import { activeTab, dirtyTabCount, hasDirtyTabs } from './lib/text-document-tabs';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 import { DocumentPane } from './components/document/DocumentPane';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 
 const activityItems = ['文', '搜', '设'];
 
-/** 待确认的"放弃未保存修改"或"混合换行规范化"过渡。 */
+/** 待确认的"放弃未保存修改"过渡（WP2：工作区切换与窗口关闭；关闭标签确认见 WP5）。 */
 type PendingDiscard =
-  | { readonly kind: 'open-file'; readonly relativePath: string }
-  | { readonly kind: 'switch-workspace' }
-  | { readonly kind: 'reload' }
-  | { readonly kind: 'close-window' }
-  | { readonly kind: 'mixed-line-endings' };
+  | { readonly kind: 'switch-workspace'; readonly dirtyTabCount: number }
+  | { readonly kind: 'close-window'; readonly dirtyTabCount: number };
 
 export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
-  const {
-    state: documentState,
-    openTextFile,
-    editContent,
-    save,
-    reload,
-    invalidate,
-  } = useTextDocument();
+  const { model, openTextFile, activateTab, closeTab, retryRead, invalidateWorkspace } =
+    useTextDocuments();
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
   const pendingRef = useRef<PendingDiscard | null>(null);
@@ -32,21 +24,27 @@ export const App = (): React.JSX.Element => {
   const guardResolveRef = useRef<((allow: boolean) => void) | null>(null);
   /** 最新 dirty 状态：窗口关闭询问可能在任何时刻到达，必须读最新值。 */
   const dirtyRef = useRef(false);
+  /** 最新未保存标签数量，供关闭窗口确认文案使用。 */
+  const dirtyCountRef = useRef(0);
+
+  const dirtyCount = dirtyTabCount(model);
+  const hasDirty = hasDirtyTabs(model);
 
   // 关闭询问回调需要最新 dirty 状态，不能依赖可能过期的闭包
   useEffect(() => {
-    dirtyRef.current = documentState.dirty;
-  }, [documentState.dirty]);
+    dirtyRef.current = hasDirty;
+    dirtyCountRef.current = dirtyCount;
+  }, [hasDirty, dirtyCount]);
 
-  // 窗口关闭协调：上报 dirty 状态，并订阅主进程的关闭询问
+  // 窗口关闭协调：上报全部标签聚合的 dirty 状态，并订阅主进程的关闭询问
   useEffect(() => {
-    void window.desktop.window.setDirtyState(documentState.dirty);
-  }, [documentState.dirty]);
+    void window.desktop.window.setDirtyState(hasDirty);
+  }, [hasDirty]);
 
   useEffect(() => {
     const unsubscribe = window.desktop.window.onCloseRequested(() => {
       if (dirtyRef.current) {
-        pendingRef.current = { kind: 'close-window' };
+        pendingRef.current = { kind: 'close-window', dirtyTabCount: dirtyCountRef.current };
         setPending(pendingRef.current);
       } else {
         void window.desktop.window.requestClose();
@@ -55,56 +53,17 @@ export const App = (): React.JSX.Element => {
     return unsubscribe;
   }, []);
 
-  // 文件树选择 → 有未保存修改时先确认；取消不发起读取，放弃后才打开新文件
-  const handleTextFileOpen = useCallback(
-    (relativePath: string) => {
-      if (
-        documentState.dirty &&
-        documentState.document !== null &&
-        documentState.status !== 'loading'
-      ) {
-        pendingRef.current = { kind: 'open-file', relativePath };
-        setPending(pendingRef.current);
-        return;
-      }
-      openTextFile(relativePath);
-    },
-    [documentState.dirty, documentState.document, documentState.status, openTextFile],
-  );
-
-  // 切换工作区守卫：有未保存修改时先确认；取消则不得打开原生目录选择器
+  // 切换工作区守卫：存在未保存标签时先确认；取消则不得打开原生目录选择器
   const handleOpenWorkspaceGuard = useCallback(async (): Promise<boolean> => {
-    if (
-      documentState.dirty &&
-      documentState.document !== null &&
-      documentState.status !== 'loading'
-    ) {
+    if (hasDirtyTabs(model)) {
       return new Promise<boolean>((resolve) => {
         guardResolveRef.current = resolve;
-        pendingRef.current = { kind: 'switch-workspace' };
+        pendingRef.current = { kind: 'switch-workspace', dirtyTabCount: dirtyTabCount(model) };
         setPending(pendingRef.current);
       });
     }
     return true;
-  }, [documentState.dirty, documentState.document, documentState.status]);
-
-  const handleReloadRequest = useCallback(() => {
-    if (documentState.document !== null) {
-      pendingRef.current = { kind: 'reload' };
-      setPending(pendingRef.current);
-    }
-  }, [documentState.document]);
-
-  // 混合换行确认：保存被拒后弹出确认，用户确认才携带 confirm 重试
-  useEffect(() => {
-    if (
-      documentState.status === 'save-error' &&
-      documentState.error?.code === 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED'
-    ) {
-      pendingRef.current = { kind: 'mixed-line-endings' };
-      setPending(pendingRef.current);
-    }
-  }, [documentState.status, documentState.error]);
+  }, [model]);
 
   const confirmPending = useCallback(() => {
     const current = pendingRef.current;
@@ -113,19 +72,13 @@ export const App = (): React.JSX.Element => {
     }
     pendingRef.current = null;
     setPending(null);
-    if (current.kind === 'open-file') {
-      openTextFile(current.relativePath);
-    } else if (current.kind === 'switch-workspace') {
+    if (current.kind === 'switch-workspace') {
       guardResolveRef.current?.(true);
       guardResolveRef.current = null;
-    } else if (current.kind === 'reload') {
-      reload();
     } else if (current.kind === 'close-window') {
       void window.desktop.window.requestClose();
-    } else if (current.kind === 'mixed-line-endings') {
-      save(true);
     }
-  }, [openTextFile, reload, save]);
+  }, []);
 
   const cancelPending = useCallback(() => {
     const current = pendingRef.current;
@@ -144,25 +97,22 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   const pendingMessage = (current: PendingDiscard): string => {
-    const fileName = documentState.tabName ?? '当前文件';
+    const label =
+      current.dirtyTabCount === 1 ? '1 个未保存标签' : `${current.dirtyTabCount} 个未保存标签`;
     switch (current.kind) {
-      case 'open-file':
-        return `放弃对 ${fileName} 的未保存修改，并打开 ${current.relativePath}？`;
       case 'switch-workspace':
-        return `放弃对 ${fileName} 的未保存修改，并切换工作区？`;
-      case 'reload':
-        return '文件已被外部修改。放弃本地修改并重新读取磁盘内容？';
+        return `放弃对 ${label} 的修改，并切换工作区？`;
       case 'close-window':
-        return `放弃对 ${fileName} 的未保存修改，并关闭窗口？`;
-      case 'mixed-line-endings':
-        return '文件包含混合换行。保存时将按主要换行风格（LF 或 CRLF）统一规范化。确认保存？';
+        return `放弃对 ${label} 的修改，并关闭窗口？`;
     }
   };
 
-  // 工作区成功切换 → 清除旧文档并使旧工作区未完成的读取失效
+  // 工作区成功切换 → 清空全部标签并使旧工作区未完成的结果失效
   const handleWorkspaceSelected = useCallback(() => {
-    invalidate();
-  }, [invalidate]);
+    invalidateWorkspace();
+  }, [invalidateWorkspace]);
+
+  const selectedTextFilePath = activeTab(model)?.relativePath ?? null;
 
   return (
     <div className="app-shell">
@@ -186,18 +136,19 @@ export const App = (): React.JSX.Element => {
         </aside>
 
         <WorkspaceSidebar
-          onTextFileOpen={handleTextFileOpen}
-          selectedTextFilePath={documentState.selectedRelativePath}
+          onTextFileOpen={openTextFile}
+          selectedTextFilePath={selectedTextFilePath}
           onWorkspaceSelected={handleWorkspaceSelected}
           onOpenWorkspaceGuard={handleOpenWorkspaceGuard}
         />
 
         <section className="editor-area">
           <DocumentPane
-            state={documentState}
-            onContentChange={editContent}
-            onSave={save}
-            onReloadRequest={handleReloadRequest}
+            tabs={model.state.tabs}
+            activeTabId={model.state.activeTabId}
+            onActivateTab={activateTab}
+            onCloseTab={closeTab}
+            onRetryRead={retryRead}
           />
         </section>
       </main>
@@ -209,9 +160,9 @@ export const App = (): React.JSX.Element => {
 
       {pending !== null && (
         <ConfirmDialog
-          title={pending.kind === 'mixed-line-endings' ? '确认换行规范化' : '放弃未保存修改'}
+          title="放弃未保存修改"
           message={pendingMessage(pending)}
-          confirmLabel={pending.kind === 'mixed-line-endings' ? '确认保存' : '放弃修改'}
+          confirmLabel="放弃修改"
           cancelLabel="取消"
           onConfirm={confirmPending}
           onCancel={cancelPending}
