@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
 import type { SaveTextDocumentRequest } from '../shared/document';
+import type {
+  WorkspaceTextSearchCancelRequest,
+  WorkspaceTextSearchRequest,
+} from '../shared/search';
 
 const desktopApi: DesktopApi = Object.freeze({
   runtime: Object.freeze({
@@ -20,6 +24,14 @@ const desktopApi: DesktopApi = Object.freeze({
     readText: (relativePath: string) => ipcRenderer.invoke('document:read-text', relativePath),
     saveText: (request: SaveTextDocumentRequest) =>
       ipcRenderer.invoke('document:save-text', request),
+  }),
+  // search 命名空间只映射固定的两个搜索通道，不接受根路径、绝对路径或任意通道：
+  // 请求与取消都经过主进程运行时校验，取消只能引用当前窗口已知的 requestId。
+  search: Object.freeze({
+    textWorkspace: (request: WorkspaceTextSearchRequest) =>
+      ipcRenderer.invoke('search:text-workspace', request),
+    cancelTextWorkspace: (request: WorkspaceTextSearchCancelRequest) =>
+      ipcRenderer.invoke('search:cancel-text-workspace', request),
   }),
   // window 命名空间只提供窗口关闭协调的最小窄协议：
   // 固定通道 + 固定参数形状，不暴露 ipcRenderer、通用事件总线或任意 send/on。
