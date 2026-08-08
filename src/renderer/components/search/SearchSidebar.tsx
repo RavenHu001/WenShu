@@ -86,6 +86,9 @@ export function SearchSidebar({
     onFocusTargetChange?.(target);
     if (target === 'workspace') {
       window.setTimeout(() => inputRef.current?.focus(), 0);
+    } else if (currentDocumentAvailable) {
+      // “查找与替换”标签本身就是功能入口，进入后直接展示完整面板。
+      onOpenCurrentDocumentSearch?.('find');
     }
   };
 
@@ -123,39 +126,12 @@ export function SearchSidebar({
         className="search-view-panel current-document-view"
         hidden={focusTarget !== 'current-document'}
       >
-        <div className="current-document-toolbar">
-          <span>当前打开的文件</span>
-          <div className="current-document-search-actions">
-            <button
-              type="button"
-              className="search-mode-btn"
-              aria-label="打开文件内查找"
-              disabled={!currentDocumentAvailable}
-              onClick={() => onOpenCurrentDocumentSearch?.('find')}
-            >
-              查找
-            </button>
-            <button
-              type="button"
-              className="search-mode-btn"
-              aria-label="打开文件内替换"
-              disabled={!currentDocumentAvailable}
-              onClick={() => onOpenCurrentDocumentSearch?.('replace')}
-            >
-              替换
-            </button>
-          </div>
-        </div>
         <div
           ref={currentDocumentPanelHostRef}
           className="current-document-search-panel"
           aria-label="当前文档查找与替换"
         />
-        {currentDocumentAvailable ? (
-          <div className="current-document-search-hint">
-            点击“查找”或“替换”，也可以使用 Ctrl+F / Ctrl+H。
-          </div>
-        ) : (
+        {!currentDocumentAvailable && (
           <div className="current-document-search-empty">打开一个 TXT 文件后可查找或替换。</div>
         )}
       </section>

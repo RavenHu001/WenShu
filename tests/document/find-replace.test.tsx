@@ -222,7 +222,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
     expect(document.activeElement).toBe(panelInput('replace'));
   });
 
-  it('无需快捷键，可从搜索侧栏用鼠标打开查找或替换', async () => {
+  it('无需二次点击，切换到查找与替换标签后直接显示完整面板', async () => {
     mockDesktop({ 'a.txt': 'hello world' });
     render(<App />);
     await openWorkspace();
@@ -232,10 +232,12 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
     expect(document.getElementById('document-search-panel')?.hidden).toBe(true);
     fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
     expect(document.getElementById('workspace-search-panel')?.hidden).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '打开文件内替换' }));
 
     expect(searchPanel()).not.toBeNull();
-    expect(document.activeElement).toBe(panelInput('replace'));
+    expect(panelInput('search')).toBeDefined();
+    expect(panelInput('replace')).toBeDefined();
+    expect(document.activeElement).toBe(panelInput('search'));
+    expect(screen.queryByRole('button', { name: '打开文件内替换' })).toBeNull();
   });
 
   it('查找：上一个/下一个导航、大小写选项；不修改正文、不制造 dirty', async () => {

@@ -877,66 +877,15 @@ body {
 }
 
 .current-document-view {
+  padding-top: 12px;
   overflow-y: auto;
 }
 
-.current-document-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 12px 10px;
-  color: #6d7382;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.current-document-search-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.search-mode-btn {
-  padding: 3px 7px;
-  color: #5268ad;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.search-mode-btn:hover:not(:disabled) {
-  background: #e5e9f3;
-  border-color: #d4daea;
-}
-
-.search-mode-btn:focus-visible {
-  outline: 2px solid #8fa4d8;
-  outline-offset: 1px;
-}
-
-.search-mode-btn:disabled {
-  color: #b3b8c3;
-  cursor: default;
-}
-
 .current-document-search-empty {
-  padding: 6px 14px 13px;
+  padding: 2px 14px 13px;
   color: #a2a8b5;
   font-size: 11px;
   line-height: 1.5;
-}
-
-.current-document-search-hint {
-  padding: 6px 14px 13px;
-  color: #a2a8b5;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.current-document-search-panel:not(:empty) + .current-document-search-hint {
-  display: none;
 }
 
 .current-document-search-panel:not(:empty) {
@@ -1019,14 +968,11 @@ body {
 }
 
 .current-document-search-panel .cm-search > button[name='close'] {
-  top: 6px;
-  right: 7px;
-  color: #838a99;
-  cursor: pointer;
+  display: none;
 }
 
 .current-document-search-panel .cm-search > input[name='search'] {
-  padding-right: 25px;
+  padding-right: 8px;
 }
 
 .search-form {
