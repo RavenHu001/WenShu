@@ -65,6 +65,10 @@ function ensureCleanupOnDestroy(webContents: WebContents): void {
   cleanedWebContents.add(senderId);
   webContents.once('destroyed', () => {
     cleanedWebContents.delete(senderId);
+    const task = tasks.get(senderId);
+    if (task !== undefined) {
+      task.cancelled = true;
+    }
     tasks.delete(senderId);
   });
 }

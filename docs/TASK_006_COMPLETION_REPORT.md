@@ -1,8 +1,9 @@
 # TASK-006 完成报告
 
-> 实现完成日期：2026-08-08；最终手工验收日期：2026-08-08；验证平台：Windows 11，Node.js 22.15.0，npm 10.9.2，Electron 37.x。
+> 实现完成日期：2026-08-08；最终手工验收日期：2026-08-08；复核修复日期：2026-08-09；验证平台：Windows 11，Node.js 22.15.0，npm 10.9.2，Electron 37.x。
 > WP0-WP7 逐包实施、逐包验收；自动验收（typecheck/lint/format:check/全部测试/check/build）、开发与生产构建桌面冒烟与性能观察由开发 Agent 完成；
 > 第 8.7 节手工界面清单由项目所有者于 2026-08-08 执行并全部通过（自动化可覆盖的部分同时由组件测试与 Agent 冒烟验证）。
+> 2026-08-09 复核修复 CRLF 磁盘偏移到 CodeMirror 位置的转换，以及组件卸载/窗口销毁时的活动搜索取消；新增回归用例后重新通过完整 `check` 与 `build`。
 
 ## 1. 实现摘要
 
@@ -27,40 +28,40 @@
 
 ### 新增文件
 
-| 文件                                               | 用途                                                                                                                                         |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/shared/search.ts`                             | 搜索契约与冻结常量：请求/取消/匹配/文件分组/统计/错误/结果联合类型；256/1000/200/2000/160/4 上限；请求运行时校验纯函数                       |
-| `src/main/search/match-text.ts`                    | 纯匹配器：literal 匹配 + ASCII-only 大小写折叠、UTF-16 范围、1-based 行列、160 预览窗口、单文件 200 与总 2000 预算、自然排序分组、协作式让出 |
-| `src/main/search/search-text-workspace.ts`         | 主进程安全搜索器：异步遍历、候选预算、稳定排序、并发 4 有界读取、复用受控 `readTextDocument`、取消/工作区变化检查、错误隔离与统计            |
-| `src/main/search/search-ipc.ts`                    | 固定 `search:text-workspace` / `search:cancel-text-workspace` 通道；按 webContents id + requestId 管理任务；新搜索取消旧搜索；窗口销毁清理   |
-| `src/renderer/lib/use-workspace.ts`                | 工作区共享 controller：打开/刷新/错误状态与 epoch（成功切换 +1），供文档失效与搜索共用                                                       |
-| `src/renderer/lib/use-workspace-search.ts`         | 搜索 controller：单调 requestId、searching 唯一活动句柄、挂载/epoch/requestId 三重迟到结果防护、主动取消、epoch 变化作废                     |
-| `src/renderer/components/search/SearchSidebar.tsx` | 搜索侧栏：输入草稿、大小写选项、搜索/取消、状态/统计/截断、无工作区空状态、磁盘快照提示                                                      |
-| `src/renderer/components/search/SearchResults.tsx` | 分组结果：相对路径、1:列 行列、安全文本节点高亮、`onMatchActivate` 定位入口                                                                  |
-| `docs/TASK_006_WP0_REPORT.md`                      | WP0 基线、语义冻结与测试规划记录                                                                                                             |
-| `docs/TASK_006_COMPLETION_REPORT.md`               | 本报告                                                                                                                                       |
+| 文件                                               | 用途                                                                                                                                               |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/search.ts`                             | 搜索契约与冻结常量：请求/取消/匹配/文件分组/统计/错误/结果联合类型；256/1000/200/2000/160/4 上限；请求运行时校验纯函数                             |
+| `src/main/search/match-text.ts`                    | 纯匹配器：literal 匹配 + ASCII-only 大小写折叠、UTF-16 范围、1-based 行列、160 预览窗口、单文件 200 与总 2000 预算、自然排序分组、协作式让出       |
+| `src/main/search/search-text-workspace.ts`         | 主进程安全搜索器：异步遍历、候选预算、稳定排序、并发 4 有界读取、复用受控 `readTextDocument`、取消/工作区变化检查、错误隔离与统计                  |
+| `src/main/search/search-ipc.ts`                    | 固定 `search:text-workspace` / `search:cancel-text-workspace` 通道；按 webContents id + requestId 管理任务；新搜索取消旧搜索；窗口销毁先取消再清理 |
+| `src/renderer/lib/use-workspace.ts`                | 工作区共享 controller：打开/刷新/错误状态与 epoch（成功切换 +1），供文档失效与搜索共用                                                             |
+| `src/renderer/lib/use-workspace-search.ts`         | 搜索 controller：单调 requestId、searching 唯一活动句柄、挂载/epoch/requestId 三重迟到结果防护、主动取消、epoch 变化及组件卸载作废                 |
+| `src/renderer/components/search/SearchSidebar.tsx` | 搜索侧栏：输入草稿、大小写选项、搜索/取消、状态/统计/截断、无工作区空状态、磁盘快照提示                                                            |
+| `src/renderer/components/search/SearchResults.tsx` | 分组结果：相对路径、1:列 行列、安全文本节点高亮、`onMatchActivate` 定位入口                                                                        |
+| `docs/TASK_006_WP0_REPORT.md`                      | WP0 基线、语义冻结与测试规划记录                                                                                                                   |
+| `docs/TASK_006_COMPLETION_REPORT.md`               | 本报告                                                                                                                                             |
 
 ### 修改文件
 
-| 文件                                                                                                      | 变更                                                                                                                        |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/index.ts`                                                                                       | 注册搜索 IPC                                                                                                                |
-| `src/preload/index.ts` / `src/shared/desktop-api.ts`                                                      | 新增 `search.textWorkspace` / `search.cancelTextWorkspace` 窄接口                                                           |
-| `src/renderer/App.tsx`                                                                                    | 活动栏真实按钮（文件/搜索切换、设置占位）、`Ctrl+Shift+F`、工作区/搜索/定位编排、过期提示横幅                               |
-| `src/renderer/components/workspace/WorkspaceSidebar.tsx`                                                  | 重构为纯展示组件（状态由 useWorkspace 注入）                                                                                |
-| `src/renderer/components/document/EditorSessionHost.tsx`                                                  | `@codemirror/search` 扩展与 keymap（`Mod-f`/`Mod-h`/`F3` 等）；搜索结果定位目标应用（选区+滚动+聚焦，单次应用守卫）         |
-| `src/renderer/components/document/DocumentPane.tsx`                                                       | 定位目标下发（绑定 tabId）与"搜索结果已过期"横幅                                                                            |
-| `src/renderer/lib/use-text-documents.ts`                                                                  | `openTextFile` 返回读取完成 Promise（open-waiters 按 tabId 结算，关闭/失效为 null）                                         |
-| `src/renderer/lib/text-document-tabs.ts` / `use-editor-sessions.ts`                                       | 仅注释级调整（未变语义）                                                                                                    |
-| `src/renderer/styles/app.css`                                                                             | 活动按钮、搜索侧栏、过期横幅样式                                                                                            |
-| `package.json` / `package-lock.json`                                                                      | 新增直接依赖 `@codemirror/search@^6.7.1`（选择理由：任务第 4.2 节建议的直接依赖，提供面板/命令/每状态查询隔离，无全局状态） |
-| `tsconfig.test.json`                                                                                      | 增加 `src/main/search/**/*.ts`                                                                                              |
-| `tests/document/read-text-document.test.ts`                                                               | 符号链接探测改为有界（超时按"环境不支持"处理，DEVELOPMENT_ENVIRONMENT.md 处置规则；不删断言）                               |
-| `README.md` / `docs/PROJECT_BASELINE.md` / `docs/TESTING.md` / `docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md` | 实际能力、基线与任务状态同步（WP7）                                                                                         |
+| 文件                                                                                                      | 变更                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main/index.ts`                                                                                       | 注册搜索 IPC                                                                                                                          |
+| `src/preload/index.ts` / `src/shared/desktop-api.ts`                                                      | 新增 `search.textWorkspace` / `search.cancelTextWorkspace` 窄接口                                                                     |
+| `src/renderer/App.tsx`                                                                                    | 活动栏真实按钮（文件/搜索切换、设置占位）、`Ctrl+Shift+F`、工作区/搜索/定位编排、过期提示横幅                                         |
+| `src/renderer/components/workspace/WorkspaceSidebar.tsx`                                                  | 重构为纯展示组件（状态由 useWorkspace 注入）                                                                                          |
+| `src/renderer/components/document/EditorSessionHost.tsx`                                                  | `@codemirror/search` 扩展与 keymap（`Mod-f`/`Mod-h`/`F3` 等）；搜索结果定位目标应用（含 CRLF 偏移转换、选区+滚动+聚焦、单次应用守卫） |
+| `src/renderer/components/document/DocumentPane.tsx`                                                       | 定位目标下发（绑定 tabId）与"搜索结果已过期"横幅                                                                                      |
+| `src/renderer/lib/use-text-documents.ts`                                                                  | `openTextFile` 返回读取完成 Promise（open-waiters 按 tabId 结算，关闭/失效为 null）                                                   |
+| `src/renderer/lib/text-document-tabs.ts` / `use-editor-sessions.ts`                                       | 仅注释级调整（未变语义）                                                                                                              |
+| `src/renderer/styles/app.css`                                                                             | 活动按钮、搜索侧栏、过期横幅样式                                                                                                      |
+| `package.json` / `package-lock.json`                                                                      | 新增直接依赖 `@codemirror/search@^6.7.1`（选择理由：任务第 4.2 节建议的直接依赖，提供面板/命令/每状态查询隔离，无全局状态）           |
+| `tsconfig.test.json`                                                                                      | 增加 `src/main/search/**/*.ts`                                                                                                        |
+| `tests/document/read-text-document.test.ts`                                                               | 符号链接探测改为有界（超时按"环境不支持"处理，DEVELOPMENT_ENVIRONMENT.md 处置规则；不删断言）                                         |
+| `README.md` / `docs/PROJECT_BASELINE.md` / `docs/TESTING.md` / `docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md` | 实际能力、基线与任务状态同步（WP7）                                                                                                   |
 
-### 测试文件（新增 7 个，修改 3 个）
+### 测试文件（新增 8 个，修改 3 个）
 
-`tests/search/search-contract.test.ts`（14）· `match-text.test.ts`（42）· `search-text-workspace.test.ts`（25）· `search-ipc.test.ts`（26）· `use-workspace-search.test.tsx`（14）· `search-sidebar.test.tsx`（13）· `result-locate.test.tsx`（11）· `tests/document/find-replace.test.tsx`（8）；修改 `tests/preload/contract.test.ts`（16）、`tests/workspace/components.test.tsx`（22）、`tests/document/read-text-document.test.ts`。
+`tests/search/search-contract.test.ts`（14）· `match-text.test.ts`（42）· `search-text-workspace.test.ts`（25）· `search-ipc.test.ts`（26）· `use-workspace-search.test.tsx`（14）· `search-sidebar.test.tsx`（13）· `result-locate.test.tsx`（12）· `tests/document/find-replace.test.tsx`（9）；修改 `tests/preload/contract.test.ts`（16）、`tests/workspace/components.test.tsx`（22）、`tests/document/read-text-document.test.ts`。
 
 ## 3. 查询语义、固定上限与结果模型
 
@@ -80,14 +81,14 @@
 
 - 固定并发 4（有界池，测试用门闩验证 maxInFlight 恒 ≤4）；候选按相对路径排序后读取，完成顺序不影响最终排序。
 - 取消为协作式：`shouldStop` 在目录批次、每条目、读取前后与匹配循环内检查（matcher 的 `shouldYield`）；已开始的受控读取可完成但其结果不提交；取消不是错误，绝不把部分结果标记 completed；取消未知/他窗请求安全无操作。
-- 主进程任务管理：`Map<webContentsId, {requestId, cancelled}>`；同一窗口同时最多一个活动搜索，新搜索先取消旧搜索；窗口 `destroyed` 清理任务引用；搜索完成在 finally 释放引用且不误删被替换的任务。
-- renderer 双重校验：搜索 controller 提交结果前必须 挂载 ∧ 工作区 epoch 未变 ∧ requestId 仍为当前活动请求；`searching` 状态必有唯一活动 requestId，非 searching 不保留任务句柄；工作区成功切换清空旧结果并取消在途请求。
+- 主进程任务管理：`Map<webContentsId, {requestId, cancelled}>`；同一窗口同时最多一个活动搜索，新搜索先取消旧搜索；窗口 `destroyed` 先标记任务取消再清理引用；搜索完成在 finally 释放引用且不误删被替换的任务。
+- renderer 双重校验：搜索 controller 提交结果前必须 挂载 ∧ 工作区 epoch 未变 ∧ requestId 仍为当前活动请求；`searching` 状态必有唯一活动 requestId，非 searching 不保留任务句柄；工作区成功切换或组件卸载均取消在途请求并作废旧结果。
 - 结果定位提交前必须：标签仍存在、相对路径一致、定位请求 ID 仍为该标签最新（全局最新定位 ID 作废旧请求）、已加载正文、revision 与正文范围通过校验。
 
 ## 6. 结果 revision、dirty 与过期定位规则
 
 - 定位绑定：定位 ID + 工作区 epoch + 搜索 requestId + 规范相对路径 + revision + from/to + 实际匹配文本；点击时从当前已完成结果捕获，异步完成时校验"epoch 未变且仍是最新定位"。
-- 规则：打开或激活唯一标签（loading 等待读取完成，不建第二标签）→ read-error 保留错误状态只提示 → 磁盘基线 revision 一致 → 范围落在实时正文内且 `slice(from,to)===matchedText` → 下发定位目标，编辑器宿主设置选区、`EditorView.scrollIntoView` 并聚焦（同一目标只应用一次，rerender 不重复抢焦点）。
+- 规则：打开或激活唯一标签（loading 等待读取完成，不建第二标签）→ read-error 保留错误状态只提示 → 磁盘基线 revision 一致 → 范围落在实时正文内且 `slice(from,to)===matchedText` → 将磁盘原文 UTF-16 偏移按 CRLF 边界转换为 CodeMirror 内部位置 → 编辑器宿主设置选区、`EditorView.scrollIntoView` 并聚焦（同一目标只应用一次，rerender 不重复抢焦点）。
 - 过期情形（只显示非破坏性横幅，可关闭）：read-error、revision 不一致（外部修改）、越界或正文不匹配（含 dirty 后范围变化）；dirty 但原范围仍一致时允许定位且不清除 dirty。
 - 定位只改变选区，不产生撤销历史步骤、不改正文、不触发保存或重新读取。
 
@@ -112,11 +113,11 @@
 | `typecheck`（5 tsconfig）  | **通过**                                                                                  |
 | `lint`（--max-warnings=0） | **通过**（0 warning）                                                                     |
 | `format:check`             | **通过**（Windows 检出环境，行尾策略固定）                                                |
-| `test`（19 文件 464 用例） | **通过**：461 passed / 3 skipped（真实 symlink 权限条件跳过，mock 拒绝覆盖保持）          |
+| `test`（19 文件 466 用例） | **通过**：463 passed / 3 skipped（真实 symlink 权限条件跳过，mock 拒绝覆盖保持）          |
 | `check`                    | **通过**（退出码 0）                                                                      |
-| `build`                    | **通过**（退出码 0）：main 38.69 kB、preload 2.41 kB、renderer 1,239.94 kB + CSS 15.81 kB |
+| `build`                    | **通过**（退出码 0）：main 38.79 kB、preload 2.41 kB、renderer 1,247.71 kB + CSS 19.11 kB |
 
-测试分布：运行时 2 · 扫描器 11 · 读取器 49 · 保存器 51 · 读取/保存 IPC 33 · preload 契约 16 · 窗口关闭 8 · 工作区组件 22 · 标签不变量 23 · 标签转移 32 · 多标签组件 64 · 搜索契约 14 · 匹配器 42 · 搜索器 25 · 搜索 IPC 26 · 搜索 controller 14 · 搜索侧栏 13 · 结果定位 11 · 查找替换 8。`check` 与 `build` 未并行运行；唯一预期 stderr 为保存器测试的 EACCES 清理日志与定位用例的 React 19 `act` 开发模式提示（去重一次，非业务失败）。
+测试分布：运行时 2 · 扫描器 11 · 读取器 49 · 保存器 51 · 读取/保存 IPC 33 · preload 契约 16 · 窗口关闭 8 · 工作区组件 22 · 标签不变量 23 · 标签转移 32 · 多标签组件 64 · 搜索契约 14 · 匹配器 42 · 搜索器 25 · 搜索 IPC 26 · 搜索 controller 14 · 搜索侧栏 13 · 结果定位 12 · 查找替换 9。`check` 与 `build` 未并行运行；唯一预期 stderr 为保存器测试的 EACCES 清理日志与定位用例的 React 19 `act` 开发模式提示（去重一次，非业务失败）。
 
 ## 10. Windows 开发和生产构建冒烟证据
 

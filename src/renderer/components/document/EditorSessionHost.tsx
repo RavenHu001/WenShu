@@ -124,6 +124,25 @@ function normalizeLineSeparators(doc: string, lineSeparator: '\n' | '\r\n'): str
   return lineSeparator === '\n' ? lfNormalized : lfNormalized.replace(/\n/g, '\r\n');
 }
 
+/**
+ * 将序列化正文中的 UTF-16 偏移转换为 CodeMirror `Text` 的位置。
+ *
+ * CodeMirror 内部的每个换行边界长度恒为 1，即使 `sliceDoc()` 按配置序列化为 CRLF；
+ * 工作区搜索则必须返回磁盘原文偏移，其中 CRLF 长度为 2。因此每个完整位于目标偏移前的
+ * CRLF 都需要折叠一个 code unit。独立 CR / LF 本身长度为 1，不改变位置。
+ */
+function toEditorOffset(content: string, sourceOffset: number): number {
+  const boundedOffset = Math.max(0, Math.min(sourceOffset, content.length));
+  let crlfCount = 0;
+  for (let index = 0; index + 1 < boundedOffset; index += 1) {
+    if (content.charCodeAt(index) === 0x0d && content.charCodeAt(index + 1) === 0x0a) {
+      crlfCount += 1;
+      index += 1;
+    }
+  }
+  return boundedOffset - crlfCount;
+}
+
 function createEditorState(
   doc: string,
   lineSeparator: '\n' | '\r\n',
@@ -317,9 +336,17 @@ export function EditorSessionHost({
       return;
     }
     appliedLocateRef.current = locateTarget;
+    const sourceFrom = Math.max(0, Math.min(locateTarget.from, content.length));
+    const sourceTo = Math.max(sourceFrom, Math.min(locateTarget.to, content.length));
+    if (content.slice(sourceFrom, sourceTo) !== locateTarget.matchedText) {
+      // React 持有的实时序列化正文已变化：不把失效的磁盘偏移映射进编辑器
+      return;
+    }
+    const editorFrom = toEditorOffset(content, sourceFrom);
+    const editorTo = toEditorOffset(content, sourceTo);
     const doc = view.state.doc;
-    const safeFrom = Math.max(0, Math.min(locateTarget.from, doc.length));
-    const safeTo = Math.max(safeFrom, Math.min(locateTarget.to, doc.length));
+    const safeFrom = Math.max(0, Math.min(editorFrom, doc.length));
+    const safeTo = Math.max(safeFrom, Math.min(editorTo, doc.length));
     if (doc.sliceString(safeFrom, safeTo) !== locateTarget.matchedText) {
       // 实时正文与结果匹配文本不一致：不选中、不改正文
       return;
@@ -329,7 +356,7 @@ export function EditorSessionHost({
       effects: EditorView.scrollIntoView(safeFrom, { y: 'center' }),
     });
     view.focus();
-  }, [locateTarget, tabId]);
+  }, [content, locateTarget, tabId]);
 
   return <div className="doc-editor" ref={containerRef} aria-label="TXT 编辑器" />;
 }

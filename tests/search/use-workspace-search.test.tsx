@@ -295,13 +295,14 @@ describe('useWorkspaceSearch 竞态与迟到结果（第 5.2 / 5.3 节）', () =
     expect(api.cancelTextWorkspace).not.toHaveBeenCalled();
   });
 
-  it('卸载后迟到结果不提交、不抛异常', async () => {
+  it('卸载时取消活动请求，迟到结果不提交、不抛异常', async () => {
     const api = mockSearchApi();
     const { unmount } = render(<Harness available={true} epoch={0} />);
     act(() => {
       screen.getByText('submit').click();
     });
     unmount();
+    expect(api.cancelTextWorkspace).toHaveBeenCalledWith({ requestId: 1 });
     await expect(async () => {
       await act(async () => {
         api.resolve(1, completedResult(1, 5));

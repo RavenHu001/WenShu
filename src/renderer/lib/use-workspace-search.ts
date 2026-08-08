@@ -87,6 +87,11 @@ export function useWorkspaceSearch({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      const current = activeRequestIdRef.current;
+      if (current !== null) {
+        activeRequestIdRef.current = null;
+        void window.desktop.search.cancelTextWorkspace({ requestId: current });
+      }
     };
   }, []);
 

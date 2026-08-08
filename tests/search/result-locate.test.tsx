@@ -4,7 +4,8 @@
  * 覆盖：点击未打开结果创建唯一 loading 标签并在读取完成后定位；已打开标签只激活不重读；
  * loading 中重复点击去重；read-error 保留错误状态；关闭后迟到定位作废；
  * 连续点击只定位最后一次；revision 不一致 / 越界 / 正文不匹配只提示过期不错误选中；
- * dirty 但范围一致允许定位且不清除 dirty；定位不修改正文、revision、dirty 或撤销历史。
+ * CRLF 原文偏移到 CodeMirror 位置的转换；dirty 但范围一致允许定位且不清除 dirty；
+ * 定位不修改正文、revision、dirty 或撤销历史。
  */
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -149,7 +150,7 @@ function loaded(relativePath: string, content: string, revision: string): ReadTe
       byteLength: Buffer.byteLength(content, 'utf8'),
       revision,
       hasUtf8Bom: false,
-      lineEnding: 'lf',
+      lineEnding: content.includes('\r\n') ? 'crlf' : 'lf',
     },
   };
 }
@@ -239,6 +240,28 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
     expect(tabs).toHaveLength(1);
     expect(tabs[0]?.classList.contains('active')).toBe(true);
     // 定位成功：无过期提示
+    expect(screen.queryByText(/搜索结果已过期/)).toBeNull();
+  });
+
+  it('CRLF 文件把磁盘原文偏移转换为 CodeMirror 位置，不会错选相邻同文文本', async () => {
+    const api = mockDesktop(
+      makeReadText({ 'crlf.txt': { content: 'a\r\nbb', revision: 'rev-crlf' } }),
+    );
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot(),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await openWorkspace();
+    await submitSearch('b');
+    await act(async () => {
+      api.resolveSearch(1, completedResult(1, [fileResult('crlf.txt', 'rev-crlf', 3, 4, 'b')]));
+    });
+
+    await clickMatch(0);
+
+    // 磁盘原文中首个 b 是 3..4；CodeMirror 将 CRLF 作为一个位置，因此应选中 2..3。
+    expect(selectionRange()).toEqual([2, 3]);
     expect(screen.queryByText(/搜索结果已过期/)).toBeNull();
   });
 

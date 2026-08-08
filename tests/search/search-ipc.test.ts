@@ -357,12 +357,12 @@ describe('search:cancel-text-workspace 处理器', () => {
     expect(other.status).toBe('cancelled'); // 他窗自己的任务被自己取消
   });
 
-  it('窗口销毁清理任务：销毁后取消安全无操作，搜索不受影响', async () => {
+  it('窗口销毁清理并取消活动任务：后续取消安全无操作', async () => {
     const searchPromise = invokeSearch({ requestId: 1, query: 'x', caseSensitive: true });
-    sender.fire('destroyed'); // 模拟窗口销毁：任务引用被清理
+    sender.fire('destroyed'); // 模拟窗口销毁：活动任务先标记取消，再清理引用
     await invokeCancel({ requestId: 1 });
-    expect(shouldStops[0]!()).toBe(false); // 任务已清理，取消无操作
+    expect(shouldStops[0]!()).toBe(true);
     const result = await searchPromise;
-    expect(result.status).toBe('completed');
+    expect(result.status).toBe('cancelled');
   });
 });
