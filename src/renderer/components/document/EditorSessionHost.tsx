@@ -1,5 +1,5 @@
 /**
- * 每标签 CodeMirror 编辑器宿主 —— TASK-005 WP3（第 4.6 / 6.3 节）。
+ * 每标签 CodeMirror 编辑器宿主 —— TASK-005 WP3 / TASK-006 WP6（第 4.6 / 6.3 节）。
  *
  * ## 职责
  *
@@ -12,16 +12,21 @@
  *   共用会话通知出口，不残留组件闭包；
  * - 空文件可正常获得焦点并输入；组件卸载后销毁编辑器。
  *
- * ## 配置范围（TASK-004 第 4.2 节）
+ * ## 配置范围（TASK-004 第 4.2 节 + TASK-006 第 4.2 节）
  *
- * 仅纯文本编辑、原生选择复制剪切粘贴、撤销重做与保存快捷键（Mod-s）；
- * 不加入语法高亮、查找替换、自动补全或复杂快捷键体系。
+ * 纯文本编辑、撤销重做、保存快捷键（Mod-s）与 CodeMirror 当前文件查找替换：
+ * `Ctrl+F`（Mod-f）打开查找面板、`Ctrl+H`（Mod-h）打开面板并聚焦替换输入、
+ * `F3` / `Mod-g` 下一个、`Shift-F3` / `Mod-Shift-g` 上一个、替换当前项与全部替换。
+ * 查找面板、查询、大小写选项、选区与历史都保存在 EditorState 中，随会话缓存
+ * 按 tabId 天然隔离；替换通过普通编辑事务进入撤销历史，不绕过编辑器。
+ * 不加入语法高亮、自动补全或复杂快捷键体系。
  */
 
 import { useEffect, useRef } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, type KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search';
 import type { EditorSession, EditorSessions } from '../../lib/use-editor-sessions';
 
 /** 搜索结果定位目标：由 App 校验通过后下发，宿主在视图就绪时应用选区并滚动聚焦。 */
@@ -66,6 +71,25 @@ function saveBinding(requestSave: () => void): KeyBinding {
   };
 }
 
+/**
+ * Ctrl+H（Mod-h）：打开查找/替换面板并聚焦替换输入。
+ * CodeMirror 的搜索面板同时包含查找与替换界面（非只读时替换行始终渲染），
+ * 这里只打开面板并聚焦替换字段，不使用私有 DOM 状态。
+ */
+const openReplaceBinding: KeyBinding = {
+  key: 'Mod-h',
+  run: (view) => {
+    if (!searchPanelOpen(view.state)) {
+      openSearchPanel(view);
+    }
+    const replaceField = view.dom.querySelector<HTMLInputElement>(
+      '.cm-search input[name="replace"]',
+    );
+    replaceField?.focus();
+    return true;
+  },
+};
+
 /** 创建会话：编辑器状态的 updateListener 经 `session.notify` 上报最新内容。 */
 function normalizeLineSeparators(doc: string, lineSeparator: '\n' | '\r\n'): string {
   const lfNormalized = doc.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -80,13 +104,21 @@ function createEditorState(
   const extensions: Extension[] = [
     EditorState.lineSeparator.of(lineSeparator),
     history(),
-    keymap.of([...defaultKeymap, ...historyKeymap, saveBinding(() => session.requestSave())]),
+    keymap.of([
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...searchKeymap,
+      openReplaceBinding,
+      saveBinding(() => session.requestSave()),
+    ]),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         session.notify(update.state.sliceDoc());
       }
     }),
+    // 当前文件查找替换：面板、查询与大小写选项保存在 EditorState 中，随会话缓存按 tabId 隔离
+    search(),
   ];
   return EditorState.create({ doc: normalizeLineSeparators(doc, lineSeparator), extensions });
 }
