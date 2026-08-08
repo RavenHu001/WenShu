@@ -35,6 +35,25 @@ function errno(code: string): NodeJS.ErrnoException {
   return Object.assign(new Error(code), { code });
 }
 
+/**
+ * 有界符号链接探测（DEVELOPMENT_ENVIRONMENT.md"symlink/junction 探测卡住"处置）：
+ * 受控环境可能因权限或安全软件使 `fs.symlink` 长时间阻塞后才失败；探测只在有限时间内等待，
+ * 超时按"环境不支持符号链接"处理，只跳过真实链接用例，mock 拒绝分支继续确定性覆盖。
+ */
+function boundedSymlinkProbe(
+  target: string,
+  path: string,
+  type?: 'junction' | 'dir',
+): Promise<void> {
+  const attempt = type === undefined ? symlink(target, path) : symlink(target, path, type);
+  return Promise.race([
+    attempt,
+    new Promise<void>((_resolve, reject) => {
+      setTimeout(() => reject(new Error('symlink probe timed out')), 5_000);
+    }),
+  ]);
+}
+
 describe('readTextDocument', () => {
   let workspaceRoot: string;
   let outsideDir: string;
@@ -47,7 +66,7 @@ describe('readTextDocument', () => {
     const probeFile = join(probeDir, 'probe.txt');
     await writeFile(probeFile, 'x');
     try {
-      await symlink(probeFile, join(probeDir, 'alias.txt'));
+      await boundedSymlinkProbe(probeFile, join(probeDir, 'alias.txt'));
       fileSymlinkSupported = true;
     } catch {
       fileSymlinkSupported = false;
@@ -56,7 +75,7 @@ describe('readTextDocument', () => {
     const probeDirTarget = join(probeDir, 'probe-dir');
     await mkdir(probeDirTarget);
     try {
-      await symlink(
+      await boundedSymlinkProbe(
         probeDirTarget,
         join(probeDir, 'alias-dir'),
         process.platform === 'win32' ? 'junction' : 'dir',
