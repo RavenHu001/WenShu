@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReadTextDocumentResult, SaveTextDocumentResult } from '../../shared/document';
-import type { TextTabsModel } from './text-document-tabs';
+import type { TextTabsModel, TextDocumentTabState } from './text-document-tabs';
 import {
   activeTab,
   activateTab as activateTabState,
@@ -51,8 +51,12 @@ const MIXED_LINE_ENDINGS_ERROR = {
 
 export interface TextDocumentsController {
   readonly model: TextTabsModel;
-  /** 从文件树选择 TXT：打开或激活对应标签，并在新标签上发起读取。 */
-  readonly openTextFile: (relativePath: string) => void;
+  /**
+   * 从文件树选择 TXT：打开或激活对应标签，并在新标签上发起读取。
+   * 返回的 Promise 在标签读取稳定后结算（加载完成 / 读取失败 / 关闭或工作区失效为 null），
+   * 供搜索结果定位等待读取完成（TASK-006 4.9.2）；文件树调用方可忽略返回值。
+   */
+  readonly openTextFile: (relativePath: string) => Promise<TextDocumentTabState | null>;
   /** 点击标签切换活动标签。 */
   readonly activateTab: (tabId: string) => void;
   /** 编辑器正文变化：只更新目标标签（正文实际变化才标记 dirty 并递增修订号）。 */
@@ -111,6 +115,36 @@ export function useTextDocuments(): TextDocumentsController {
     setModel(next);
   }, []);
 
+  /**
+   * 打开流程的等待者：按 tabId 收集，标签读取完成（或关闭/工作区失效）时统一结算。
+   * 用于搜索结果定位：新标签需等读取完成后才能执行 revision / 范围校验（TASK-006 4.9.2）。
+   */
+  const openWaitersRef = useRef(new Map<string, Set<(tab: TextDocumentTabState | null) => void>>());
+
+  const resolveOpenWaiters = useCallback((tabId: string, tab: TextDocumentTabState | null) => {
+    const waiters = openWaitersRef.current.get(tabId);
+    if (waiters === undefined) {
+      return;
+    }
+    openWaitersRef.current.delete(tabId);
+    for (const resolve of waiters) {
+      resolve(tab);
+    }
+  }, []);
+
+  const waitForTabLoad = useCallback(
+    (tabId: string): Promise<TextDocumentTabState | null> =>
+      new Promise((resolve) => {
+        const waiters = openWaitersRef.current.get(tabId);
+        if (waiters === undefined) {
+          openWaitersRef.current.set(tabId, new Set([resolve]));
+        } else {
+          waiters.add(resolve);
+        }
+      }),
+    [],
+  );
+
   const commitReadResult = useCallback(
     (result: ReadTextDocumentResult, tabId: string, requestId: number, epoch: number) => {
       if (!mountedRef.current) {
@@ -130,18 +164,19 @@ export function useTextDocuments(): TextDocumentsController {
       }
       if (result.status === 'loaded') {
         const document = result.document;
+        const nextTab: TextDocumentTabState = {
+          ...tab,
+          status: 'loaded-clean',
+          name: document.name,
+          document,
+          content: document.content,
+          dirty: false,
+          saving: false,
+          error: null,
+        };
         commit(
           updateTabRuntime(
-            updateTab(current, tabId, (target) => ({
-              ...target,
-              status: 'loaded-clean',
-              name: document.name,
-              document,
-              content: document.content,
-              dirty: false,
-              saving: false,
-              error: null,
-            })),
+            updateTab(current, tabId, () => nextTab),
             tabId,
             (runtimeEntry) => ({
               ...runtimeEntry,
@@ -150,18 +185,20 @@ export function useTextDocuments(): TextDocumentsController {
             }),
           ),
         );
+        // 打开流程等待者以最终标签状态结算（定位校验依据）
+        resolveOpenWaiters(tabId, nextTab);
       } else {
         // 读取失败：目标标签进入 read-error；已有快照时保留正文、dirty 与已保存快照
-        commit(
-          updateTab(current, tabId, (target) => ({
-            ...target,
-            status: 'read-error',
-            error: result.error,
-          })),
-        );
+        const nextTab: TextDocumentTabState = {
+          ...tab,
+          status: 'read-error',
+          error: result.error,
+        };
+        commit(updateTab(current, tabId, () => nextTab));
+        resolveOpenWaiters(tabId, nextTab);
       }
     },
-    [commit],
+    [commit, resolveOpenWaiters],
   );
 
   const readPath = useCallback(
@@ -182,13 +219,19 @@ export function useTextDocuments(): TextDocumentsController {
     [commitReadResult],
   );
 
+  /**
+   * 打开或激活标签（TASK-006 WP5 扩展）：
+   * 返回的 Promise 在标签读取稳定后结算——新标签等待本次读取完成（loaded 或 read-error），
+   * 已加载标签立即以当前状态结算；标签被关闭或工作区失效时以 null 结算。
+   * 文件树调用方可忽略返回值（void 化），搜索结果定位依赖该结算时机（第 4.9.2 节）。
+   */
   const openTextFile = useCallback(
-    (relativePath: string) => {
+    (relativePath: string): Promise<TextDocumentTabState | null> => {
       const current = modelRef.current;
       const opened = openTab(current, relativePath);
       const tab = activeTab(opened);
       if (tab === null) {
-        return;
+        return Promise.resolve(null);
       }
       // 新创建的 loading 占位标签没有运行时条目：发起唯一一次读取；
       // 已存在标签（含 loading 中）只激活，不发起读取
@@ -199,8 +242,13 @@ export function useTextDocuments(): TextDocumentsController {
       } else {
         commit(opened);
       }
+      if (tab.status === 'loading') {
+        // 读取在途（新建或重复点击）：等待原读取完成后结算，不创建第二标签
+        return waitForTabLoad(tab.id);
+      }
+      return Promise.resolve(tab);
     },
-    [commit, readPath],
+    [commit, readPath, waitForTabLoad],
   );
 
   const activateTab = useCallback(
@@ -219,9 +267,11 @@ export function useTextDocuments(): TextDocumentsController {
 
   const closeTab = useCallback(
     (tabId: string) => {
+      // 关闭后结算打开流程等待者（null：标签已不存在，定位流程不再继续）
+      resolveOpenWaiters(tabId, null);
       commit(closeTabState(modelRef.current, tabId));
     },
-    [commit],
+    [commit, resolveOpenWaiters],
   );
 
   const retryRead = useCallback(
@@ -411,6 +461,14 @@ export function useTextDocuments(): TextDocumentsController {
 
   const invalidateWorkspace = useCallback(() => {
     epochRef.current += 1;
+    // 工作区失效：全部打开流程等待者以 null 结算（定位流程不再继续）
+    const waiters = openWaitersRef.current;
+    for (const [tabId, resolves] of waiters) {
+      waiters.delete(tabId);
+      for (const resolve of resolves) {
+        resolve(null);
+      }
+    }
     commit(invalidateTabsModel());
   }, [commit]);
 

@@ -15,7 +15,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceSearchController } from '../../lib/use-workspace-search';
-import type { WorkspaceTextSearchResult } from '../../../shared/search';
+import type {
+  WorkspaceTextSearchFileResult,
+  WorkspaceTextSearchMatch,
+  WorkspaceTextSearchResult,
+} from '../../../shared/search';
 import { SearchResults } from './SearchResults';
 
 interface SearchSidebarProps {
@@ -24,6 +28,11 @@ interface SearchSidebarProps {
   readonly workspaceAvailable: boolean;
   /** 侧栏激活时自动聚焦搜索输入（Ctrl+Shift+F 打开后可直接输入）。 */
   readonly active: boolean;
+  /** 点击匹配结果后的打开 / 定位入口（WP5 接入）。 */
+  readonly onMatchActivate?: (
+    file: WorkspaceTextSearchFileResult,
+    match: WorkspaceTextSearchMatch,
+  ) => void;
 }
 
 const TRUNCATED_REASON_LABEL: Readonly<Record<string, string>> = {
@@ -36,6 +45,7 @@ export function SearchSidebar({
   search,
   workspaceAvailable,
   active,
+  onMatchActivate,
 }: SearchSidebarProps): React.JSX.Element {
   const [draft, setDraft] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -107,7 +117,7 @@ export function SearchSidebar({
 
           <div className="search-note">结果来自磁盘上已保存的文件，不包含未保存的编辑。</div>
 
-          <SearchStatus search={search} />
+          <SearchStatus search={search} onMatchActivate={onMatchActivate} />
         </>
       )}
     </>
@@ -116,8 +126,10 @@ export function SearchSidebar({
 
 function SearchStatus({
   search,
+  onMatchActivate,
 }: {
   readonly search: WorkspaceSearchController;
+  readonly onMatchActivate?: SearchSidebarProps['onMatchActivate'];
 }): React.JSX.Element {
   const { state } = search;
   switch (state.status) {
@@ -134,7 +146,13 @@ function SearchStatus({
       if (result === null || result.status !== 'completed') {
         return <div className="search-status" />;
       }
-      return <CompletedView result={result} submittedQuery={state.submittedQuery} />;
+      return (
+        <CompletedView
+          result={result}
+          submittedQuery={state.submittedQuery}
+          onMatchActivate={onMatchActivate}
+        />
+      );
     }
   }
 }
@@ -142,9 +160,11 @@ function SearchStatus({
 function CompletedView({
   result,
   submittedQuery,
+  onMatchActivate,
 }: {
   readonly result: Extract<WorkspaceTextSearchResult, { status: 'completed' }>;
   readonly submittedQuery: string;
+  readonly onMatchActivate?: SearchSidebarProps['onMatchActivate'];
 }): React.JSX.Element {
   const { statistics } = result;
   const statsParts = [
@@ -167,7 +187,11 @@ function CompletedView({
       {result.files.length === 0 ? (
         <div className="search-empty">没有匹配</div>
       ) : (
-        <SearchResults files={result.files} submittedQuery={submittedQuery} />
+        <SearchResults
+          files={result.files}
+          submittedQuery={submittedQuery}
+          {...(onMatchActivate !== undefined ? { onMatchActivate } : {})}
+        />
       )}
     </>
   );

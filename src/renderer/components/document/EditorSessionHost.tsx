@@ -24,6 +24,13 @@ import { EditorView, keymap, type KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import type { EditorSession, EditorSessions } from '../../lib/use-editor-sessions';
 
+/** 搜索结果定位目标：由 App 校验通过后下发，宿主在视图就绪时应用选区并滚动聚焦。 */
+export interface EditorLocateTarget {
+  readonly from: number;
+  readonly to: number;
+  readonly matchedText: string;
+}
+
 export interface EditorSessionHostProps {
   /** 稳定标签 id：会话缓存键。 */
   readonly tabId: string;
@@ -39,6 +46,11 @@ export interface EditorSessionHostProps {
   readonly onContentChange: (content: string) => void;
   /** Ctrl+S / Cmd+S 保存请求回调（目标标签由挂载中的宿主决定）。 */
   readonly onSaveRequest: () => void;
+  /**
+   * 待应用的搜索结果定位目标（仅当目标标签与本宿主一致时生效）。
+   * 同一目标对象只应用一次（appliedLocateRef 守卫），防止普通 rerender 重复抢焦点（第 6.7 节）。
+   */
+  readonly locateTarget?: EditorLocateTarget | null;
   /** 每标签会话缓存。 */
   readonly sessions: EditorSessions;
 }
@@ -106,6 +118,7 @@ export function EditorSessionHost({
   lineSeparator = '\n',
   onContentChange,
   onSaveRequest,
+  locateTarget = null,
   sessions,
 }: EditorSessionHostProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -114,6 +127,8 @@ export function EditorSessionHost({
   const saveRequestRef = useRef(onSaveRequest);
   const contentRef = useRef(content);
   const sessionsRef = useRef(sessions);
+  /** 已应用过的定位目标：同一对象只应用一次（rerender 不重复抢焦点）。 */
+  const appliedLocateRef = useRef<EditorLocateTarget | null>(null);
 
   useEffect(() => {
     contentChangeRef.current = onContentChange;
@@ -191,6 +206,28 @@ export function EditorSessionHost({
     }
     view.setState(createEditorState(content, lineSeparator, session));
   }, [content, lineSeparator, tabId]);
+
+  // 搜索结果定位：视图就绪后校验当前正文范围，命中则设置选区、滚动到可视区域并聚焦。
+  // 同一目标对象只应用一次（appliedLocateRef 守卫），普通 rerender 不会重复抢焦点（第 6.7 节）。
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null || locateTarget === null || appliedLocateRef.current === locateTarget) {
+      return;
+    }
+    appliedLocateRef.current = locateTarget;
+    const doc = view.state.doc;
+    const safeFrom = Math.max(0, Math.min(locateTarget.from, doc.length));
+    const safeTo = Math.max(safeFrom, Math.min(locateTarget.to, doc.length));
+    if (doc.sliceString(safeFrom, safeTo) !== locateTarget.matchedText) {
+      // 实时正文与结果匹配文本不一致：不选中、不改正文
+      return;
+    }
+    view.dispatch({
+      selection: { anchor: safeFrom, head: safeTo },
+      effects: EditorView.scrollIntoView(safeFrom, { y: 'center' }),
+    });
+    view.focus();
+  }, [locateTarget, tabId]);
 
   return <div className="doc-editor" ref={containerRef} aria-label="TXT 编辑器" />;
 }

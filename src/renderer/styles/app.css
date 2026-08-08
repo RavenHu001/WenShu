@@ -698,6 +698,39 @@ body {
   color: #b34141;
 }
 
+/* TASK-006 WP5：非破坏性"搜索结果已过期"提示横幅 */
+.doc-locate-banner {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 12px 0;
+  padding: 8px 12px;
+  color: #6d6223;
+  background: #fdf8e3;
+  border: 1px solid #ecdfa8;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.doc-locate-dismiss {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  color: #8a7d33;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.doc-locate-dismiss:hover {
+  background: #f3e9c3;
+}
+
 /* ---- 应用内确认对话框 ---------------------------------------------------- */
 
 .confirm-overlay {
