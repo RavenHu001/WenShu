@@ -11,9 +11,14 @@
  *   光标、选区、滚动位置与撤销历史。
  */
 
-import { useMemo } from 'react';
+import { useMemo, type RefObject } from 'react';
 import { TabBar } from './TabBar';
-import { EditorSessionHost } from './EditorSessionHost';
+import {
+  EditorSessionHost,
+  type EditorLocateTarget,
+  type EditorSearchControls,
+  type EditorSearchMode,
+} from './EditorSessionHost';
 import { useEditorSessions } from '../../lib/use-editor-sessions';
 import type { TextDocumentTabState } from '../../lib/text-document-tabs';
 
@@ -26,6 +31,12 @@ export function DocumentPane({
   onContentChange,
   onSave,
   onReloadRequest,
+  locateTarget,
+  locateNotice,
+  onDismissLocateNotice,
+  searchPanelHostRef,
+  onSearchPanelRequest,
+  onSearchControlsChange,
 }: {
   readonly tabs: readonly TextDocumentTabState[];
   readonly activeTabId: string | null;
@@ -39,6 +50,14 @@ export function DocumentPane({
   readonly onSave: (tabId: string) => void;
   /** 冲突状态下请求"放弃本地修改并重新读取"（确认由 App 绑定 tabId 完成）。 */
   readonly onReloadRequest: (tabId: string) => void;
+  /** 待应用的搜索结果定位目标（含目标 tabId；只对匹配的标签生效）。 */
+  readonly locateTarget?: (EditorLocateTarget & { readonly tabId: string }) | null;
+  /** 非破坏性"搜索结果已过期"提示文案；null 不显示。 */
+  readonly locateNotice?: string | null;
+  readonly onDismissLocateNotice?: () => void;
+  readonly searchPanelHostRef?: RefObject<HTMLElement | null>;
+  readonly onSearchPanelRequest?: (mode: EditorSearchMode) => void;
+  readonly onSearchControlsChange?: (controls: EditorSearchControls | null) => void;
 }): React.JSX.Element {
   const liveTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
   const sessions = useEditorSessions(liveTabIds);
@@ -80,6 +99,22 @@ export function DocumentPane({
           onContentChange={onContentChange}
           onReloadRequest={onReloadRequest}
           onSave={onSave}
+          locateTarget={
+            locateTarget !== null &&
+            locateTarget !== undefined &&
+            locateTarget.tabId === activeTab.id
+              ? {
+                  from: locateTarget.from,
+                  to: locateTarget.to,
+                  matchedText: locateTarget.matchedText,
+                }
+              : null
+          }
+          locateNotice={locateNotice}
+          onDismissLocateNotice={onDismissLocateNotice}
+          searchPanelHostRef={searchPanelHostRef}
+          onSearchPanelRequest={onSearchPanelRequest}
+          onSearchControlsChange={onSearchControlsChange}
         />
       )}
     </>
@@ -163,6 +198,12 @@ function TabBody({
   onContentChange,
   onReloadRequest,
   onSave,
+  locateTarget,
+  locateNotice,
+  onDismissLocateNotice,
+  searchPanelHostRef,
+  onSearchPanelRequest,
+  onSearchControlsChange,
 }: {
   readonly tab: TextDocumentTabState;
   readonly sessions: ReturnType<typeof useEditorSessions>;
@@ -170,6 +211,12 @@ function TabBody({
   readonly onContentChange: (tabId: string, content: string) => void;
   readonly onReloadRequest: (tabId: string) => void;
   readonly onSave: (tabId: string) => void;
+  readonly locateTarget: EditorLocateTarget | null;
+  readonly locateNotice: string | null | undefined;
+  readonly onDismissLocateNotice: (() => void) | undefined;
+  readonly searchPanelHostRef: RefObject<HTMLElement | null> | undefined;
+  readonly onSearchPanelRequest: ((mode: EditorSearchMode) => void) | undefined;
+  readonly onSearchControlsChange: ((controls: EditorSearchControls | null) => void) | undefined;
 }): React.JSX.Element {
   if (tab.status === 'loading') {
     return <div className="doc-pane-body doc-loading">正在读取 {tab.name}…</div>;
@@ -179,6 +226,21 @@ function TabBody({
   if (showErrorPanel) {
     return (
       <div className="doc-pane-body doc-error-panel">
+        {locateNotice !== null && locateNotice !== undefined && (
+          <div className="doc-locate-banner" role="status">
+            <span>{locateNotice}</span>
+            {onDismissLocateNotice !== undefined && (
+              <button
+                type="button"
+                className="doc-locate-dismiss"
+                aria-label="关闭提示"
+                onClick={onDismissLocateNotice}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
         <p>无法读取文件 {tab.name}</p>
         <span>{tab.error?.message}</span>
         <span>请在工作区文件树中选择其他 TXT 文件重试。</span>
@@ -206,6 +268,21 @@ function TabBody({
 
   return (
     <div className="doc-pane-body">
+      {locateNotice !== null && locateNotice !== undefined && (
+        <div className="doc-locate-banner" role="status">
+          <span>{locateNotice}</span>
+          {onDismissLocateNotice !== undefined && (
+            <button
+              type="button"
+              className="doc-locate-dismiss"
+              aria-label="关闭提示"
+              onClick={onDismissLocateNotice}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
       {errorBanner !== null && (
         <div className="doc-error-banner">
           <span>{errorBanner.text}</span>
@@ -228,6 +305,10 @@ function TabBody({
         sessions={sessions}
         onContentChange={(content) => onContentChange(tab.id, content)}
         onSaveRequest={() => onSave(tab.id)}
+        {...(locateTarget !== null ? { locateTarget } : {})}
+        {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
+        {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
+        {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
       />
     </div>
   );

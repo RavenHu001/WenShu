@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
 import { useTextDocuments } from './lib/use-text-documents';
+import { useWorkspace } from './lib/use-workspace';
+import { useWorkspaceSearch } from './lib/use-workspace-search';
 import {
   activeTab,
   dirtyTabCount,
@@ -9,11 +11,25 @@ import {
   tabById,
   type TextDocumentTabState,
 } from './lib/text-document-tabs';
+import type {
+  EditorLocateTarget,
+  EditorSearchControls,
+  EditorSearchMode,
+} from './components/document/EditorSessionHost';
+import type { WorkspaceTextSearchFileResult, WorkspaceTextSearchMatch } from '../shared/search';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
+import { SearchSidebar } from './components/search/SearchSidebar';
 import { DocumentPane } from './components/document/DocumentPane';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 
-const activityItems = ['文', '搜', '设'];
+/** 活动栏面板：文件 / 搜索为真实可访问入口；设置保持不可用占位（第 4.10 节）。 */
+type ActivityPanel = 'files' | 'search';
+
+const activityItems = [
+  { id: 'files', label: '文', title: '文件' },
+  { id: 'search', label: '搜', title: '搜索' },
+  { id: 'settings', label: '设', title: '设置（未提供）', disabled: true },
+] as const;
 
 const MIXED_LINE_ENDINGS_CODE = 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED';
 
@@ -48,6 +64,33 @@ export const App = (): React.JSX.Element => {
     retryRead,
     invalidateWorkspace,
   } = useTextDocuments();
+  // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）
+  const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
+  const search = useWorkspaceSearch({
+    workspaceAvailable: workspace.state.workspace !== null,
+    workspaceEpoch: workspace.epoch,
+  });
+  const [activity, setActivity] = useState<ActivityPanel>('files');
+  const [searchFocusTarget, setSearchFocusTarget] = useState<'workspace' | 'current-document'>(
+    'workspace',
+  );
+  const currentDocumentSearchPanelHostRef = useRef<HTMLDivElement | null>(null);
+  const editorSearchControlsRef = useRef<EditorSearchControls | null>(null);
+  /** 待应用的搜索结果定位目标（App 校验通过后下发给编辑器宿主）。 */
+  const [locateTarget, setLocateTarget] = useState<
+    (EditorLocateTarget & { readonly tabId: string }) | null
+  >(null);
+  /** 非破坏性"搜索结果已过期"提示文案。 */
+  const [staleNotice, setStaleNotice] = useState<string | null>(null);
+  /** 定位请求编号：全局单调递增，新定位请求作废旧请求（第 4.9.7 节）。 */
+  const locateCounterRef = useRef(0);
+  /** 最新定位请求编号：异步完成时校验仍是最新请求。 */
+  const latestLocateIdRef = useRef(0);
+  /** 发起定位时的工作区 epoch 快照。 */
+  const workspaceEpochRef = useRef(workspace.epoch);
+  useEffect(() => {
+    workspaceEpochRef.current = workspace.epoch;
+  });
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
   const pendingRef = useRef<PendingDiscard | null>(null);
@@ -307,10 +350,116 @@ export const App = (): React.JSX.Element => {
     }
   };
 
-  // 工作区成功切换 → 清空全部标签并使旧工作区未完成的结果失效
-  const handleWorkspaceSelected = useCallback(() => {
-    invalidateWorkspace();
-  }, [invalidateWorkspace]);
+  // 工作区成功切换 → 清空全部标签并使旧工作区未完成的结果失效（useWorkspace 已调用）
+  const handleOpenWorkspace = useCallback(async (): Promise<void> => {
+    // 未保存修改保护：守卫拒绝时不得打开原生目录选择器
+    if (!(await handleOpenWorkspaceGuard())) {
+      return;
+    }
+    await workspace.openWorkspace();
+  }, [handleOpenWorkspaceGuard, workspace.openWorkspace]);
+
+  // Ctrl+Shift+F：打开搜索侧栏并聚焦搜索输入
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setSearchFocusTarget('workspace');
+        setActivity('search');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
+  const handleCurrentDocumentSearchRequest = useCallback((): void => {
+    setSearchFocusTarget('current-document');
+    setActivity('search');
+  }, []);
+
+  const handleOpenCurrentDocumentSearch = useCallback((mode: EditorSearchMode): void => {
+    editorSearchControlsRef.current?.open(mode);
+  }, []);
+
+  // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）
+  useEffect(() => {
+    setLocateTarget(null);
+    setStaleNotice(null);
+  }, [workspace.epoch]);
+
+  /** 定位请求是否仍有效：工作区 epoch 未变化且没有更新的定位请求（第 5.3 节）。 */
+  const isLocateCurrent = useCallback((locateId: number, epoch: number): boolean => {
+    return workspaceEpochRef.current === epoch && latestLocateIdRef.current === locateId;
+  }, []);
+
+  /**
+   * 搜索结果点击 → "打开/激活 → 验证 → 定位"闭环（第 4.9 节）：
+   * 打开或激活唯一标签并等待读取完成；revision、范围与实际匹配文本全部有效时
+   * 下发定位目标，由编辑器宿主设置选区、滚动并聚焦；任何过期情况只提示，不选中、不改正文。
+   */
+  const handleMatchActivate = useCallback(
+    (file: WorkspaceTextSearchFileResult, match: WorkspaceTextSearchMatch) => {
+      const result = search.state.result;
+      // 只允许点击当前已完成搜索结果的分组（绑定搜索 requestId 与发起时 epoch）
+      if (result === null || result.status !== 'completed') {
+        return;
+      }
+      const locateId = ++locateCounterRef.current;
+      latestLocateIdRef.current = locateId;
+      const epoch = workspace.epoch;
+      const relativePath = file.relativePath;
+      setStaleNotice(null);
+      setLocateTarget(null); // 新定位请求作废旧定位目标
+
+      void (async () => {
+        // 1. 打开或激活唯一标签；新标签等待读取完成（不创建第二标签）
+        const tab = await openTextFile(relativePath);
+        if (!isLocateCurrent(locateId, epoch)) {
+          return; // 新定位请求或工作区切换已作废本次定位
+        }
+        if (tab === null) {
+          return; // 标签已关闭或工作区已失效
+        }
+        // 2. read-error 标签保留错误状态，不能伪造定位成功（第 4.9.6 节）
+        if (tab.status === 'read-error' || tab.document === null) {
+          setStaleNotice(`搜索结果已过期：${tab.name} 读取失败。`);
+          return;
+        }
+        if (!isLocateCurrent(locateId, epoch)) {
+          return;
+        }
+        // 3. 磁盘基线 revision 必须与结果一致（外部修改后只提示过期）
+        if (tab.document.revision !== file.revision) {
+          setStaleNotice(`搜索结果已过期：${tab.name} 的内容已被外部修改。`);
+          return;
+        }
+        // 4. 范围必须落在当前实时正文内，且与实际匹配文本精确一致；
+        //    dirty 但原范围仍一致时允许定位（不清除 dirty）
+        if (
+          match.from < 0 ||
+          match.to > tab.content.length ||
+          match.to < match.from ||
+          tab.content.slice(match.from, match.to) !== match.matchedText
+        ) {
+          setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+          return;
+        }
+        if (!isLocateCurrent(locateId, epoch)) {
+          return;
+        }
+        // 5. 下发定位目标：编辑器宿主应用选区、滚动与聚焦后消费
+        setLocateTarget({
+          tabId: relativePath,
+          from: match.from,
+          to: match.to,
+          matchedText: match.matchedText,
+        });
+      })();
+    },
+    [openTextFile, search.state.result, workspace.epoch, isLocateCurrent],
+  );
 
   const selectedTextFilePath = activeTab(model)?.relativePath ?? null;
 
@@ -328,19 +477,57 @@ export const App = (): React.JSX.Element => {
 
       <main className="workspace">
         <aside aria-label="活动栏" className="activity-bar">
-          {activityItems.map((item, index) => (
-            <div className={index === 0 ? 'activity-item active' : 'activity-item'} key={item}>
-              {item}
-            </div>
-          ))}
+          {activityItems.map((item) => {
+            const isSettings = item.id === 'settings';
+            return (
+              <button
+                type="button"
+                key={item.id}
+                className={`activity-item${activity === item.id ? ' active' : ''}`}
+                title={item.title}
+                aria-pressed={isSettings ? undefined : activity === item.id}
+                aria-disabled={isSettings ? true : undefined}
+                disabled={isSettings}
+                onClick={() => {
+                  if (!isSettings) {
+                    if (item.id === 'search') {
+                      setSearchFocusTarget('workspace');
+                    }
+                    setActivity(item.id);
+                  }
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </aside>
 
-        <WorkspaceSidebar
-          onTextFileOpen={openTextFile}
-          selectedTextFilePath={selectedTextFilePath}
-          onWorkspaceSelected={handleWorkspaceSelected}
-          onOpenWorkspaceGuard={handleOpenWorkspaceGuard}
-        />
+        <aside aria-label="侧栏" className="sidebar">
+          {/* 两个侧栏保持挂载，用 hidden 切换：切换活动栏不丢失工作区或文件树展开状态 */}
+          <div className="sidebar-panel sidebar-panel-files" hidden={activity !== 'files'}>
+            <WorkspaceSidebar
+              state={workspace.state}
+              onOpenWorkspace={handleOpenWorkspace}
+              onRefreshWorkspace={workspace.refreshWorkspace}
+              onTextFileOpen={openTextFile}
+              selectedTextFilePath={selectedTextFilePath}
+            />
+          </div>
+          <div className="sidebar-panel sidebar-panel-search" hidden={activity !== 'search'}>
+            <SearchSidebar
+              search={search}
+              workspaceAvailable={workspace.state.workspace !== null}
+              active={activity === 'search'}
+              focusTarget={searchFocusTarget}
+              onFocusTargetChange={setSearchFocusTarget}
+              currentDocumentPanelHostRef={currentDocumentSearchPanelHostRef}
+              currentDocumentAvailable={activeTab(model)?.document != null}
+              onOpenCurrentDocumentSearch={handleOpenCurrentDocumentSearch}
+              onMatchActivate={handleMatchActivate}
+            />
+          </div>
+        </aside>
 
         <section className="editor-area">
           <DocumentPane
@@ -352,6 +539,14 @@ export const App = (): React.JSX.Element => {
             onContentChange={editTab}
             onSave={handleSaveRequest}
             onReloadRequest={handleReloadRequest}
+            locateTarget={locateTarget}
+            locateNotice={staleNotice}
+            onDismissLocateNotice={() => setStaleNotice(null)}
+            searchPanelHostRef={currentDocumentSearchPanelHostRef}
+            onSearchPanelRequest={handleCurrentDocumentSearchRequest}
+            onSearchControlsChange={(controls) => {
+              editorSearchControlsRef.current = controls;
+            }}
           />
         </section>
       </main>

@@ -1,122 +1,39 @@
-import { useCallback, useState } from 'react';
+/**
+ * 工作区文件侧栏 —— 纯展示组件（TASK-006 WP4）。
+ *
+ * 打开 / 刷新 / 错误状态由 `useWorkspace` controller 持有并注入，
+ * 本组件只负责按状态渲染文件树与操作按钮，不再自行调用 IPC。
+ * 切换活动栏时本组件保持挂载（App 用 hidden 切换），文件树展开状态不丢失。
+ */
+
 import { FileTree } from './FileTree';
-import type { WorkspaceEntryError, WorkspaceSnapshot } from '../../../shared/workspace';
-
-type Status = 'idle' | 'loading' | 'loaded' | 'error' | 'refreshing';
-
-interface State {
-  status: Status;
-  workspace: WorkspaceSnapshot | null;
-  error: WorkspaceEntryError | null;
-}
+import type { WorkspaceUiState } from '../../lib/use-workspace';
 
 interface WorkspaceSidebarProps {
+  /** 工作区可渲染状态（来自 useWorkspace）。 */
+  readonly state: WorkspaceUiState;
+  /** 打开文件夹入口（App 已执行未保存守卫）。 */
+  readonly onOpenWorkspace: () => void | Promise<void>;
+  /** 刷新当前工作区入口。 */
+  readonly onRefreshWorkspace: () => void | Promise<void>;
   /** 用户选择工作区内的 TXT 文件时报告其相对路径；由 App/文档容器处理读取。 */
   readonly onTextFileOpen: (relativePath: string) => void;
   /** 当前选中的文件相对路径，用于文件树的选中高亮。 */
   readonly selectedTextFilePath: string | null;
-  /** 工作区成功切换（新工作区扫描成功）时通知；用于清除旧文档并失效旧读取。 */
-  readonly onWorkspaceSelected: () => void;
-  /**
-   * 打开文件夹前的守卫：返回 false 时中止打开（不弹出原生目录选择器）。
-   * 用于有未保存修改时先完成"放弃/取消"确认；不传则直接打开。
-   */
-  readonly onOpenWorkspaceGuard?: () => boolean | Promise<boolean>;
-}
-
-function toWorkspaceEntryError(error: unknown): WorkspaceEntryError {
-  return {
-    message: error instanceof Error ? error.message : String(error),
-  };
 }
 
 export function WorkspaceSidebar({
+  state,
+  onOpenWorkspace,
+  onRefreshWorkspace,
   onTextFileOpen,
   selectedTextFilePath,
-  onWorkspaceSelected,
-  onOpenWorkspaceGuard,
 }: WorkspaceSidebarProps): React.JSX.Element {
-  const [state, setState] = useState<State>({
-    status: 'idle',
-    workspace: null,
-    error: null,
-  });
-
-  const handleOpen = useCallback(async () => {
-    // 未保存修改保护：守卫返回 false 时不得打开原生目录选择器
-    if (onOpenWorkspaceGuard !== undefined && !(await onOpenWorkspaceGuard())) {
-      return;
-    }
-    const prevWorkspace = state.workspace;
-    setState({ status: 'loading', workspace: prevWorkspace, error: null });
-
-    try {
-      const result = await window.desktop.workspace.open();
-
-      if (result.status === 'selected') {
-        setState({ status: 'loaded', workspace: result.workspace, error: null });
-        // 扫描成功才通知文档状态重置；取消或失败保持旧工作区和旧文档
-        onWorkspaceSelected();
-      } else if (result.status === 'cancelled') {
-        setState({
-          status: prevWorkspace ? 'loaded' : 'idle',
-          workspace: prevWorkspace,
-          error: null,
-        });
-      } else {
-        setState({
-          status: 'error',
-          workspace: prevWorkspace,
-          error: result.error,
-        });
-      }
-    } catch (error) {
-      setState({
-        status: 'error',
-        workspace: prevWorkspace,
-        error: toWorkspaceEntryError(error),
-      });
-    }
-  }, [state.workspace, onWorkspaceSelected, onOpenWorkspaceGuard]);
-
-  const handleRefresh = useCallback(async () => {
-    if (!state.workspace) {
-      return;
-    }
-    setState((prev) => ({ ...prev, status: 'refreshing' as const }));
-
-    try {
-      const result = await window.desktop.workspace.refresh();
-
-      if (result.status === 'refreshed') {
-        setState({ status: 'loaded', workspace: result.workspace, error: null });
-      } else if (result.status === 'error') {
-        setState((prev) => ({
-          status: 'error',
-          workspace: prev.workspace,
-          error: result.error,
-        }));
-      } else {
-        setState((prev) => ({
-          status: 'loaded',
-          workspace: prev.workspace,
-          error: null,
-        }));
-      }
-    } catch (error) {
-      setState((prev) => ({
-        status: 'error',
-        workspace: prev.workspace,
-        error: toWorkspaceEntryError(error),
-      }));
-    }
-  }, [state.workspace]);
-
   const busy = state.status === 'loading' || state.status === 'refreshing';
   const showIdle = state.status === 'idle';
 
   return (
-    <aside className="sidebar">
+    <>
       <div className="section-label">工作区</div>
 
       {showIdle && (
@@ -125,7 +42,7 @@ export function WorkspaceSidebar({
           <p>尚未打开文件夹</p>
           <button
             className="ws-btn ws-btn-primary"
-            onClick={() => void handleOpen()}
+            onClick={() => void onOpenWorkspace()}
             disabled={busy}
           >
             打开文件夹
@@ -147,10 +64,14 @@ export function WorkspaceSidebar({
                 {state.workspace.rootPath}
               </div>
               <div className="ws-info-actions">
-                <button className="ws-btn" onClick={() => void handleOpen()} disabled={busy}>
+                <button className="ws-btn" onClick={() => void onOpenWorkspace()} disabled={busy}>
                   打开文件夹
                 </button>
-                <button className="ws-btn" onClick={() => void handleRefresh()} disabled={busy}>
+                <button
+                  className="ws-btn"
+                  onClick={() => void onRefreshWorkspace()}
+                  disabled={busy}
+                >
                   {state.status === 'refreshing' ? '刷新中…' : '刷新'}
                 </button>
               </div>
@@ -183,13 +104,13 @@ export function WorkspaceSidebar({
           <span>{state.error?.message}</span>
           <button
             className="ws-btn ws-btn-primary"
-            onClick={() => void handleOpen()}
+            onClick={() => void onOpenWorkspace()}
             disabled={busy}
           >
             重试
           </button>
         </div>
       )}
-    </aside>
+    </>
   );
 }

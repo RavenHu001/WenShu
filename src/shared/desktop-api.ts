@@ -13,6 +13,11 @@ import type {
   SaveTextDocumentRequest,
   SaveTextDocumentResult,
 } from './document';
+import type {
+  WorkspaceTextSearchCancelRequest,
+  WorkspaceTextSearchRequest,
+  WorkspaceTextSearchResult,
+} from './search';
 
 /** 窗口关闭协调命名空间：固定窄协议，不暴露 ipcRenderer 或通用事件总线。 */
 export interface DesktopWindowApi {
@@ -41,6 +46,18 @@ export interface DesktopApi {
      * 主进程会拒绝多余字段（根路径、绝对目标、临时路径、编码、替换策略等）。
      */
     readonly saveText: (request: SaveTextDocumentRequest) => Promise<SaveTextDocumentResult>;
+  };
+  /**
+   * 工作区搜索窄接口：固定开始与取消方法，不暴露 ipcRenderer、通用通道或事件总线。
+   * 请求不得携带工作区根或绝对路径；取消只引用当前窗口已知的 requestId。
+   */
+  readonly search: {
+    /** 对当前工作区磁盘上已保存的普通 UTF-8 TXT 执行一次有界、可取消的搜索。 */
+    readonly textWorkspace: (
+      request: WorkspaceTextSearchRequest,
+    ) => Promise<WorkspaceTextSearchResult>;
+    /** 取消指定 requestId 的活动搜索；未知或过期请求安全无操作。 */
+    readonly cancelTextWorkspace: (request: WorkspaceTextSearchCancelRequest) => Promise<void>;
   };
   readonly window: DesktopWindowApi;
 }
