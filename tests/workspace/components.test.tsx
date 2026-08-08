@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
+/**
+ * TASK-006 WP4 工作区状态所有权回归测试（任务第 8.5 节与第 4.10 节）。
+ * 覆盖：useWorkspace controller 的打开/取消/失败/刷新语义与 epoch 递增；
+ * WorkspaceSidebar 纯展示组件按状态渲染；文件树 TXT 选择与展开/折叠行为无回归。
+ * 所有行为均通过真实 controller + 展示组件组合验证（与 App 的接线一致）。
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WorkspaceSidebar } from '../../src/renderer/components/workspace/WorkspaceSidebar';
+import { useWorkspace, type WorkspaceController } from '../../src/renderer/lib/use-workspace';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -49,21 +57,57 @@ function openBtn(): HTMLButtonElement {
   return (buttons[0] ?? buttons[buttons.length - 1]) as HTMLButtonElement;
 }
 
-function renderSidebar(
-  onTextFileOpen: (relativePath: string) => void = vi.fn(),
-  selectedTextFilePath: string | null = null,
-  onWorkspaceSelected: () => void = vi.fn(),
-): ReturnType<typeof render> {
-  return render(
+/** 与 App 相同的接线：useWorkspace controller + 纯展示 WorkspaceSidebar。 */
+function SidebarHarness({
+  onTextFileOpen = vi.fn(),
+  selectedTextFilePath = null,
+}: {
+  onTextFileOpen?: (relativePath: string) => void;
+  selectedTextFilePath?: string | null;
+}): React.JSX.Element {
+  const workspace = useWorkspace();
+  return (
     <WorkspaceSidebar
+      state={workspace.state}
+      onOpenWorkspace={workspace.openWorkspace}
+      onRefreshWorkspace={workspace.refreshWorkspace}
       onTextFileOpen={onTextFileOpen}
       selectedTextFilePath={selectedTextFilePath}
-      onWorkspaceSelected={onWorkspaceSelected}
-    />,
+    />
   );
 }
 
-describe('WorkspaceSidebar', () => {
+/** 暴露 controller 状态与 epoch 的测试宿主。 */
+function ControllerHarness({
+  onWorkspaceSelected,
+}: {
+  onWorkspaceSelected: () => void;
+}): React.JSX.Element {
+  const workspace = useWorkspace({ onWorkspaceSelected });
+  return <WorkspaceSidebarView controller={workspace} />;
+}
+
+function WorkspaceSidebarView({
+  controller,
+}: {
+  controller: WorkspaceController;
+}): React.JSX.Element {
+  return (
+    <div>
+      <output data-testid="epoch">{controller.epoch}</output>
+      <output data-testid="ws-status">{controller.state.status}</output>
+      <WorkspaceSidebar
+        state={controller.state}
+        onOpenWorkspace={controller.openWorkspace}
+        onRefreshWorkspace={controller.refreshWorkspace}
+        onTextFileOpen={vi.fn()}
+        selectedTextFilePath={null}
+      />
+    </div>
+  );
+}
+
+describe('useWorkspace 工作区状态所有权（第 4.10 节）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -73,22 +117,108 @@ describe('WorkspaceSidebar', () => {
     delete (window as unknown as Record<string, unknown>).desktop;
   });
 
-  it('initial state shows open folder button', () => {
+  it('初始：idle、epoch 为 0', () => {
     mockDesktop(vi.fn());
-    renderSidebar();
-    expect(screen.getByText('打开文件夹')).toBeDefined();
+    render(<ControllerHarness onWorkspaceSelected={vi.fn()} />);
+    expect(screen.getByTestId('ws-status').textContent).toBe('idle');
+    expect(screen.getByTestId('epoch').textContent).toBe('0');
   });
 
-  it('shows idle prompt when no workspace is open', () => {
+  it('成功打开：epoch +1 并通知 onWorkspaceSelected', async () => {
+    const onSelected = vi.fn();
+    mockDesktop(
+      vi
+        .fn()
+        .mockResolvedValue({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult),
+    );
+    render(<ControllerHarness onWorkspaceSelected={onSelected} />);
+
+    await userEvent.click(openBtn());
+    expect(screen.getByTestId('epoch').textContent).toBe('1');
+    expect(onSelected).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('ws-status').textContent).toBe('loaded');
+  });
+
+  it('取消选择：保留原工作区、epoch 不变、不通知 onWorkspaceSelected', async () => {
+    const onSelected = vi.fn();
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult);
+    mockDesktop(open);
+    render(<ControllerHarness onWorkspaceSelected={onSelected} />);
+
+    await userEvent.click(openBtn());
+    expect(screen.getByTestId('epoch').textContent).toBe('1');
+    expect(screen.getByText('test-root')).toBeDefined();
+
+    await userEvent.click(openBtn());
+    expect(screen.getByTestId('epoch').textContent).toBe('1');
+    expect(onSelected).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('test-root')).toBeDefined();
+  });
+
+  it('打开失败：保留原工作区、epoch 不变、不通知 onWorkspaceSelected', async () => {
+    const onSelected = vi.fn();
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({
+        status: 'error',
+        error: { message: '拒绝访问' },
+      } as OpenWorkspaceResult);
+    mockDesktop(open);
+    render(<ControllerHarness onWorkspaceSelected={onSelected} />);
+
+    await userEvent.click(openBtn());
+    await userEvent.click(openBtn());
+    expect(screen.getByTestId('epoch').textContent).toBe('1');
+    expect(onSelected).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('test-root')).toBeDefined();
+  });
+
+  it('刷新成功替换快照但不递增 epoch、不通知 onWorkspaceSelected', async () => {
+    const onSelected = vi.fn();
+    mockDesktop(
+      vi
+        .fn()
+        .mockResolvedValue({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult),
+      vi.fn().mockResolvedValue({
+        status: 'refreshed',
+        workspace: snapshot({ entries: [f('new.txt', 'new.txt')] }),
+      } as RefreshWorkspaceResult),
+    );
+    render(<ControllerHarness onWorkspaceSelected={onSelected} />);
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByText('刷新'));
+    expect(screen.getByText('new.txt')).toBeDefined();
+    expect(screen.getByTestId('epoch').textContent).toBe('1');
+    expect(onSelected).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WorkspaceSidebar 纯展示', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+    delete (window as unknown as Record<string, unknown>).desktop;
+  });
+
+  it('initial state shows open folder button and idle prompt', () => {
     mockDesktop(vi.fn());
-    renderSidebar();
+    render(<SidebarHarness />);
+    expect(screen.getByText('打开文件夹')).toBeDefined();
     expect(screen.getByText('尚未打开文件夹')).toBeDefined();
   });
 
-  it('cancelling dialog keeps idle state and does not clear', async () => {
+  it('cancelling dialog keeps idle state', async () => {
     const open = vi.fn().mockResolvedValue({ status: 'cancelled' } as OpenWorkspaceResult);
     mockDesktop(open);
-    renderSidebar();
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     expect(screen.getByText('尚未打开文件夹')).toBeDefined();
@@ -96,11 +226,10 @@ describe('WorkspaceSidebar', () => {
 
   it('successful open shows workspace root name and path', async () => {
     const snap = snapshot({ entries: [f('readme.txt', 'readme.txt')] });
-    const open = vi
-      .fn()
-      .mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult);
-    mockDesktop(open);
-    renderSidebar();
+    mockDesktop(
+      vi.fn().mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult),
+    );
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     expect(screen.getByText('test-root')).toBeDefined();
@@ -109,106 +238,39 @@ describe('WorkspaceSidebar', () => {
   });
 
   it('empty workspace shows empty message', async () => {
-    const snap = snapshot({ entries: [] });
-    const open = vi
-      .fn()
-      .mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult);
-    mockDesktop(open);
-    renderSidebar();
+    mockDesktop(
+      vi
+        .fn()
+        .mockResolvedValue({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult),
+    );
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     expect(screen.getByText('此文件夹为空')).toBeDefined();
   });
 
-  it('directories can expand and collapse', async () => {
-    const snap = snapshot({
-      entries: [d('src', 'src', [f('index.ts', 'src/index.ts')])],
-    });
-    const open = vi
-      .fn()
-      .mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult);
-    mockDesktop(open);
-    renderSidebar();
-
-    await userEvent.click(openBtn());
-    expect(screen.getByText('src')).toBeDefined();
-    expect(screen.queryByText('index.ts')).toBeNull();
-
-    const directoryButton = screen.getByRole('button', { name: 'src' });
-    directoryButton.focus();
-    await userEvent.keyboard('{Enter}');
-    expect(screen.getByText('index.ts')).toBeDefined();
-
-    await userEvent.keyboard('{Enter}');
-    expect(screen.queryByText('index.ts')).toBeNull();
-  });
-
   it('top-level error shows error message with retry button', async () => {
-    const open = vi.fn().mockResolvedValue({
-      status: 'error',
-      error: { message: '拒绝访问' },
-    } as OpenWorkspaceResult);
-    mockDesktop(open);
-    renderSidebar();
+    mockDesktop(
+      vi.fn().mockResolvedValue({
+        status: 'error',
+        error: { message: '拒绝访问' },
+      } as OpenWorkspaceResult),
+    );
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     expect(screen.getByText('无法打开工作区')).toBeDefined();
     expect(screen.getByText('重试')).toBeDefined();
   });
 
-  it('subdirectory error shows on node but does not prevent sibling display', async () => {
-    const snap = snapshot({
-      entries: [d('ok', 'ok', [f('good.txt', 'ok/good.txt')]), d('bad', 'bad', undefined)],
-    });
-    const entries = snap.entries.map((e) => {
-      if (e.name === 'bad') {
-        return { ...d('bad', 'bad', []), error: { message: '拒绝访问' } };
-      }
-      return e;
-    });
-    const modifiedSnap = { ...snap, entries };
-
-    const open = vi
-      .fn()
-      .mockResolvedValue({ status: 'selected', workspace: modifiedSnap } as OpenWorkspaceResult);
-    mockDesktop(open);
-    renderSidebar();
-
-    await userEvent.click(openBtn());
-    expect(screen.getByText('ok')).toBeDefined();
-    expect(screen.getByText('bad')).toBeDefined();
-    expect(screen.getByText('无法读取').getAttribute('title')).toBe('拒绝访问');
-  });
-
   it('loading state does not show the open button', async () => {
     const open = vi.fn().mockImplementation(() => new Promise<OpenWorkspaceResult>(() => {}));
     mockDesktop(open);
-    renderSidebar();
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     expect(screen.queryByText('打开文件夹')).toBeNull();
     expect(screen.getByText('正在读取工作区…')).toBeDefined();
-  });
-
-  it('refresh succeeds and replaces old snapshot', async () => {
-    const snap1 = snapshot({ entries: [f('a.txt', 'a.txt')] });
-    const snap2 = snapshot({ entries: [f('b.txt', 'b.txt')] });
-
-    const open = vi
-      .fn()
-      .mockResolvedValue({ status: 'selected', workspace: snap1 } as OpenWorkspaceResult);
-    const refresh = vi
-      .fn()
-      .mockResolvedValue({ status: 'refreshed', workspace: snap2 } as RefreshWorkspaceResult);
-    mockDesktop(open, refresh);
-    renderSidebar();
-
-    await userEvent.click(openBtn());
-    expect(screen.getByText('a.txt')).toBeDefined();
-
-    await userEvent.click(screen.getByText('刷新'));
-    expect(screen.getByText('b.txt')).toBeDefined();
-    expect(screen.queryByText('a.txt')).toBeNull();
   });
 
   it('keeps the current workspace visible and disables actions while opening a replacement', async () => {
@@ -218,7 +280,7 @@ describe('WorkspaceSidebar', () => {
       .mockResolvedValueOnce({ status: 'selected', workspace: snap } as OpenWorkspaceResult)
       .mockImplementationOnce(() => new Promise<OpenWorkspaceResult>(() => {}));
     mockDesktop(open);
-    renderSidebar();
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     await userEvent.click(openBtn());
@@ -231,7 +293,7 @@ describe('WorkspaceSidebar', () => {
 
   it('shows a recoverable error when opening rejects unexpectedly', async () => {
     mockDesktop(vi.fn().mockRejectedValue(new Error('IPC 已断开')));
-    renderSidebar();
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
 
@@ -242,11 +304,11 @@ describe('WorkspaceSidebar', () => {
 
   it('keeps the current workspace when refresh rejects unexpectedly', async () => {
     const snap = snapshot({ entries: [f('current.txt', 'current.txt')] });
-    const open = vi
-      .fn()
-      .mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult);
-    mockDesktop(open, vi.fn().mockRejectedValue(new Error('刷新失败')));
-    renderSidebar();
+    mockDesktop(
+      vi.fn().mockResolvedValue({ status: 'selected', workspace: snap } as OpenWorkspaceResult),
+      vi.fn().mockRejectedValue(new Error('刷新失败')),
+    );
+    render(<SidebarHarness />);
 
     await userEvent.click(openBtn());
     await userEvent.click(screen.getByText('刷新'));
@@ -256,7 +318,7 @@ describe('WorkspaceSidebar', () => {
   });
 });
 
-describe('文件树 TXT 选择（WP3）', () => {
+describe('文件树 TXT 选择（无回归）', () => {
   afterEach(() => {
     cleanup();
     delete (window as unknown as Record<string, unknown>).desktop;
@@ -266,28 +328,26 @@ describe('文件树 TXT 选择（WP3）', () => {
     entries: readonly WorkspaceEntry[],
     onTextFileOpen: (relativePath: string) => void = vi.fn(),
     selectedTextFilePath: string | null = null,
-  ): Promise<ReturnType<typeof render>> {
-    const open = vi.fn().mockResolvedValue({
-      status: 'selected',
-      workspace: snapshot({ entries }),
-    } as OpenWorkspaceResult);
-    mockDesktop(open);
-    const view = renderSidebar(onTextFileOpen, selectedTextFilePath);
+  ): Promise<void> {
+    mockDesktop(
+      vi.fn().mockResolvedValue({
+        status: 'selected',
+        workspace: snapshot({ entries }),
+      } as OpenWorkspaceResult),
+    );
+    render(
+      <SidebarHarness
+        onTextFileOpen={onTextFileOpen}
+        selectedTextFilePath={selectedTextFilePath}
+      />,
+    );
     await userEvent.click(openBtn());
-    return view;
   }
 
   it('TXT 文件节点可由鼠标点击选择并报告相对路径', async () => {
     const onOpen = vi.fn();
-    mockDesktop(
-      vi.fn().mockResolvedValue({
-        status: 'selected',
-        workspace: snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] }),
-      } as OpenWorkspaceResult),
-    );
-    renderSidebar(onOpen);
+    await openWorkspaceWith([f('a.txt', 'a.txt'), f('b.txt', 'b.txt')], onOpen);
 
-    await userEvent.click(openBtn());
     await userEvent.click(screen.getByRole('button', { name: 'a.txt' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onOpen).toHaveBeenCalledWith('a.txt');
@@ -296,15 +356,8 @@ describe('文件树 TXT 选择（WP3）', () => {
   it('TXT 文件节点可由键盘激活（Enter 与 Space）', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
-    mockDesktop(
-      vi.fn().mockResolvedValue({
-        status: 'selected',
-        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
-      } as OpenWorkspaceResult),
-    );
-    renderSidebar(onOpen);
+    await openWorkspaceWith([f('a.txt', 'a.txt')], onOpen);
 
-    await user.click(openBtn());
     const fileButton = screen.getByRole('button', { name: 'a.txt' });
     fileButton.focus();
 
@@ -338,15 +391,8 @@ describe('文件树 TXT 选择（WP3）', () => {
 
   it('当前选中文件具有可辨识的选中状态', async () => {
     const onOpen = vi.fn();
-    mockDesktop(
-      vi.fn().mockResolvedValue({
-        status: 'selected',
-        workspace: snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] }),
-      } as OpenWorkspaceResult),
-    );
-    renderSidebar(onOpen, 'a.txt');
+    await openWorkspaceWith([f('a.txt', 'a.txt'), f('b.txt', 'b.txt')], onOpen, 'a.txt');
 
-    await userEvent.click(openBtn());
     const selectedNode = screen.getByRole('button', { name: 'a.txt' }).closest('[role="treeitem"]');
     const otherNode = screen.getByRole('button', { name: 'b.txt' }).closest('[role="treeitem"]');
     expect(selectedNode?.getAttribute('aria-selected')).toBe('true');

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
 import { useTextDocuments } from './lib/use-text-documents';
+import { useWorkspace } from './lib/use-workspace';
+import { useWorkspaceSearch } from './lib/use-workspace-search';
 import {
   activeTab,
   dirtyTabCount,
@@ -10,10 +12,18 @@ import {
   type TextDocumentTabState,
 } from './lib/text-document-tabs';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
+import { SearchSidebar } from './components/search/SearchSidebar';
 import { DocumentPane } from './components/document/DocumentPane';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 
-const activityItems = ['文', '搜', '设'];
+/** 活动栏面板：文件 / 搜索为真实可访问入口；设置保持不可用占位（第 4.10 节）。 */
+type ActivityPanel = 'files' | 'search';
+
+const activityItems = [
+  { id: 'files', label: '文', title: '文件' },
+  { id: 'search', label: '搜', title: '搜索' },
+  { id: 'settings', label: '设', title: '设置（未提供）', disabled: true },
+] as const;
 
 const MIXED_LINE_ENDINGS_CODE = 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED';
 
@@ -48,6 +58,13 @@ export const App = (): React.JSX.Element => {
     retryRead,
     invalidateWorkspace,
   } = useTextDocuments();
+  // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）
+  const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
+  const search = useWorkspaceSearch({
+    workspaceAvailable: workspace.state.workspace !== null,
+    workspaceEpoch: workspace.epoch,
+  });
+  const [activity, setActivity] = useState<ActivityPanel>('files');
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
   const pendingRef = useRef<PendingDiscard | null>(null);
@@ -307,10 +324,28 @@ export const App = (): React.JSX.Element => {
     }
   };
 
-  // 工作区成功切换 → 清空全部标签并使旧工作区未完成的结果失效
-  const handleWorkspaceSelected = useCallback(() => {
-    invalidateWorkspace();
-  }, [invalidateWorkspace]);
+  // 工作区成功切换 → 清空全部标签并使旧工作区未完成的结果失效（useWorkspace 已调用）
+  const handleOpenWorkspace = useCallback(async (): Promise<void> => {
+    // 未保存修改保护：守卫拒绝时不得打开原生目录选择器
+    if (!(await handleOpenWorkspaceGuard())) {
+      return;
+    }
+    await workspace.openWorkspace();
+  }, [handleOpenWorkspaceGuard, workspace.openWorkspace]);
+
+  // Ctrl+Shift+F：打开搜索侧栏并聚焦搜索输入
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setActivity('search');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
 
   const selectedTextFilePath = activeTab(model)?.relativePath ?? null;
 
@@ -328,19 +363,48 @@ export const App = (): React.JSX.Element => {
 
       <main className="workspace">
         <aside aria-label="活动栏" className="activity-bar">
-          {activityItems.map((item, index) => (
-            <div className={index === 0 ? 'activity-item active' : 'activity-item'} key={item}>
-              {item}
-            </div>
-          ))}
+          {activityItems.map((item) => {
+            const isSettings = item.id === 'settings';
+            return (
+              <button
+                type="button"
+                key={item.id}
+                className={`activity-item${activity === item.id ? ' active' : ''}`}
+                title={item.title}
+                aria-pressed={isSettings ? undefined : activity === item.id}
+                aria-disabled={isSettings ? true : undefined}
+                disabled={isSettings}
+                onClick={() => {
+                  if (!isSettings) {
+                    setActivity(item.id);
+                  }
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </aside>
 
-        <WorkspaceSidebar
-          onTextFileOpen={openTextFile}
-          selectedTextFilePath={selectedTextFilePath}
-          onWorkspaceSelected={handleWorkspaceSelected}
-          onOpenWorkspaceGuard={handleOpenWorkspaceGuard}
-        />
+        <aside aria-label="侧栏" className="sidebar">
+          {/* 两个侧栏保持挂载，用 hidden 切换：切换活动栏不丢失工作区或文件树展开状态 */}
+          <div hidden={activity !== 'files'}>
+            <WorkspaceSidebar
+              state={workspace.state}
+              onOpenWorkspace={handleOpenWorkspace}
+              onRefreshWorkspace={workspace.refreshWorkspace}
+              onTextFileOpen={openTextFile}
+              selectedTextFilePath={selectedTextFilePath}
+            />
+          </div>
+          <div hidden={activity !== 'search'}>
+            <SearchSidebar
+              search={search}
+              workspaceAvailable={workspace.state.workspace !== null}
+              active={activity === 'search'}
+            />
+          </div>
+        </aside>
 
         <section className="editor-area">
           <DocumentPane
