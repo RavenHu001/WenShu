@@ -36,6 +36,12 @@ export interface TextMatchOptions {
   readonly maxMatchesPerFile?: number;
   /** 单条预览长度上限，默认 `MAX_PREVIEW_LENGTH`（160）。 */
   readonly maxPreviewLength?: number;
+  /**
+   * 协作式让出检查点（TASK-006 4.6 节"匹配循环中检查取消或工作区变化"）：
+   * 匹配循环的每次迭代前调用；返回 true 时立即停止并标记 `yielded`。
+   * 调用方（搜索器）把取消 / 工作区变化组合进该回调。
+   */
+  readonly shouldYield?: () => boolean;
 }
 
 /** 单文件匹配结果：匹配列表（升序、不重叠）与是否被单文件上限截断。 */
@@ -43,6 +49,8 @@ export interface TextMatchOutcome {
   readonly matches: readonly WorkspaceTextSearchMatch[];
   /** 单文件匹配数达到上限且正文中仍可能存在更多匹配。 */
   readonly truncated: boolean;
+  /** 在匹配循环中经 `shouldYield` 让出：结果为部分匹配，调用方应停止整个搜索。 */
+  readonly yielded: boolean;
 }
 
 /** 行范围：行内容在正文中的 [start, end)，不包含换行符本身。 */
@@ -145,16 +153,21 @@ export function matchText(
   const maxMatchesPerFile = options.maxMatchesPerFile ?? MAX_MATCHES_PER_FILE;
   const maxPreviewLength = options.maxPreviewLength ?? MAX_PREVIEW_LENGTH;
   if (query.length === 0 || maxMatchesPerFile <= 0 || content.length < query.length) {
-    return { matches: [], truncated: false };
+    return { matches: [], truncated: false, yielded: false };
   }
 
   const needle = options.caseSensitive ? query : foldedAsciiLower(query);
   const lines = lineRanges(content);
   const matches: WorkspaceTextSearchMatch[] = [];
   let truncated = false;
+  let yielded = false;
   let pos = 0;
 
   while (pos + needle.length <= content.length) {
+    if (options.shouldYield !== undefined && options.shouldYield()) {
+      yielded = true;
+      break;
+    }
     let matched = true;
     for (let j = 0; j < needle.length; j += 1) {
       const contentCode = content.charCodeAt(pos + j);
@@ -191,7 +204,7 @@ export function matchText(
     pos = to; // 不重叠：下一次匹配从本匹配结束位置开始
   }
 
-  return { matches, truncated };
+  return { matches, truncated, yielded };
 }
 
 /** 分组预算选项；总匹配上限缺省使用共享冻结常量。 */

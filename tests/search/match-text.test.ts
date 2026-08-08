@@ -435,6 +435,34 @@ describe('文件分组排序（第 4.4 节与 WP0 冻结项 9）', () => {
   });
 });
 
+describe('协作式让出（shouldYield，TASK-006 4.6 节"匹配循环中检查取消"）', () => {
+  it('不提供 shouldYield 时 yielded 恒为 false', () => {
+    const outcome = matchText('abab', 'ab', { caseSensitive: true });
+    expect(outcome.yielded).toBe(false);
+    expect(outcome.matches).toHaveLength(2);
+  });
+
+  it('首次检查即让出：返回空匹配并标记 yielded', () => {
+    const outcome = matchText('abab', 'ab', { caseSensitive: true, shouldYield: () => true });
+    expect(outcome.yielded).toBe(true);
+    expect(outcome.matches).toEqual([]);
+  });
+
+  it('匹配过程中让出：保留已找到的匹配并标记 yielded，不报告截断', () => {
+    let calls = 0;
+    const outcome = matchText('ab ab ab', 'ab', {
+      caseSensitive: true,
+      shouldYield: () => {
+        calls += 1;
+        return calls >= 2;
+      },
+    });
+    expect(outcome.yielded).toBe(true);
+    expect(outcome.matches).toHaveLength(1);
+    expect(outcome.truncated).toBe(false);
+  });
+});
+
 describe('匹配结果确定性（第 5.2 节不变量 6）', () => {
   it('同一正文与查询重复匹配结果完全一致', () => {
     const content = 'Hello\nworld\r\nhello 你好 😀\n';
