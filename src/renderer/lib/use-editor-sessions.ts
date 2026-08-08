@@ -39,6 +39,8 @@ export interface EditorSession {
   notify: (content: string) => void;
   /** 保存请求出口（Ctrl+S，可变）：宿主挂载时绑定当前保存回调。 */
   requestSave: () => void;
+  /** 当前文档查找入口（Ctrl+F / Ctrl+H，可变）：通知 App 打开搜索侧栏。 */
+  requestSearchPanel: (mode: 'find' | 'replace') => void;
 }
 
 /** 会话缓存操作：只暴露 Map 的最小子集。 */
@@ -94,6 +96,7 @@ export function useEditorSessions(liveTabIds: readonly string[]): EditorSessions
         scrollAnchor: view.scrollSnapshot(),
         notify: existing?.notify ?? (() => {}),
         requestSave: existing?.requestSave ?? (() => {}),
+        requestSearchPanel: existing?.requestSearchPanel ?? (() => {}),
       });
     },
     drop: (tabId) => {

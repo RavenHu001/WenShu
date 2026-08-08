@@ -11,9 +11,14 @@
  *   光标、选区、滚动位置与撤销历史。
  */
 
-import { useMemo } from 'react';
+import { useMemo, type RefObject } from 'react';
 import { TabBar } from './TabBar';
-import { EditorSessionHost, type EditorLocateTarget } from './EditorSessionHost';
+import {
+  EditorSessionHost,
+  type EditorLocateTarget,
+  type EditorSearchControls,
+  type EditorSearchMode,
+} from './EditorSessionHost';
 import { useEditorSessions } from '../../lib/use-editor-sessions';
 import type { TextDocumentTabState } from '../../lib/text-document-tabs';
 
@@ -29,6 +34,9 @@ export function DocumentPane({
   locateTarget,
   locateNotice,
   onDismissLocateNotice,
+  searchPanelHostRef,
+  onSearchPanelRequest,
+  onSearchControlsChange,
 }: {
   readonly tabs: readonly TextDocumentTabState[];
   readonly activeTabId: string | null;
@@ -47,6 +55,9 @@ export function DocumentPane({
   /** 非破坏性"搜索结果已过期"提示文案；null 不显示。 */
   readonly locateNotice?: string | null;
   readonly onDismissLocateNotice?: () => void;
+  readonly searchPanelHostRef?: RefObject<HTMLElement | null>;
+  readonly onSearchPanelRequest?: (mode: EditorSearchMode) => void;
+  readonly onSearchControlsChange?: (controls: EditorSearchControls | null) => void;
 }): React.JSX.Element {
   const liveTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
   const sessions = useEditorSessions(liveTabIds);
@@ -101,6 +112,9 @@ export function DocumentPane({
           }
           locateNotice={locateNotice}
           onDismissLocateNotice={onDismissLocateNotice}
+          searchPanelHostRef={searchPanelHostRef}
+          onSearchPanelRequest={onSearchPanelRequest}
+          onSearchControlsChange={onSearchControlsChange}
         />
       )}
     </>
@@ -187,6 +201,9 @@ function TabBody({
   locateTarget,
   locateNotice,
   onDismissLocateNotice,
+  searchPanelHostRef,
+  onSearchPanelRequest,
+  onSearchControlsChange,
 }: {
   readonly tab: TextDocumentTabState;
   readonly sessions: ReturnType<typeof useEditorSessions>;
@@ -197,6 +214,9 @@ function TabBody({
   readonly locateTarget: EditorLocateTarget | null;
   readonly locateNotice: string | null | undefined;
   readonly onDismissLocateNotice: (() => void) | undefined;
+  readonly searchPanelHostRef: RefObject<HTMLElement | null> | undefined;
+  readonly onSearchPanelRequest: ((mode: EditorSearchMode) => void) | undefined;
+  readonly onSearchControlsChange: ((controls: EditorSearchControls | null) => void) | undefined;
 }): React.JSX.Element {
   if (tab.status === 'loading') {
     return <div className="doc-pane-body doc-loading">正在读取 {tab.name}…</div>;
@@ -286,6 +306,9 @@ function TabBody({
         onContentChange={(content) => onContentChange(tab.id, content)}
         onSaveRequest={() => onSave(tab.id)}
         {...(locateTarget !== null ? { locateTarget } : {})}
+        {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
+        {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
+        {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
       />
     </div>
   );

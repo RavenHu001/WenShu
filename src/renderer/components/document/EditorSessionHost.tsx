@@ -22,9 +22,9 @@
  * 不加入语法高亮、自动补全或复杂快捷键体系。
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, keymap, type KeyBinding } from '@codemirror/view';
+import { EditorView, keymap, panels, type KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search';
 import type { EditorSession, EditorSessions } from '../../lib/use-editor-sessions';
@@ -34,6 +34,13 @@ export interface EditorLocateTarget {
   readonly from: number;
   readonly to: number;
   readonly matchedText: string;
+}
+
+export type EditorSearchMode = 'find' | 'replace';
+
+/** 供左侧搜索栏按钮调用的当前编辑器查找入口。 */
+export interface EditorSearchControls {
+  readonly open: (mode: EditorSearchMode) => void;
 }
 
 export interface EditorSessionHostProps {
@@ -58,6 +65,12 @@ export interface EditorSessionHostProps {
   readonly locateTarget?: EditorLocateTarget | null;
   /** 每标签会话缓存。 */
   readonly sessions: EditorSessions;
+  /** 搜索侧栏中的 CodeMirror 面板挂载点；避免面板继续占用编辑区底部。 */
+  readonly searchPanelHostRef?: RefObject<HTMLElement | null>;
+  /** 快捷键或鼠标请求打开当前文档查找时，通知 App 切换到搜索侧栏。 */
+  readonly onSearchPanelRequest?: (mode: EditorSearchMode) => void;
+  /** 活动编辑器挂载/卸载时暴露或清理鼠标查找入口。 */
+  readonly onSearchControlsChange?: (controls: EditorSearchControls | null) => void;
 }
 
 /** 保存快捷键绑定：run 必须返回 true，表示快捷键已被处理。 */
@@ -76,19 +89,34 @@ function saveBinding(requestSave: () => void): KeyBinding {
  * CodeMirror 的搜索面板同时包含查找与替换界面（非只读时替换行始终渲染），
  * 这里只打开面板并聚焦替换字段，不使用私有 DOM 状态。
  */
-const openReplaceBinding: KeyBinding = {
-  key: 'Mod-h',
-  run: (view) => {
-    if (!searchPanelOpen(view.state)) {
-      openSearchPanel(view);
+function focusSearchField(view: EditorView, mode: EditorSearchMode): void {
+  const fieldName = mode === 'replace' ? 'replace' : 'search';
+  const field = view.dom.ownerDocument.querySelector<HTMLInputElement>(
+    `.cm-search input[name="${fieldName}"]`,
+  );
+  field?.focus();
+  field?.select();
+}
+
+/** 打开侧栏内的统一查找/替换面板，并按入口聚焦对应输入框。 */
+function openSidebarSearchPanel(
+  view: EditorView,
+  mode: EditorSearchMode,
+  session: EditorSession,
+): boolean {
+  session.requestSearchPanel(mode);
+  if (!searchPanelOpen(view.state)) {
+    openSearchPanel(view);
+  }
+  focusSearchField(view, mode);
+  // 从文件侧栏切换过来时 React 会在本次事件后移除 hidden；再聚焦一次保证真实浏览器可用。
+  window.setTimeout(() => {
+    if (view.dom.isConnected) {
+      focusSearchField(view, mode);
     }
-    const replaceField = view.dom.querySelector<HTMLInputElement>(
-      '.cm-search input[name="replace"]',
-    );
-    replaceField?.focus();
-    return true;
-  },
-};
+  }, 0);
+  return true;
+}
 
 /** 创建会话：编辑器状态的 updateListener 经 `session.notify` 上报最新内容。 */
 function normalizeLineSeparators(doc: string, lineSeparator: '\n' | '\r\n'): string {
@@ -100,6 +128,7 @@ function createEditorState(
   doc: string,
   lineSeparator: '\n' | '\r\n',
   session: EditorSession,
+  searchPanelHost: HTMLElement | null,
 ): EditorState {
   const extensions: Extension[] = [
     EditorState.lineSeparator.of(lineSeparator),
@@ -107,8 +136,15 @@ function createEditorState(
     keymap.of([
       ...defaultKeymap,
       ...historyKeymap,
+      {
+        key: 'Mod-f',
+        run: (view) => openSidebarSearchPanel(view, 'find', session),
+      },
+      {
+        key: 'Mod-h',
+        run: (view) => openSidebarSearchPanel(view, 'replace', session),
+      },
       ...searchKeymap,
-      openReplaceBinding,
       saveBinding(() => session.requestSave()),
     ]),
     EditorView.lineWrapping,
@@ -119,6 +155,20 @@ function createEditorState(
     }),
     // 当前文件查找替换：面板、查询与大小写选项保存在 EditorState 中，随会话缓存按 tabId 隔离
     search(),
+    ...(searchPanelHost !== null ? [panels({ bottomContainer: searchPanelHost })] : []),
+    EditorState.phrases.of({
+      Find: '查找',
+      Replace: '替换为',
+      next: '下一个',
+      previous: '上一个',
+      all: '全选',
+      'match case': '区分大小写',
+      regexp: '正则表达式',
+      'by word': '全字匹配',
+      replace: '替换',
+      'replace all': '全部替换',
+      close: '关闭',
+    }),
   ];
   return EditorState.create({ doc: normalizeLineSeparators(doc, lineSeparator), extensions });
 }
@@ -132,6 +182,8 @@ function createSession(
   lineSeparator: '\n' | '\r\n',
   notify: (content: string) => void,
   requestSave: () => void,
+  requestSearchPanel: (mode: EditorSearchMode) => void,
+  searchPanelHost: HTMLElement | null,
 ): EditorSession {
   const session: EditorSession = {
     // 立即在下一行赋值为真实状态：仅供 updateListener 引用会话对象
@@ -139,8 +191,9 @@ function createSession(
     scrollAnchor: null,
     notify,
     requestSave,
+    requestSearchPanel,
   };
-  session.state = createEditorState(doc, lineSeparator, session);
+  session.state = createEditorState(doc, lineSeparator, session, searchPanelHost);
   return session;
 }
 
@@ -152,11 +205,15 @@ export function EditorSessionHost({
   onSaveRequest,
   locateTarget = null,
   sessions,
+  searchPanelHostRef,
+  onSearchPanelRequest,
+  onSearchControlsChange,
 }: EditorSessionHostProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const contentChangeRef = useRef(onContentChange);
   const saveRequestRef = useRef(onSaveRequest);
+  const searchPanelRequestRef = useRef(onSearchPanelRequest);
   const contentRef = useRef(content);
   const sessionsRef = useRef(sessions);
   /** 已应用过的定位目标：同一对象只应用一次（rerender 不重复抢焦点）。 */
@@ -165,6 +222,7 @@ export function EditorSessionHost({
   useEffect(() => {
     contentChangeRef.current = onContentChange;
     saveRequestRef.current = onSaveRequest;
+    searchPanelRequestRef.current = onSearchPanelRequest;
   });
   useEffect(() => {
     contentRef.current = content;
@@ -180,6 +238,7 @@ export function EditorSessionHost({
       return;
     }
     const api = sessionsRef.current;
+    const searchPanelHost = searchPanelHostRef?.current ?? null;
     const doc = contentRef.current;
     const existing = api.get(tabId);
     const expectedDoc = normalizeLineSeparators(doc, lineSeparator);
@@ -194,24 +253,31 @@ export function EditorSessionHost({
         lineSeparator,
         (text) => contentChangeRef.current(text),
         () => saveRequestRef.current(),
+        (mode) => searchPanelRequestRef.current?.(mode),
+        searchPanelHost,
       );
       api.register(tabId, session);
     }
     // 重新绑定出口：切换标签重新挂载后仍指向当前内容/保存回调
     session.notify = (text) => contentChangeRef.current(text);
     session.requestSave = () => saveRequestRef.current();
+    session.requestSearchPanel = (mode) => searchPanelRequestRef.current?.(mode);
     const view = new EditorView({ state: session.state, parent: container });
     if (cachedValid && session.scrollAnchor !== null) {
       // 恢复滚动位置：scrollSnapshot() 返回的是滚动效果，经 dispatch 应用
       view.dispatch({ effects: session.scrollAnchor });
     }
     viewRef.current = view;
+    onSearchControlsChange?.({
+      open: (mode) => openSidebarSearchPanel(view, mode, session),
+    });
     return () => {
       if (viewRef.current === view) {
         api.capture(tabId, view);
       }
       view.destroy();
       viewRef.current = null;
+      onSearchControlsChange?.(null);
     };
   }, [tabId, lineSeparator]);
 
@@ -233,10 +299,14 @@ export function EditorSessionHost({
         lineSeparator,
         (text) => contentChangeRef.current(text),
         () => saveRequestRef.current(),
+        (mode) => searchPanelRequestRef.current?.(mode),
+        searchPanelHostRef?.current ?? null,
       );
       api.register(tabId, session);
     }
-    view.setState(createEditorState(content, lineSeparator, session));
+    view.setState(
+      createEditorState(content, lineSeparator, session, searchPanelHostRef?.current ?? null),
+    );
   }, [content, lineSeparator, tabId]);
 
   // 搜索结果定位：视图就绪后校验当前正文范围，命中则设置选区、滚动到可视区域并聚焦。

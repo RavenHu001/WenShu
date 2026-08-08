@@ -109,9 +109,23 @@ body {
 
 .sidebar {
   min-width: 0;
+  min-height: 0;
   color: #4a5060;
   background: #f3f4f7;
   border-right: 1px solid #dfe2e8;
+}
+
+.sidebar-panel {
+  height: 100%;
+  min-height: 0;
+}
+
+.sidebar-panel-files {
+  overflow-y: auto;
+}
+
+.sidebar-panel-search {
+  overflow: hidden;
 }
 
 .section-label {
@@ -794,6 +808,227 @@ body {
 
 /* ---- TASK-006 WP4：工作区搜索侧栏 ---------------------------------------- */
 
+.search-sidebar {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.search-view-tabs {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 1fr 1fr;
+  padding: 10px 10px 0;
+  border-bottom: 1px solid #dfe2e8;
+}
+
+.search-view-tab {
+  position: relative;
+  padding: 8px 4px 10px;
+  color: #818898;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.search-view-tab::after {
+  position: absolute;
+  right: 12px;
+  bottom: -1px;
+  left: 12px;
+  height: 2px;
+  background: transparent;
+  border-radius: 2px 2px 0 0;
+  content: '';
+}
+
+.search-view-tab:hover {
+  color: #5268ad;
+}
+
+.search-view-tab:focus-visible {
+  outline: 2px solid #8fa4d8;
+  outline-offset: -2px;
+}
+
+.search-view-tab.active {
+  color: #40589e;
+}
+
+.search-view-tab.active::after {
+  background: #5268ad;
+}
+
+.search-view-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.search-view-panel[hidden] {
+  display: none;
+}
+
+.workspace-search-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.current-document-view {
+  overflow-y: auto;
+}
+
+.current-document-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px 10px;
+  color: #6d7382;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.current-document-search-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.search-mode-btn {
+  padding: 3px 7px;
+  color: #5268ad;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.search-mode-btn:hover:not(:disabled) {
+  background: #e5e9f3;
+  border-color: #d4daea;
+}
+
+.search-mode-btn:focus-visible {
+  outline: 2px solid #8fa4d8;
+  outline-offset: 1px;
+}
+
+.search-mode-btn:disabled {
+  color: #b3b8c3;
+  cursor: default;
+}
+
+.current-document-search-empty {
+  padding: 6px 14px 13px;
+  color: #a2a8b5;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.current-document-search-hint {
+  padding: 6px 14px 13px;
+  color: #a2a8b5;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.current-document-search-panel:not(:empty) + .current-document-search-hint {
+  display: none;
+}
+
+.current-document-search-panel:not(:empty) {
+  padding: 0 10px 12px;
+}
+
+.current-document-search-panel .cm-panels {
+  color: #4a5060;
+  background: #ffffff;
+  border: 1px solid #dfe3eb;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(43 52 75 / 7%);
+  font-size: 11px;
+}
+
+.current-document-search-panel .cm-panel.cm-search {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 9px;
+}
+
+.current-document-search-panel .cm-search > input[name='search'],
+.current-document-search-panel .cm-search > input[name='replace'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 8px;
+  color: #343a48;
+  background: #ffffff;
+  border: 1px solid #d4d9e2;
+  border-radius: 5px;
+  box-sizing: border-box;
+  font: inherit;
+  outline: none;
+}
+
+.current-document-search-panel .cm-search > input:focus-visible {
+  border-color: #5268ad;
+  box-shadow: 0 0 0 2px rgb(82 104 173 / 18%);
+}
+
+.current-document-search-panel .cm-search > button:not([name='close']) {
+  min-width: 0;
+  margin: 0;
+  padding: 5px 3px;
+  overflow: hidden;
+  color: #51596a;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #f5f6f9;
+  border: 1px solid #d9dde6;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.current-document-search-panel .cm-search > button:not([name='close']):hover {
+  color: #40589e;
+  background: #e9edf7;
+}
+
+.current-document-search-panel .cm-search > label {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: #6d7382;
+  cursor: pointer;
+}
+
+.current-document-search-panel .cm-search > label input {
+  margin: 0;
+}
+
+.current-document-search-panel .cm-search > br {
+  display: none;
+}
+
+.current-document-search-panel .cm-search > button[name='close'] {
+  top: 6px;
+  right: 7px;
+  color: #838a99;
+  cursor: pointer;
+}
+
+.current-document-search-panel .cm-search > input[name='search'] {
+  padding-right: 25px;
+}
+
 .search-form {
   display: flex;
   flex-direction: column;
@@ -882,8 +1117,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 320px);
   padding: 8px 10px 16px;
+}
+
+.search-status-region {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 

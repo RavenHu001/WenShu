@@ -210,9 +210,30 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
 
     pressModKey('f');
     expect(searchPanel()).not.toBeNull();
+    expect(screen.getByLabelText('当前文档查找与替换').contains(searchPanel())).toBe(true);
+    expect(screen.getByRole('button', { name: '搜' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('tab', { name: '查找与替换' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
     expect(screen.queryByText('保存')).not.toBeNull();
 
     pressModKey('h');
+    expect(searchPanel()).not.toBeNull();
+    expect(document.activeElement).toBe(panelInput('replace'));
+  });
+
+  it('无需快捷键，可从搜索侧栏用鼠标打开查找或替换', async () => {
+    mockDesktop({ 'a.txt': 'hello world' });
+    render(<App />);
+    await openWorkspace();
+    await openFile('a.txt');
+
+    fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    expect(document.getElementById('document-search-panel')?.hidden).toBe(true);
+    fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
+    expect(document.getElementById('workspace-search-panel')?.hidden).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '打开文件内替换' }));
+
     expect(searchPanel()).not.toBeNull();
     expect(document.activeElement).toBe(panelInput('replace'));
   });
@@ -410,6 +431,7 @@ describe('查找会话隔离与清理（第 4.2 节）', () => {
     expect(screen.queryByText('关闭 a.txt')).toBeNull();
 
     // 重新打开：新会话，查找面板不复现
+    fireEvent.click(screen.getByRole('button', { name: '文' }));
     await openFile('a.txt');
     expect(searchPanel()).toBeNull();
     expect(editorDoc()).toBe('hello world\nhello again');

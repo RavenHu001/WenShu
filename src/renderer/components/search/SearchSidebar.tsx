@@ -13,7 +13,8 @@
  * - 本组件不调用 Node API，不从展示字符串解析路径、行列或匹配范围。
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import type { EditorSearchMode } from '../document/EditorSessionHost';
 import type { WorkspaceSearchController } from '../../lib/use-workspace-search';
 import type {
   WorkspaceTextSearchFileResult,
@@ -28,6 +29,14 @@ interface SearchSidebarProps {
   readonly workspaceAvailable: boolean;
   /** 侧栏激活时自动聚焦搜索输入（Ctrl+Shift+F 打开后可直接输入）。 */
   readonly active: boolean;
+  /** 本次打开搜索侧栏希望聚焦的区域，避免当前文档查找被工作区输入抢焦点。 */
+  readonly focusTarget?: 'workspace' | 'current-document';
+  /** 鼠标切换侧栏内部标签时同步 App 中的快捷键目标。 */
+  readonly onFocusTargetChange?: (target: 'workspace' | 'current-document') => void;
+  /** CodeMirror 当前文档查找/替换面板的外部挂载点。 */
+  readonly currentDocumentPanelHostRef?: RefObject<HTMLDivElement | null>;
+  readonly currentDocumentAvailable?: boolean;
+  readonly onOpenCurrentDocumentSearch?: (mode: EditorSearchMode) => void;
   /** 点击匹配结果后的打开 / 定位入口（WP5 接入）。 */
   readonly onMatchActivate?: (
     file: WorkspaceTextSearchFileResult,
@@ -45,6 +54,11 @@ export function SearchSidebar({
   search,
   workspaceAvailable,
   active,
+  focusTarget = 'workspace',
+  onFocusTargetChange,
+  currentDocumentPanelHostRef,
+  currentDocumentAvailable = false,
+  onOpenCurrentDocumentSearch,
   onMatchActivate,
 }: SearchSidebarProps): React.JSX.Element {
   const [draft, setDraft] = useState('');
@@ -55,10 +69,10 @@ export function SearchSidebar({
   const searching = search.state.status === 'searching';
 
   useEffect(() => {
-    if (active) {
+    if (active && focusTarget === 'workspace') {
       inputRef.current?.focus();
     }
-  }, [active]);
+  }, [active, focusTarget]);
 
   const handleSubmit = (event: React.FormEvent): void => {
     event.preventDefault();
@@ -68,59 +82,145 @@ export function SearchSidebar({
     search.submitSearch(draft, caseSensitive);
   };
 
+  const handleViewChange = (target: 'workspace' | 'current-document'): void => {
+    onFocusTargetChange?.(target);
+    if (target === 'workspace') {
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  };
+
   return (
-    <>
-      <div className="section-label">工作区搜索</div>
+    <div className="search-sidebar">
+      <div className="search-view-tabs" role="tablist" aria-label="搜索范围">
+        <button
+          type="button"
+          role="tab"
+          id="workspace-search-tab"
+          aria-controls="workspace-search-panel"
+          aria-selected={focusTarget === 'workspace'}
+          className={`search-view-tab${focusTarget === 'workspace' ? ' active' : ''}`}
+          onClick={() => handleViewChange('workspace')}
+        >
+          全局搜索
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="document-search-tab"
+          aria-controls="document-search-panel"
+          aria-selected={focusTarget === 'current-document'}
+          className={`search-view-tab${focusTarget === 'current-document' ? ' active' : ''}`}
+          onClick={() => handleViewChange('current-document')}
+        >
+          查找与替换
+        </button>
+      </div>
 
-      {!workspaceAvailable ? (
-        <div className="ws-idle">
-          <div className="folder-icon" aria-hidden="true" />
-          <p>尚未打开工作区</p>
-          <span>打开文件夹后可搜索已保存的 TXT 内容</span>
+      <section
+        id="document-search-panel"
+        role="tabpanel"
+        aria-labelledby="document-search-tab"
+        className="search-view-panel current-document-view"
+        hidden={focusTarget !== 'current-document'}
+      >
+        <div className="current-document-toolbar">
+          <span>当前打开的文件</span>
+          <div className="current-document-search-actions">
+            <button
+              type="button"
+              className="search-mode-btn"
+              aria-label="打开文件内查找"
+              disabled={!currentDocumentAvailable}
+              onClick={() => onOpenCurrentDocumentSearch?.('find')}
+            >
+              查找
+            </button>
+            <button
+              type="button"
+              className="search-mode-btn"
+              aria-label="打开文件内替换"
+              disabled={!currentDocumentAvailable}
+              onClick={() => onOpenCurrentDocumentSearch?.('replace')}
+            >
+              替换
+            </button>
+          </div>
         </div>
-      ) : (
-        <>
-          <form className="search-form" onSubmit={handleSubmit}>
-            <input
-              ref={inputRef}
-              className="search-input"
-              type="text"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="搜索已保存的 TXT 内容…"
-              aria-label="搜索内容"
-            />
-            <label className="search-case-label">
+        <div
+          ref={currentDocumentPanelHostRef}
+          className="current-document-search-panel"
+          aria-label="当前文档查找与替换"
+        />
+        {currentDocumentAvailable ? (
+          <div className="current-document-search-hint">
+            点击“查找”或“替换”，也可以使用 Ctrl+F / Ctrl+H。
+          </div>
+        ) : (
+          <div className="current-document-search-empty">打开一个 TXT 文件后可查找或替换。</div>
+        )}
+      </section>
+
+      <section
+        id="workspace-search-panel"
+        role="tabpanel"
+        aria-labelledby="workspace-search-tab"
+        className="search-view-panel workspace-search-view"
+        hidden={focusTarget !== 'workspace'}
+      >
+        <div className="section-label">工作区搜索</div>
+
+        {!workspaceAvailable ? (
+          <div className="ws-idle">
+            <div className="folder-icon" aria-hidden="true" />
+            <p>尚未打开工作区</p>
+            <span>打开文件夹后可搜索已保存的 TXT 内容</span>
+          </div>
+        ) : (
+          <>
+            <form className="search-form" onSubmit={handleSubmit}>
               <input
-                type="checkbox"
-                checked={caseSensitive}
-                onChange={(event) => setCaseSensitive(event.target.checked)}
+                ref={inputRef}
+                className="search-input"
+                type="text"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="搜索已保存的 TXT 内容…"
+                aria-label="搜索内容"
               />
-              区分大小写
-            </label>
-            <div className="search-actions">
-              {searching ? (
-                <button type="button" className="ws-btn" onClick={search.cancelSearch}>
-                  取消
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className="ws-btn ws-btn-primary"
-                  disabled={draft.length === 0}
-                >
-                  搜索
-                </button>
-              )}
+              <label className="search-case-label">
+                <input
+                  type="checkbox"
+                  checked={caseSensitive}
+                  onChange={(event) => setCaseSensitive(event.target.checked)}
+                />
+                区分大小写
+              </label>
+              <div className="search-actions">
+                {searching ? (
+                  <button type="button" className="ws-btn" onClick={search.cancelSearch}>
+                    取消
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="ws-btn ws-btn-primary"
+                    disabled={draft.length === 0}
+                  >
+                    搜索
+                  </button>
+                )}
+              </div>
+            </form>
+
+            <div className="search-note">结果来自磁盘上已保存的文件，不包含未保存的编辑。</div>
+
+            <div className="search-status-region">
+              <SearchStatus search={search} onMatchActivate={onMatchActivate} />
             </div>
-          </form>
-
-          <div className="search-note">结果来自磁盘上已保存的文件，不包含未保存的编辑。</div>
-
-          <SearchStatus search={search} onMatchActivate={onMatchActivate} />
-        </>
-      )}
-    </>
+          </>
+        )}
+      </section>
+    </div>
   );
 }
 

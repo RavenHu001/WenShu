@@ -11,7 +11,11 @@ import {
   tabById,
   type TextDocumentTabState,
 } from './lib/text-document-tabs';
-import type { EditorLocateTarget } from './components/document/EditorSessionHost';
+import type {
+  EditorLocateTarget,
+  EditorSearchControls,
+  EditorSearchMode,
+} from './components/document/EditorSessionHost';
 import type { WorkspaceTextSearchFileResult, WorkspaceTextSearchMatch } from '../shared/search';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 import { SearchSidebar } from './components/search/SearchSidebar';
@@ -67,6 +71,11 @@ export const App = (): React.JSX.Element => {
     workspaceEpoch: workspace.epoch,
   });
   const [activity, setActivity] = useState<ActivityPanel>('files');
+  const [searchFocusTarget, setSearchFocusTarget] = useState<'workspace' | 'current-document'>(
+    'workspace',
+  );
+  const currentDocumentSearchPanelHostRef = useRef<HTMLDivElement | null>(null);
+  const editorSearchControlsRef = useRef<EditorSearchControls | null>(null);
   /** 待应用的搜索结果定位目标（App 校验通过后下发给编辑器宿主）。 */
   const [locateTarget, setLocateTarget] = useState<
     (EditorLocateTarget & { readonly tabId: string }) | null
@@ -355,6 +364,7 @@ export const App = (): React.JSX.Element => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
+        setSearchFocusTarget('workspace');
         setActivity('search');
       }
     };
@@ -362,6 +372,15 @@ export const App = (): React.JSX.Element => {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
+  }, []);
+
+  const handleCurrentDocumentSearchRequest = useCallback((): void => {
+    setSearchFocusTarget('current-document');
+    setActivity('search');
+  }, []);
+
+  const handleOpenCurrentDocumentSearch = useCallback((mode: EditorSearchMode): void => {
+    editorSearchControlsRef.current?.open(mode);
   }, []);
 
   // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）
@@ -471,6 +490,9 @@ export const App = (): React.JSX.Element => {
                 disabled={isSettings}
                 onClick={() => {
                   if (!isSettings) {
+                    if (item.id === 'search') {
+                      setSearchFocusTarget('workspace');
+                    }
                     setActivity(item.id);
                   }
                 }}
@@ -483,7 +505,7 @@ export const App = (): React.JSX.Element => {
 
         <aside aria-label="侧栏" className="sidebar">
           {/* 两个侧栏保持挂载，用 hidden 切换：切换活动栏不丢失工作区或文件树展开状态 */}
-          <div hidden={activity !== 'files'}>
+          <div className="sidebar-panel sidebar-panel-files" hidden={activity !== 'files'}>
             <WorkspaceSidebar
               state={workspace.state}
               onOpenWorkspace={handleOpenWorkspace}
@@ -492,11 +514,16 @@ export const App = (): React.JSX.Element => {
               selectedTextFilePath={selectedTextFilePath}
             />
           </div>
-          <div hidden={activity !== 'search'}>
+          <div className="sidebar-panel sidebar-panel-search" hidden={activity !== 'search'}>
             <SearchSidebar
               search={search}
               workspaceAvailable={workspace.state.workspace !== null}
               active={activity === 'search'}
+              focusTarget={searchFocusTarget}
+              onFocusTargetChange={setSearchFocusTarget}
+              currentDocumentPanelHostRef={currentDocumentSearchPanelHostRef}
+              currentDocumentAvailable={activeTab(model)?.document != null}
+              onOpenCurrentDocumentSearch={handleOpenCurrentDocumentSearch}
               onMatchActivate={handleMatchActivate}
             />
           </div>
@@ -515,6 +542,11 @@ export const App = (): React.JSX.Element => {
             locateTarget={locateTarget}
             locateNotice={staleNotice}
             onDismissLocateNotice={() => setStaleNotice(null)}
+            searchPanelHostRef={currentDocumentSearchPanelHostRef}
+            onSearchPanelRequest={handleCurrentDocumentSearchRequest}
+            onSearchControlsChange={(controls) => {
+              editorSearchControlsRef.current = controls;
+            }}
           />
         </section>
       </main>
