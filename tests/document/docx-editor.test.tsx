@@ -232,6 +232,21 @@ describe('文件树 .docx 选择与加载（第 8.6 节）', () => {
     const view = docxEditor()?.view ?? null;
     expect(view).not.toBeNull();
     expect(view?.state.doc.textContent).toContain('DOCX 正文');
+    // 布局回归：已加载 DOCX 的可见编辑器宿主唯一承担编辑区域（docx-editor-host），
+    // 不存在与它竞争 flex 高度的空 doc-pane-body 容器（TASK-007 修复后回归保护）
+    const visibleHosts = Array.from(
+      document.querySelectorAll<HTMLElement>('.docx-editor-host'),
+    ).filter((el) => el.closest('[hidden]') === null);
+    expect(visibleHosts).toHaveLength(1);
+    const visiblePaneBodies = Array.from(
+      document.querySelectorAll<HTMLElement>('.doc-pane-body'),
+    ).filter(
+      (el) =>
+        el.closest('[hidden]') === null &&
+        !el.classList.contains('doc-loading') &&
+        !el.classList.contains('doc-error-panel'),
+    );
+    expect(visiblePaneBodies).toHaveLength(0);
   });
 
   it('DOCX 读取失败：错误面板与重试', async () => {

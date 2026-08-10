@@ -33,6 +33,8 @@ export interface DocxPackageInspection {
   readonly colorsByTopLevelParagraph: readonly DocxParagraphRunColors[];
   /** 文档级特性（页眉页脚/修订/保护/嵌入对象）。 */
   readonly documentFeatures: readonly DocxImportDocumentFeature[];
+  /** document.xml 是否包含 w:body 元素；缺失时按空白文档处理（Mammoth 无法解析无 body 文档）。 */
+  readonly hasBodyElement: boolean;
 }
 
 export type InspectDocxPackageResult =
@@ -57,6 +59,8 @@ function colorValueFromAttrText(attrText: string): string | null {
 export function scanDocumentXml(xml: string): {
   readonly colorsByTopLevelParagraph: readonly DocxParagraphRunColors[];
   readonly hasTrackedChanges: boolean;
+  /** document.xml 是否包含 w:body 元素（Mammoth 要求存在；缺失按空白文档处理）。 */
+  readonly hasBodyElement: boolean;
 } {
   const colorsByTopLevelParagraph: DocxParagraphRunColors[] = [];
   // 属性串不消费尾部自闭合斜杠；属性值内的 "/" 只出现在引号中
@@ -66,6 +70,7 @@ export function scanDocumentXml(xml: string): {
   let currentRunColor: string | null = null;
   let inRunProperties = false;
   let hasTrackedChanges = false;
+  let hasBodyElement = false;
 
   let match: RegExpExecArray | null;
   while ((match = tagPattern.exec(xml)) !== null) {
@@ -80,6 +85,10 @@ export function scanDocumentXml(xml: string): {
     }
     if (name === 'w:ins' || name === 'w:del') {
       hasTrackedChanges = true;
+      continue;
+    }
+    if (name === 'w:body') {
+      hasBodyElement = true;
       continue;
     }
     if (name === 'w:p') {
@@ -126,7 +135,7 @@ export function scanDocumentXml(xml: string): {
     }
   }
   // 文档以未闭合 w:p 结束的畸形输入：丢弃该段（保守）
-  return { colorsByTopLevelParagraph, hasTrackedChanges };
+  return { colorsByTopLevelParagraph, hasTrackedChanges, hasBodyElement };
 }
 
 /**
@@ -211,6 +220,7 @@ export async function inspectDocxPackage(bytes: Uint8Array): Promise<InspectDocx
     inspection: {
       colorsByTopLevelParagraph: scan.colorsByTopLevelParagraph,
       documentFeatures: features,
+      hasBodyElement: scan.hasBodyElement,
     },
   };
 }

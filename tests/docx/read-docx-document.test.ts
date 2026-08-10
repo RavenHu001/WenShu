@@ -11,6 +11,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Buffer } from 'node:buffer';
+import JSZip from 'jszip';
 import {
   DOCX_MAX_FILE_BYTES,
   type DocxDocumentError,
@@ -303,6 +304,48 @@ describe('readDocxDocument', () => {
       await writeFile(join(workspaceRoot, `${id}.docx`), fixtures.files[id]!);
       const result = await readDocxDocument(workspaceRoot, `${id}.docx`);
       expect(expectError(result).code, id).toBe('INVALID_DOCX');
+    }
+  });
+
+  it('空白文档变体：无 w:body / 空 body / 仅 sectPr / 空段落均按空白文档加载（不拒绝）', async () => {
+    const ns =
+      ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    const variants: [string, string][] = [
+      ['no-body', `<w:document${ns}/>`],
+      ['empty-body', `<w:document${ns}><w:body/></w:document>`],
+      ['sectpr-only', `<w:document${ns}><w:body><w:sectPr/></w:body></w:document>`],
+      ['empty-paragraph', `<w:document${ns}><w:body><w:p/></w:body></w:document>`],
+      [
+        'whitespace-text',
+        `<w:document${ns}><w:body><w:p><w:r><w:t xml:space="preserve">  </w:t></w:r></w:p></w:body></w:document>`,
+      ],
+    ];
+    for (const [label, docXml] of variants) {
+      const zip = new JSZip();
+      zip.file(
+        '[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      );
+      zip.file('word/document.xml', docXml);
+      zip.file(
+        'word/styles.xml',
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
+      );
+      const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      await writeFile(join(workspaceRoot, `${label}.docx`), bytes);
+      const result = await readDocxDocument(workspaceRoot, `${label}.docx`);
+      expect(result.status, label).toBe('loaded');
+      if (result.status === 'loaded') {
+        expect(result.document.compatibility.level, label).toBe('supported');
+        const text = result.document.model.blocks
+          .map((block) =>
+            block.kind === 'paragraph' || block.kind === 'heading'
+              ? block.runs.map((run) => run.text).join('')
+              : '',
+          )
+          .join('');
+        expect(text.replace(/\s+/g, ''), label).toBe('');
+      }
     }
   });
 

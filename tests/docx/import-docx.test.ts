@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TASK-007 WP2：DOCX 语义导入测试（任务第 8.2/8.3 节）—— Mammoth 树 → 导入源 → 模型。
  * 覆盖：普通/空/标题/marks/字号/颜色合并/列表/对齐导入、复杂样本稳定警告、
  * 行内换行、颜色按序对齐与数量不一致保守放弃、失败样本稳定错误、模型预算超限。
@@ -283,6 +283,7 @@ describe('mammothTreeToImportSource：颜色对齐规则', () => {
   const inspection: DocxPackageInspection = {
     colorsByTopLevelParagraph: [['#FF0000', null]],
     documentFeatures: [],
+    hasBodyElement: true,
   };
 
   it('颜色数量与 run 数一致时按序合并', () => {
@@ -330,6 +331,7 @@ describe('mammothTreeToImportSource：颜色对齐规则', () => {
     const source = mammothTreeToImportSource(tree, {
       colorsByTopLevelParagraph: [['#00FF00']],
       documentFeatures: [],
+      hasBodyElement: true,
     });
     expect(source.blocks.map((b) => b.type)).toEqual(['table', 'paragraph']);
     const paragraph = source.blocks[1];

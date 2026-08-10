@@ -210,12 +210,16 @@ export type ImportDocxResult =
 /**
  * 把 DOCX 原始字节导入为结构化模型与兼容性报告。
  * 解析失败 → INVALID_DOCX；模型预算超限 → RESOURCE_LIMIT_EXCEEDED；其余不抛出。
+ * 特殊情形：document.xml 不含 `w:body` 的合法包结构（Mammoth 1.12 无法解析，
+ * 报 "Could not find the body element"）按空白文档处理——返回空模型（supported），
+ * 而不是拒绝读取（第 3.3 节"空白文档"夹具的等价形态）。
  */
 export async function importDocxDocument(
   bytes: Uint8Array,
   inspection: DocxPackageInspection,
 ): Promise<ImportDocxResult> {
   let tree: MammothTreeLike | null = null;
+  let parseFailed = false;
   try {
     // mammoth 的 BufferInput 类型只声明 Buffer；运行时接受 Uint8Array（jszip 直接消费），
     // 此处按运行时语义转换类型，不复制字节。
@@ -229,16 +233,23 @@ export async function importDocxDocument(
       },
     );
   } catch {
-    return { status: 'error', error: docxDocumentError('INVALID_DOCX') };
+    parseFailed = true;
   }
-  if (tree === null) {
-    return { status: 'error', error: docxDocumentError('INVALID_DOCX') };
+  if (!parseFailed && tree !== null) {
+    const source = mammothTreeToImportSource(tree, inspection);
+    const converted = importSourceToDocxModel(source);
+    if (converted.status === 'limit-exceeded') {
+      return { status: 'error', error: docxDocumentError('RESOURCE_LIMIT_EXCEEDED') };
+    }
+    return { status: 'ok', model: converted.model, compatibility: converted.compatibility };
   }
-
-  const source = mammothTreeToImportSource(tree, inspection);
-  const converted = importSourceToDocxModel(source);
-  if (converted.status === 'limit-exceeded') {
-    return { status: 'error', error: docxDocumentError('RESOURCE_LIMIT_EXCEEDED') };
+  if (parseFailed && !inspection.hasBodyElement) {
+    // 无 w:body 的合法包结构：空白文档
+    return {
+      status: 'ok',
+      model: { schemaVersion: 1, blocks: [] },
+      compatibility: { level: 'supported', warnings: [] },
+    };
   }
-  return { status: 'ok', model: converted.model, compatibility: converted.compatibility };
+  return { status: 'error', error: docxDocumentError('INVALID_DOCX') };
 }

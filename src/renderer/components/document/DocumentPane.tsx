@@ -158,14 +158,15 @@ export function DocumentPane({
         />
       )}
       {/* 全部已加载 DOCX 标签的宿主保持挂载（非活动以 hidden 隐藏），
-          切换标签不销毁会话，选择/滚动/撤销历史隔离 */}
+          切换标签不销毁会话，选择/滚动/撤销历史隔离；
+          可见宿主承担编辑器区域剩余高度并内部滚动（见 .docx-editor-host 样式） */}
       {tabs
         .filter(
           (tab): tab is DocxDocumentTabState =>
             isDocxTab(tab) && tab.model !== null && tab.status !== 'loading',
         )
         .map((tab) => (
-          <div key={tab.id} hidden={tab.id !== activeTabId}>
+          <div key={tab.id} className="docx-editor-host" hidden={tab.id !== activeTabId}>
             <DocxEditorSessionHost
               tab={tab}
               editable={isEditable(tab)}
@@ -334,31 +335,8 @@ function TabBody({
             }
           : null;
 
-  const body = (): React.JSX.Element => {
-    if (isDocxTab(tab)) {
-      // 已加载 DOCX 标签的编辑器宿主在 DocumentPane 的稳定列表中以 hidden 切换渲染；
-      // 此处只渲染空容器，避免活动/隐藏切换导致宿主重挂载（会话丢失）。
-      return <div className="doc-pane-body" />;
-    }
-    return (
-      <EditorSessionHost
-        key={tab.id}
-        tabId={tab.id}
-        content={tab.content}
-        lineSeparator={editorLineSeparator(tab)}
-        sessions={sessions}
-        onContentChange={(content) => onContentChange(tab.id, content)}
-        onSaveRequest={() => onSave(tab.id)}
-        {...(locateTarget !== null ? { locateTarget } : {})}
-        {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
-        {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
-        {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
-      />
-    );
-  };
-
-  return (
-    <div className="doc-pane-body">
+  const bannerFragment = (): React.JSX.Element => (
+    <>
       {locateNotice !== null && locateNotice !== undefined && (
         <div className="doc-locate-banner" role="status">
           <span>{locateNotice}</span>
@@ -388,7 +366,32 @@ function TabBody({
           )}
         </div>
       )}
-      {body()}
+    </>
+  );
+
+  if (isDocxTab(tab)) {
+    // 已加载 DOCX 标签的编辑器宿主在 DocumentPane 的稳定列表中渲染
+    // （docx-editor-host 承担剩余高度并内部滚动）；此处只渲染横幅，
+    // 不参与 flex 高度竞争。loading / read-error（无快照）已在上方提前返回。
+    return <div className="docx-banner-host">{bannerFragment()}</div>;
+  }
+
+  return (
+    <div className="doc-pane-body">
+      {bannerFragment()}
+      <EditorSessionHost
+        key={tab.id}
+        tabId={tab.id}
+        content={tab.content}
+        lineSeparator={editorLineSeparator(tab)}
+        sessions={sessions}
+        onContentChange={(content) => onContentChange(tab.id, content)}
+        onSaveRequest={() => onSave(tab.id)}
+        {...(locateTarget !== null ? { locateTarget } : {})}
+        {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
+        {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
+        {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
+      />
     </div>
   );
 }
