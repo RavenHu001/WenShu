@@ -39,7 +39,7 @@
  * 缩小校验与读取窗口并保证只读，不实现平台原生句柄级防竞态方案。
  */
 
-import { basename, extname, isAbsolute, join, relative, sep } from 'node:path';
+import { basename, extname, isAbsolute } from 'node:path';
 import { createHash } from 'node:crypto';
 import { lstat, open, realpath } from 'node:fs/promises';
 import {
@@ -49,14 +49,15 @@ import {
   type TextDocumentError,
   type TextDocumentSnapshot,
 } from '../../shared/document';
+import {
+  readBoundedBytes,
+  resolveWorkspaceTarget,
+  validateRelativePath,
+  type FileStatLike,
+  type ReadableFileHandle,
+} from './path-validation';
 
-/** 与 `fs.Stats` 语义一致的轻量接口，供测试 mock 使用。 */
-export interface FileStatLike {
-  isFile(): boolean;
-  isDirectory(): boolean;
-  isSymbolicLink(): boolean;
-  readonly size: number;
-}
+export type { FileStatLike } from './path-validation';
 
 /** 文件系统适配函数集合；生产环境为 `node:fs/promises`，测试环境可注入 mock。 */
 export interface ReadTextAdapters {
@@ -69,37 +70,14 @@ export interface ReadTextAdapters {
 }
 
 /** `FileHandle.read` 的最小只读契约，便于确定性测试短读。 */
-export interface ReadableFileHandle {
-  readonly read: (
-    buffer: Uint8Array,
-    offset: number,
-    length: number,
-    position: number,
-  ) => Promise<{ readonly bytesRead: number }>;
-}
+export type { ReadableFileHandle };
 
 /**
  * 循环读取直至 EOF 或达到 5 MiB + 1 的硬上限。
  * 单次 `FileHandle.read` 允许短读，因此不能把一次返回不足误判为 EOF。
  */
 export async function readBoundedTextBytes(handle: ReadableFileHandle): Promise<Uint8Array> {
-  const buffer = new Uint8Array(MAX_TXT_FILE_BYTES + 1);
-  let totalBytesRead = 0;
-
-  while (totalBytesRead < buffer.byteLength) {
-    const { bytesRead } = await handle.read(
-      buffer,
-      totalBytesRead,
-      buffer.byteLength - totalBytesRead,
-      totalBytesRead,
-    );
-    if (bytesRead === 0) {
-      break;
-    }
-    totalBytesRead += bytesRead;
-  }
-
-  return buffer.subarray(0, totalBytesRead);
+  return readBoundedBytes(handle, MAX_TXT_FILE_BYTES + 1);
 }
 
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
@@ -185,30 +163,12 @@ function readFailed(): TextDocumentError {
   return { code: 'READ_FAILED', message: '读取文件失败' };
 }
 
-/**
- * 校验相对路径格式：
- * - 非空字符串，使用 `/` 分隔；
- * - 不得为空段、`.`、`..`、反斜杠、空字符或 `:`（Windows 盘符 / 盘符相对路径）；
- * - 不得以 `/` 开头（绝对路径形式）；
- * - 返回拆分后的段列表，校验失败返回 null。
- */
-function validateRelativePath(relativePath: unknown): string[] | null {
-  if (typeof relativePath !== 'string' || relativePath.length === 0) {
-    return null;
-  }
-  if (
-    relativePath.startsWith('/') ||
-    relativePath.includes('\\') ||
-    relativePath.includes('\0') ||
-    relativePath.includes(':')
-  ) {
-    return null;
-  }
-  const segments = relativePath.split('/');
-  if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
-    return null;
-  }
-  return segments;
+/** 把路径校验 helper 的稳定错误转换为 TXT 读取错误（码与消息一致）。 */
+function mapPathError(error: {
+  readonly code: string;
+  readonly message: string;
+}): TextDocumentError {
+  return { code: error.code as TextDocumentError['code'], message: error.message };
 }
 
 /**
@@ -243,73 +203,15 @@ export async function readTextDocument(
     };
   }
 
-  // 4. 解析候选路径（相对路径已通过格式校验，join 结果即为规范绝对路径）
-  const candidate = join(workspaceRoot, ...segments);
-
-  // 5. 词法逃逸检查：拒绝任何落在工作区根目录之外的候选路径
-  const lexicalRel = relative(workspaceRoot, candidate);
-  if (lexicalRel === '..' || lexicalRel.startsWith(`..${sep}`) || isAbsolute(lexicalRel)) {
-    return {
-      status: 'error',
-      error: { code: 'OUTSIDE_WORKSPACE', message: '文件不在工作区内' },
-    };
+  // 4-8. 工作区边界解析与校验（格式/词法/逐段 lstat/真实路径）
+  const resolved = await resolveWorkspaceTarget(workspaceRoot, relativePath, adapters);
+  if (resolved.status === 'error') {
+    return { status: 'error', error: mapPathError(resolved.error) };
   }
-
-  // 6. 从工作区根目录开始逐段 lstat：拒绝任一层符号链接 / junction，
-  //    中间段必须是目录，最终段必须是普通文件
-  let finalStat: FileStatLike | null = null;
-  let current = workspaceRoot;
-  try {
-    for (let i = 0; i < segments.length; i += 1) {
-      current = join(current, segments[i]!);
-      const stat = await adapters.lstat(current);
-      if (stat.isSymbolicLink()) {
-        return {
-          status: 'error',
-          error: { code: 'NOT_FILE', message: '路径包含符号链接或 junction' },
-        };
-      }
-      const isLast = i === segments.length - 1;
-      if (isLast) {
-        if (!stat.isFile()) {
-          return {
-            status: 'error',
-            error: { code: 'NOT_FILE', message: '目标不是普通文件' },
-          };
-        }
-        finalStat = stat;
-      } else if (!stat.isDirectory()) {
-        return {
-          status: 'error',
-          error: { code: 'NOT_FILE', message: '路径中间部分不是目录' },
-        };
-      }
-    }
-  } catch (err) {
-    const mapped = mapFsError(err);
-    return { status: 'error', error: mapped ?? readFailed() };
-  }
-
-  // 7-8. 真实路径检查：工作区根路径与候选文件的真实路径必须保持一致边界
-  try {
-    const [realRoot, realCandidate] = await Promise.all([
-      adapters.realpath(workspaceRoot),
-      adapters.realpath(candidate),
-    ]);
-    const realRel = relative(realRoot, realCandidate);
-    if (realRel === '..' || realRel.startsWith(`..${sep}`) || isAbsolute(realRel)) {
-      return {
-        status: 'error',
-        error: { code: 'OUTSIDE_WORKSPACE', message: '文件不在工作区内' },
-      };
-    }
-  } catch (err) {
-    const mapped = mapFsError(err);
-    return { status: 'error', error: mapped ?? readFailed() };
-  }
+  const candidate = resolved.candidate;
 
   // 9. 读取前大小检查（基于逐段 lstat 得到的最终段状态）
-  if (finalStat !== null && finalStat.size > MAX_TXT_FILE_BYTES) {
+  if (resolved.finalStat.size > MAX_TXT_FILE_BYTES) {
     return {
       status: 'error',
       error: { code: 'TOO_LARGE', message: '文件超过 5 MiB 上限' },
