@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
 import type { SaveTextDocumentRequest } from '../shared/document';
+import type { SaveDocxDocumentRequest } from '../shared/docx';
 import type {
   WorkspaceTextSearchCancelRequest,
   WorkspaceTextSearchRequest,
@@ -19,11 +20,15 @@ const desktopApi: DesktopApi = Object.freeze({
   }),
   // document.readText 只映射固定的 document:read-text 通道，且只接受一个相对路径参数；
   // document.saveText 只映射固定的 document:save-text 通道，且只接受一个结构化保存请求；
+  // document.readDocx / document.saveDocx 同理只映射 document:read-docx / document:save-docx；
   // 调用方无法指定通道、根路径、绝对目标、临时路径、编码、大小上限或写入策略。
   document: Object.freeze({
     readText: (relativePath: string) => ipcRenderer.invoke('document:read-text', relativePath),
     saveText: (request: SaveTextDocumentRequest) =>
       ipcRenderer.invoke('document:save-text', request),
+    readDocx: (relativePath: string) => ipcRenderer.invoke('document:read-docx', relativePath),
+    saveDocx: (request: SaveDocxDocumentRequest) =>
+      ipcRenderer.invoke('document:save-docx', request),
   }),
   // search 命名空间只映射固定的两个搜索通道，不接受根路径、绝对路径或任意通道：
   // 请求与取消都经过主进程运行时校验，取消只能引用当前窗口已知的 requestId。

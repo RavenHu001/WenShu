@@ -2,6 +2,7 @@ import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
+import { registerDocxIpc } from './docx/docx-ipc';
 import { registerSearchIpc } from './search/search-ipc';
 import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/window-close';
 
@@ -50,6 +51,7 @@ void app.whenReady().then(() => {
 
   registerWorkspaceIpc();
   registerDocumentIpc();
+  registerDocxIpc();
   registerSearchIpc();
   registerWindowCloseIpc();
 
