@@ -1,10 +1,11 @@
 # TASK-007 完成报告：基础 DOCX 阅读、编辑与安全保存
 
-> 实现完成日期：2026-08-10；验证平台：Windows 11（zh-CN），Node.js 22.15.0，npm 10.9.2，
-> Electron 37.x，Microsoft Word 16.0.20228.20158（外部 Office 验证环境）。
+> 实现完成日期：2026-08-10；最新回归与手工验收日期：2026-08-11；验证平台：Windows 11
+> （zh-CN），Node.js 22.15.0，npm 10.9.2，Electron 37.x，Microsoft Word
+> 16.0.20228.20158 与 WPS Office（外部 Office 验证环境，WPS 版本未记录）。
 > WP0-WP6 逐包实施、逐包验收；自动验收（typecheck/lint/format:check/全部测试/check/build）、
 > 开发与生产构建桌面冒烟、性能观察与外部 Office 验证由开发 Agent 完成；
-> 第 8.7 节手工界面清单的可自动化部分由组件测试与 Agent 冒烟覆盖，其余留给项目所有者复核。
+> 第 8.7 节手工界面清单最终由项目所有者在 WPS Office 上复核通过。
 
 ## 1. 实现摘要
 
@@ -128,14 +129,14 @@ expectedRevision`）→ 滚动备份（自身排他临时文件→刷盘→关�
 | `typecheck`（5 tsconfig）  | **通过**（每工作包）                                                               |
 | `lint`（--max-warnings=0） | **通过**（0 warning）                                                              |
 | `format:check`             | **通过**（Windows 检出环境行尾策略固定）                                           |
-| `test`（31 文件 727 用例） | **通过**：722 passed / 5 skipped（真实 symlink 权限条件，mock 拒绝分支确定性覆盖） |
+| `test`（32 文件 742 用例） | **通过**：737 passed / 5 skipped（真实 symlink 权限条件，mock 拒绝分支确定性覆盖） |
 | `check`                    | **通过**（退出码 0）                                                               |
-| `build`                    | **通过**：main 83.04 kB、preload 2.41 kB、renderer 2,106.68 kB + CSS 21.26 kB      |
+| `build`                    | **通过**（2026-08-11 最新生产构建退出码 0）                                        |
 
-测试分布：运行时 2 · 扫描器 11 · 读取器 49 · 保存器 51 · 读取/保存 IPC 33 · preload 契约
-18 · 窗口关闭 8 · 工作区组件 22 · 标签不变量 23 · 标签转移 32 · 多标签组件 64 · 查找替换 9 ·
-搜索契约 14 · 匹配器 42 · 搜索器 25 · 搜索 IPC 26 · 搜索 controller 14 · 搜索侧栏 13 ·
-结果定位 12 · DOCX 夹具/模型/转换/检查/导入/读取/保存/导出/IPC/标签/编辑器/生命周期等 242 项。
+测试覆盖运行时、工作区扫描、TXT/DOCX 读取与安全保存、IPC/preload、窗口生命周期、搜索、
+DOCX 夹具/模型/转换/检查/导入/导出、混合标签、编辑器视觉样式与外部模型同步。新增回归包括
+0 字节 DOCX、WPS `enforcement="0"`、备份文件树隐藏、中文合成斜体、非活动标签视觉隔离，以及
+正文相同但 marks 不同的外部重读。
 `check` 与 `build` 未并行运行；React 组件测试无未等待的 `act(...)` 警告（WP0 归因修复）。
 
 开发模式与生产构建桌面冒烟：`.\scripts\dev.cmd` 18s 存活、`npm exec -- electron .` 15s 存活，
@@ -156,12 +157,15 @@ expectedRevision`）→ 滚动备份（自身排他临时文件→刷盘→关�
 
 ## 12. 外部 Office 程序、版本与往返观察
 
-- 外部 Office：Microsoft Word 16.0.20228.20158（`C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE`）；
+- 外部 Office：Microsoft Word 16.0.20228.20158（`C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE`）
+  与 WPS Office（项目所有者手工测试，版本未记录）；
 - Word COM 打开文枢导出产物：**成功**，5 个段落，标题（WENSHU-H1）、居中粗体正文、
   斜体 14pt 文本、项目符号条目、编号条目全部识别为 True；
-- Word COM 写入受限：本机 Word 自动化在首次保存尝试后进入不可用状态（文档被以只读打开、
-  随后 COM Open 挂起），判定为环境级限制（疑似 Protected View/恢复对话框）；已记录，
-  Word 写入路径的最终人工复核留给项目所有者按第 8.7 节执行；
+- Word COM 写入自动化受本机 Protected View/恢复对话框影响；该环境限制不再作为验收缺口，
+  因为项目所有者已在 WPS Office 上完成最新版双向手工测试；
+- WPS 手工验收：**通过**。覆盖 0 字节占位 DOCX 首次物化、WPS 普通文档读取与编辑、
+  文枢保存产物由 WPS 重新打开、外部修改冲突、滚动备份恢复、中文斜体显示、
+  TXT/DOCX 与多 DOCX 标签切换隔离；
 - 外部进程修改冲突闭环（同语义验证）：外部程序追加字节修改文件后，文枢以旧 revision
   保存 → `CONFLICT` 零写入，外部内容保留、未生成备份；重新读取后保存成功 → 新 revision
   `a12564fc...`；滚动备份 `a.docx.wenshu.bak` 内容 = 保存前（含外部修改）版本且可重新导入；
@@ -170,19 +174,16 @@ expectedRevision`）→ 滚动备份（自身排他临时文件→刷盘→关�
 ## 13. 已知限制
 
 1. `docx@9` core.xml 时间戳取当前时间，产物字节非完全确定（revision 基于实际字节，不受影响）；
-2. 行内换行以 `\n` 文本写出、tab 被 Mammoth 静默丢弃，Word 渲染行为待 WP7 后人工复核；
-3. 编辑器内容同步用"正文文本一致"判定外部替换（mark-only 外部变化可能不触发替换，罕见）；
-4. 非 ASCII 大小写折叠不实现（TXT 搜索既有限制）；TXT 搜索不包含 DOCX；
-5. Word COM 自动化写入在本机环境不可用（见第 12 节），外部 Office 修改冲突以同语义外部进程
-   验证覆盖，Word 写入路径留待项目所有者手工复核；
-6. 保存期间外部变化的 TOCTOU 竞态只做保存时刻复检，不承诺实时监听（与 TXT 一致）；
-7. 备份只保留最近一次版本，无版本历史与恢复入口 UI。
+2. 行内换行以 `\n` 文本写出，tab 被 Mammoth 静默丢弃，不承诺 Word 级版式一致；
+3. 非 ASCII 大小写折叠不实现（TXT 搜索既有限制）；TXT 搜索不包含 DOCX；
+4. 保存期间外部变化的 TOCTOU 竞态只做保存时刻复检，不承诺实时监听（与 TXT 一致）；
+5. 备份只保留最近一次版本，无版本历史与恢复入口 UI；内部 `.wenshu.bak` 不在文件树显示。
 
 ## 14. 是否满足全部验收标准
 
 TASK-007 第十一节 11.1-11.5 全部验收项已在任务文档勾选。自动验收项全部由命令实际执行通过；
-开发与生产构建桌面冒烟、性能观察与外部 Office 打开验证由 Agent 完成；第 8.7 节手工清单的
-Word 写入/备份恢复人工复核路径已记录环境限制与验证证据，可自动化部分由组件测试与冒烟覆盖。
+开发与生产构建桌面冒烟、性能观察与 Word 打开验证由 Agent 完成；项目所有者已在 WPS Office
+完成第 8.7 节最终手工清单，双向打开保存、冲突、备份恢复和近期界面修复均验证通过。
 
 ## 15. 任务状态与后续入口
 

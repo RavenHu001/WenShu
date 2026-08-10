@@ -598,4 +598,63 @@ describe('DOCX 保存与冲突提示（第 8.6 节）', () => {
     await act(async () => {});
     expect(docxEditorText()).toContain('外部新正文');
   });
+
+  it('重新读取会应用文字相同但 marks 不同的外部模型且不产生 dirty', async () => {
+    const api = mockDesktop();
+    api.readDocx.mockResolvedValue({
+      status: 'loaded',
+      document: docxSnapshot(paragraphModel('相同正文')),
+    });
+    api.saveDocx.mockResolvedValue({
+      status: 'error',
+      error: { code: 'CONFLICT', message: '文件已被外部修改，保存被拒绝' },
+    });
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot([entry('b.docx')]),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
+    });
+    await openDocxFromTree(api, 'b.docx');
+
+    const editor = docxEditor()!;
+    await act(async () => {
+      editor.chain().selectAll().toggleItalic().run();
+    });
+    await act(async () => {});
+    expect(editor.isActive('italic')).toBe(true);
+    await userEvent.setup().click(screen.getByRole('button', { name: '保存' }));
+    await act(async () => {});
+
+    api.readDocx.mockResolvedValue({
+      status: 'loaded',
+      document: docxSnapshot(
+        {
+          schemaVersion: DOCX_MODEL_SCHEMA_VERSION,
+          blocks: [
+            {
+              kind: 'paragraph',
+              alignment: null,
+              runs: [{ text: '相同正文', marks: [{ type: 'bold' }] }],
+            },
+          ],
+        },
+        { revision: 'rev-format-only' },
+      ),
+    });
+    await userEvent.setup().click(screen.getByRole('button', { name: '重新读取' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: '放弃修改' }));
+    await act(async () => {});
+    await act(async () => {});
+
+    const reloadedEditor = docxEditor()!;
+    await act(async () => {
+      reloadedEditor.commands.selectAll();
+    });
+    expect(reloadedEditor.isActive('bold')).toBe(true);
+    expect(reloadedEditor.isActive('italic')).toBe(false);
+    expect(dirtyMarkers()).toBe(0);
+  });
 });

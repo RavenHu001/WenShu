@@ -2,7 +2,7 @@
 
 ## 任务状态
 
-- 状态：`已完成`（2026-08-10，详见 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)）
+- 状态：`已完成`（2026-08-11 完成最新回归与 WPS 手工验收，详见 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)）
 - 优先级：`P0`
 - 类型：`产品纵向切片 / 新文件类型 / 富文本编辑 / 高风险文件写入`
 - 前置任务：[TASK-006：工作区 TXT 搜索与当前文件查找替换](./TASK_006_TXT_SEARCH_FIND_REPLACE.md)
