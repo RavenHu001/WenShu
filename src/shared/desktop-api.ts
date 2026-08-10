@@ -14,6 +14,11 @@ import type {
   SaveTextDocumentResult,
 } from './document';
 import type {
+  ReadDocxDocumentResult,
+  SaveDocxDocumentRequest,
+  SaveDocxDocumentResult,
+} from './docx';
+import type {
   WorkspaceTextSearchCancelRequest,
   WorkspaceTextSearchRequest,
   WorkspaceTextSearchResult,
@@ -46,6 +51,14 @@ export interface DesktopApi {
      * 主进程会拒绝多余字段（根路径、绝对目标、临时路径、编码、替换策略等）。
      */
     readonly saveText: (request: SaveTextDocumentRequest) => Promise<SaveTextDocumentResult>;
+    /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */
+    readonly readDocx: (relativePath: string) => Promise<ReadDocxDocumentResult>;
+    /**
+     * 只接受一个结构化 DOCX 保存请求：相对路径、预期版本、模型与可选的兼容性确认
+     * revision。主进程会拒绝多余字段（根路径、绝对目标、临时/备份路径、原始
+     * HTML/XML、跳过备份、强制覆盖等危险参数）。
+     */
+    readonly saveDocx: (request: SaveDocxDocumentRequest) => Promise<SaveDocxDocumentResult>;
   };
   /**
    * 工作区搜索窄接口：固定开始与取消方法，不暴露 ipcRenderer、通用通道或事件总线。

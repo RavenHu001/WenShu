@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopApi } from '../../src/shared/desktop-api';
 import type { ReadTextDocumentResult, SaveTextDocumentResult } from '../../src/shared/document';
+import type {
+  ReadDocxDocumentResult,
+  SaveDocxDocumentRequest,
+  SaveDocxDocumentResult,
+} from '../../src/shared/docx';
 
 const electronMock = vi.hoisted(() => {
   const invoke = vi.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -44,12 +49,16 @@ describe('preload 窄接口契约', () => {
     ]);
   });
 
-  it('document 命名空间只暴露 readText 与 saveText 两个函数，且各只接受一个参数', () => {
-    expect(Object.keys(desktop.document)).toEqual(['readText', 'saveText']);
+  it('document 命名空间只暴露 readText、saveText、readDocx、saveDocx 四个固定函数，且各只接受一个参数', () => {
+    expect(Object.keys(desktop.document)).toEqual(['readText', 'saveText', 'readDocx', 'saveDocx']);
     expect(typeof desktop.document.readText).toBe('function');
     expect(typeof desktop.document.saveText).toBe('function');
+    expect(typeof desktop.document.readDocx).toBe('function');
+    expect(typeof desktop.document.saveDocx).toBe('function');
     expect(desktop.document.readText.length).toBe(1);
     expect(desktop.document.saveText.length).toBe(1);
+    expect(desktop.document.readDocx.length).toBe(1);
+    expect(desktop.document.saveDocx.length).toBe(1);
   });
 
   it('readText 只映射固定的 document:read-text 通道并原样传递相对路径', async () => {
@@ -115,6 +124,48 @@ describe('preload 窄接口契约', () => {
 
   it('saveText 只接受一个参数：不会接受通道名、根路径或其他选项', () => {
     expect(desktop.document.saveText.length).toBe(1);
+  });
+
+  it('readDocx 只映射固定的 document:read-docx 通道并原样传递相对路径', async () => {
+    const loaded: ReadDocxDocumentResult = {
+      status: 'error',
+      error: { code: 'NOT_FOUND', message: '文件不存在或已被移除' },
+    };
+    electronMock.invoke.mockResolvedValue(loaded);
+
+    const result = await desktop.document.readDocx('sub/a.docx');
+
+    expect(electronMock.invoke).toHaveBeenCalledTimes(1);
+    expect(electronMock.invoke).toHaveBeenCalledWith('document:read-docx', 'sub/a.docx');
+    expect(JSON.stringify(result)).toBe(JSON.stringify(loaded));
+  });
+
+  it('saveDocx 只映射固定的 document:save-docx 通道并原样传递结构化请求', async () => {
+    const request: SaveDocxDocumentRequest = {
+      relativePath: 'sub/a.docx',
+      expectedRevision: 'a'.repeat(64),
+      model: { schemaVersion: 1, blocks: [] },
+    };
+    const saved: SaveDocxDocumentResult = {
+      status: 'saved',
+      document: {
+        kind: 'docx',
+        name: 'a.docx',
+        relativePath: 'sub/a.docx',
+        revision: 'b'.repeat(64),
+        size: 10,
+        model: { schemaVersion: 1, blocks: [] },
+        compatibility: { level: 'supported', warnings: [] },
+      },
+      backupRelativePath: 'a.docx.wenshu.bak',
+    };
+    electronMock.invoke.mockResolvedValue(saved);
+
+    const result = await desktop.document.saveDocx(request);
+
+    expect(electronMock.invoke).toHaveBeenCalledTimes(1);
+    expect(electronMock.invoke).toHaveBeenCalledWith('document:save-docx', request);
+    expect(JSON.stringify(result)).toBe(JSON.stringify(saved));
   });
 
   it('workspace.open / refresh 仍映射固定通道', () => {

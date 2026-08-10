@@ -191,6 +191,8 @@
 
 复杂 DOCX 可以降级显示、只读打开或在用户确认后进行编辑。
 
+Task 7 已完成（见 [TASK-007：基础 DOCX 阅读、编辑与安全保存](./TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md) 与 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)）：以有版本、有资源上限的结构化中间模型（`DocxDocumentModel`，见 `src/shared/docx.ts`）衔接 DOCX 导入、Tiptap/ProseMirror 编辑与基础导出；复杂内容按 `supported`、`degraded`、`read-only` 分级处理（`rejected` 为读取错误路径）。覆盖保存执行原始字节 revision 冲突检测、同目录滚动备份 `<文件名>.wenshu.bak`、临时生成、产物重新验证、刷盘、关闭与安全替换。Task 7 不包含新建/另存为、DOCX 搜索、复杂 Word 格式或完整无损往返。
+
 ### 5.6 搜索
 
 应支持：
@@ -203,6 +205,8 @@
 - 点击结果打开对应文件。
 
 Task 6 已完成 TXT 查找与搜索闭环（见 [TASK-006 完成报告](./TASK_006_COMPLETION_REPORT.md)）：当前文件查找替换作用于活动编辑器的实时正文（`Ctrl+F` / `Ctrl+H`，普通文字查询、大小写选项、上一个/下一个、替换当前项与全部替换，替换经 CodeMirror 编辑事务进入撤销历史）；工作区 TXT 搜索作用于磁盘已保存内容，通过主进程受控异步遍历、固定并发 4、取消和结果上限（候选 1000 / 单文件 200 / 总匹配 2000）完成。搜索结果以规范相对路径和内容 revision 标识文件，点击后复用多标签的打开/激活能力；revision 或正文范围已失效时只提示结果过期，不错误定位或覆盖内容。首版不实现工作区替换、工作区正则搜索、持久全文索引或 DOCX 搜索。具体实施边界与验收见 [TASK-006 规划](./TASK_006_TXT_SEARCH_FIND_REPLACE.md)。
+
+Task 7 仍不把 DOCX 隐式加入 Task 6 的 TXT 搜索器。工作区 DOCX 正文搜索需要在基础 DOCX 读取、结构化模型和富文本定位稳定后单独规划，复用搜索任务身份、取消、预算和 revision 过期原则，但单独设计正文提取与段落位置映射。
 
 ### 5.7 设置
 
@@ -433,6 +437,8 @@ Task 5 已在不扩大文件系统权限的前提下把单文档编辑扩展为�
 
 Task 6 已在 CodeMirror 会话中增加当前文件查找替换（`@codemirror/search` 直接依赖），并为工作区 TXT 搜索增加独立的主进程只读搜索能力。renderer 只提交有界查询和请求身份（requestId），不能提交工作区根或任意文件系统参数；主进程负责受控遍历、TXT 读取、固定并发 4、取消、结果上限（候选 1000 / 单文件 200 / 总匹配 2000）和错误隔离。首版搜索不建立持久索引，不写工作区；结果定位绑定 requestId、工作区 epoch、相对路径、revision 与稳定 tabId，过期只提示不覆盖正文。具体实施边界见 [TASK-006 规划](./TASK_006_TXT_SEARCH_FIND_REPLACE.md)。
 
+Task 7 已采用 Tiptap/ProseMirror 作为 DOCX renderer 编辑会话，编辑器实例不跨 IPC；项目自有 `DocxDocumentModel` 是导入、编辑状态和导出的稳定边界（`src/shared/docx.ts` 契约 + `src/shared/docx-convert.ts` 纯转换）。TXT 继续使用 CodeMirror，通用标签生命周期通过文件类型判别联合复用（`src/renderer/lib/document-tabs.ts`），TXT 与 DOCX 的正文模型和编辑器 runtime 保持隔离。具体实施结果见 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)。
+
 ### 8.4 DOCX 处理
 
 | 技术 | 用途 |
@@ -442,6 +448,8 @@ Task 6 已在 CodeMirror 会话中增加当前文件查找替换（`@codemirror/
 | JSZip | 必要时检查 DOCX 压缩包和内部 XML |
 
 初期不自行实现完整 OOXML 解析和排版引擎。
+
+Task 7 已由 Mammoth 负责语义导入（`mammoth.convertToHtml({buffer}, {transformDocument})` 的文档树），JSZip 只做 ZIP/OOXML 基础结构、资源预算和经技术验证确有必要的有限属性补充（run 颜色、页眉页脚/修订/保护/嵌入对象检测），`docx` 负责从受支持中间模型重建基础产物。原始 OOXML、未清洗 HTML、编辑器实例和库私有对象不进入跨进程文档模型。保存前生成最近一次原文件的同目录滚动备份 `<文件名>.wenshu.bak`；备份或产物验证失败时禁止替换目标。详细实现见 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)。
 
 ### 8.5 本地存储与系统通信
 

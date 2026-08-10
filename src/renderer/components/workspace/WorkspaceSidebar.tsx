@@ -16,18 +16,18 @@ interface WorkspaceSidebarProps {
   readonly onOpenWorkspace: () => void | Promise<void>;
   /** 刷新当前工作区入口。 */
   readonly onRefreshWorkspace: () => void | Promise<void>;
-  /** 用户选择工作区内的 TXT 文件时报告其相对路径；由 App/文档容器处理读取。 */
-  readonly onTextFileOpen: (relativePath: string) => void;
+  /** 用户选择工作区内的 TXT / DOCX 文件时报告其相对路径；由 App/文档容器处理读取。 */
+  readonly onFileOpen: (relativePath: string) => void;
   /** 当前选中的文件相对路径，用于文件树的选中高亮。 */
-  readonly selectedTextFilePath: string | null;
+  readonly selectedFilePath: string | null;
 }
 
 export function WorkspaceSidebar({
   state,
   onOpenWorkspace,
   onRefreshWorkspace,
-  onTextFileOpen,
-  selectedTextFilePath,
+  onFileOpen,
+  selectedFilePath,
 }: WorkspaceSidebarProps): React.JSX.Element {
   const busy = state.status === 'loading' || state.status === 'refreshing';
   const showIdle = state.status === 'idle';
@@ -91,8 +91,8 @@ export function WorkspaceSidebar({
             {state.workspace.entries.length > 0 && (
               <FileTree
                 entries={state.workspace.entries}
-                onFileSelect={onTextFileOpen}
-                selectedRelativePath={selectedTextFilePath}
+                onFileSelect={onFileOpen}
+                selectedRelativePath={selectedFilePath}
               />
             )}
           </>

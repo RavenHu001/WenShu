@@ -10,7 +10,6 @@
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { EditorView } from '@codemirror/view';
 import { undo } from '@codemirror/commands';
 import { App } from '../../src/renderer/App';
@@ -200,13 +199,21 @@ async function clickMatch(index: number): Promise<void> {
   });
 }
 
+/**
+ * 打开搜索侧栏并提交查询。
+ * 注意：提交只用 fireEvent（change + Enter + form submit），不使用 user-event 键盘输入——
+ * React 19.1 的 act 与 user-event 的 document 捕获级 dispatch 在编辑器聚焦夺走输入框焦点
+ * 时存在 flush 碰撞，会产生"component suspended inside an act scope"一次性警告
+ * （TASK-007 WP0 归因，见 docs/TASK_007_WP0_REPORT.md）。本文件的主题是结果定位，
+ * 键入路径已在 tests/search/search-sidebar.test.tsx 用 user-event 覆盖。
+ */
 async function submitSearch(query: string): Promise<void> {
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    fireEvent.change(screen.getByLabelText('搜索内容'), { target: { value: query } });
+    fireEvent.keyDown(screen.getByLabelText('搜索内容'), { key: 'Enter' });
+    fireEvent.submit(screen.getByLabelText('搜索内容').closest('form') as HTMLFormElement);
   });
-  const user = userEvent.setup();
-  await user.type(screen.getByLabelText('搜索内容'), query);
-  await user.keyboard('{Enter}');
 }
 
 afterEach(() => {

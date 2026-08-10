@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 /**
  * TASK-006 WP4 工作区状态所有权回归测试（任务第 8.5 节与第 4.10 节）。
  * 覆盖：useWorkspace controller 的打开/取消/失败/刷新语义与 epoch 递增；
@@ -59,11 +59,11 @@ function openBtn(): HTMLButtonElement {
 
 /** 与 App 相同的接线：useWorkspace controller + 纯展示 WorkspaceSidebar。 */
 function SidebarHarness({
-  onTextFileOpen = vi.fn(),
-  selectedTextFilePath = null,
+  onFileOpen = vi.fn(),
+  selectedFilePath = null,
 }: {
-  onTextFileOpen?: (relativePath: string) => void;
-  selectedTextFilePath?: string | null;
+  onFileOpen?: (relativePath: string) => void;
+  selectedFilePath?: string | null;
 }): React.JSX.Element {
   const workspace = useWorkspace();
   return (
@@ -71,8 +71,8 @@ function SidebarHarness({
       state={workspace.state}
       onOpenWorkspace={workspace.openWorkspace}
       onRefreshWorkspace={workspace.refreshWorkspace}
-      onTextFileOpen={onTextFileOpen}
-      selectedTextFilePath={selectedTextFilePath}
+      onFileOpen={onFileOpen}
+      selectedFilePath={selectedFilePath}
     />
   );
 }
@@ -100,8 +100,8 @@ function WorkspaceSidebarView({
         state={controller.state}
         onOpenWorkspace={controller.openWorkspace}
         onRefreshWorkspace={controller.refreshWorkspace}
-        onTextFileOpen={vi.fn()}
-        selectedTextFilePath={null}
+        onFileOpen={vi.fn()}
+        selectedFilePath={null}
       />
     </div>
   );
@@ -326,8 +326,8 @@ describe('文件树 TXT 选择（无回归）', () => {
 
   async function openWorkspaceWith(
     entries: readonly WorkspaceEntry[],
-    onTextFileOpen: (relativePath: string) => void = vi.fn(),
-    selectedTextFilePath: string | null = null,
+    onFileOpen: (relativePath: string) => void = vi.fn(),
+    selectedFilePath: string | null = null,
   ): Promise<void> {
     mockDesktop(
       vi.fn().mockResolvedValue({
@@ -335,12 +335,7 @@ describe('文件树 TXT 选择（无回归）', () => {
         workspace: snapshot({ entries }),
       } as OpenWorkspaceResult),
     );
-    render(
-      <SidebarHarness
-        onTextFileOpen={onTextFileOpen}
-        selectedTextFilePath={selectedTextFilePath}
-      />,
-    );
+    render(<SidebarHarness onFileOpen={onFileOpen} selectedFilePath={selectedFilePath} />);
     await userEvent.click(openBtn());
   }
 

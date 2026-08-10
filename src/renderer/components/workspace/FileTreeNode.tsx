@@ -11,9 +11,12 @@ function kindLabel(kind: WorkspaceEntry['kind']): string {
 /**
  * 扩展名判断只决定界面交互（是否渲染为可激活按钮），
  * 不替代主进程的完整类型、路径与内容校验。
+ * 只接受普通 `.txt` 与 `.docx`（大小写不敏感），不接受 `.docm`、`.dotm`、`.rtf`
+ * 或伪装扩展名（第 4.5 节）。
  */
-function isTxtFileName(name: string): boolean {
-  return name.toLowerCase().endsWith('.txt');
+function isOpenableFileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith('.txt') || lower.endsWith('.docx');
 }
 
 const paddingStep = 16;
@@ -37,9 +40,9 @@ export function FileTreeNode({
   const hasChildren = isDir && entry.children !== undefined && entry.children.length > 0;
   const indent = depth * paddingStep;
 
-  // 只有普通 .txt 文件可作为选择目标；目录、符号链接、其他类型节点不触发正文读取。
-  const isSelectableTxt = entry.kind === 'file' && isTxtFileName(entry.name);
-  const isSelected = isSelectableTxt && selectedRelativePath === entry.relativePath;
+  // 只有普通 .txt / .docx 文件可作为选择目标；目录、符号链接、其他类型节点不触发正文读取。
+  const isSelectableFile = entry.kind === 'file' && isOpenableFileName(entry.name);
+  const isSelected = isSelectableFile && selectedRelativePath === entry.relativePath;
 
   const toggle = (): void => {
     setExpanded((prev) => !prev);
@@ -84,7 +87,7 @@ export function FileTreeNode({
         >
           {rowContents}
         </button>
-      ) : isSelectableTxt ? (
+      ) : isSelectableFile ? (
         <button
           type="button"
           className={`ft-row ft-row--file ${isSelected ? 'ft-row--selected' : ''}`}

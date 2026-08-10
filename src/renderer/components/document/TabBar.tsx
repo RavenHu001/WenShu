@@ -7,7 +7,7 @@
  * - 标签横向溢出可滚动，不挤压正文区域。
  */
 
-import type { TextDocumentTabState } from '../../lib/text-document-tabs';
+import type { DocumentTabState } from '../../lib/document-tabs';
 
 export function TabBar({
   tabs,
@@ -15,7 +15,7 @@ export function TabBar({
   onActivate,
   onCloseRequest,
 }: {
-  readonly tabs: readonly TextDocumentTabState[];
+  readonly tabs: readonly DocumentTabState[];
   readonly activeTabId: string | null;
   readonly onActivate: (tabId: string) => void;
   readonly onCloseRequest: (tabId: string) => void;

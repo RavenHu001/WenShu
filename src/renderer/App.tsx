@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatRuntimeInfo } from './lib/runtime-info';
-import { useTextDocuments } from './lib/use-text-documents';
+import { useDocuments } from './lib/use-documents';
 import { useWorkspace } from './lib/use-workspace';
 import { useWorkspaceSearch } from './lib/use-workspace-search';
 import {
@@ -8,9 +8,10 @@ import {
   dirtyTabCount,
   hasDirtyTabs,
   hasSavingTabs,
+  isDocxTab,
   tabById,
-  type TextDocumentTabState,
-} from './lib/text-document-tabs';
+  type DocumentTabState,
+} from './lib/document-tabs';
 import type {
   EditorLocateTarget,
   EditorSearchControls,
@@ -55,15 +56,19 @@ export const App = (): React.JSX.Element => {
   const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
   const {
     model,
+    openFile,
     openTextFile,
     activateTab,
     editTab,
+    editDocxTab,
     saveTab,
+    saveDocxTab,
+    confirmDocxCompatibility,
     reloadTab,
     closeTab,
     retryRead,
     invalidateWorkspace,
-  } = useTextDocuments();
+  } = useDocuments();
   // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）
   const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
   const search = useWorkspaceSearch({
@@ -107,7 +112,7 @@ export const App = (): React.JSX.Element => {
   /** 最新活动标签，供 Ctrl+W 使用。 */
   const activeTabIdRef = useRef<string | null>(null);
   /** 上一次渲染的标签快照：识别"新进入混合换行保存错误"的转移。 */
-  const prevTabsRef = useRef<readonly TextDocumentTabState[]>([]);
+  const prevTabsRef = useRef<readonly DocumentTabState[]>([]);
 
   const dirtyCount = dirtyTabCount(model);
   const hasDirty = hasDirtyTabs(model);
@@ -257,14 +262,21 @@ export const App = (): React.JSX.Element => {
     setPending(pendingRef.current);
   }, []);
 
-  // 保存统一入口：原始磁盘快照为 mixed 时，在 renderer 仍持有该稳定元数据，
-  // 必须先确认再调用保存 IPC；CodeMirror 内部会按 dominant 风格统一表示换行。
+  // 保存统一入口：TXT 的原始磁盘快照为 mixed 时须先确认换行规范化再调用保存 IPC；
+  // DOCX 直接走 DOCX 保存（degraded 未确认由模型层拒绝，UI 经兼容性提示确认）。
   const handleSaveRequest = useCallback(
     (tabId: string) => {
       if (pendingRef.current !== null) {
         return;
       }
       const tab = tabById(modelRef.current, tabId);
+      if (tab === null) {
+        return;
+      }
+      if (isDocxTab(tab)) {
+        saveDocxTab(tabId);
+        return;
+      }
       if (tab?.dirty && !tab.saving && tab.document?.lineEnding === 'mixed') {
         pendingRef.current = { kind: 'mixed-line-endings', tabId };
         setPending(pendingRef.current);
@@ -272,7 +284,7 @@ export const App = (): React.JSX.Element => {
       }
       saveTab(tabId);
     },
-    [saveTab],
+    [saveTab, saveDocxTab],
   );
 
   const confirmPending = useCallback(() => {
@@ -461,7 +473,7 @@ export const App = (): React.JSX.Element => {
     [openTextFile, search.state.result, workspace.epoch, isLocateCurrent],
   );
 
-  const selectedTextFilePath = activeTab(model)?.relativePath ?? null;
+  const selectedFilePath = activeTab(model)?.relativePath ?? null;
 
   return (
     <div className="app-shell">
@@ -510,8 +522,8 @@ export const App = (): React.JSX.Element => {
               state={workspace.state}
               onOpenWorkspace={handleOpenWorkspace}
               onRefreshWorkspace={workspace.refreshWorkspace}
-              onTextFileOpen={openTextFile}
-              selectedTextFilePath={selectedTextFilePath}
+              onFileOpen={openFile}
+              selectedFilePath={selectedFilePath}
             />
           </div>
           <div className="sidebar-panel sidebar-panel-search" hidden={activity !== 'search'}>
@@ -537,7 +549,9 @@ export const App = (): React.JSX.Element => {
             onCloseTab={handleCloseTabRequest}
             onRetryRead={retryRead}
             onContentChange={editTab}
+            onDocxContentChange={editDocxTab}
             onSave={handleSaveRequest}
+            onConfirmCompatibility={confirmDocxCompatibility}
             onReloadRequest={handleReloadRequest}
             locateTarget={locateTarget}
             locateNotice={staleNotice}
