@@ -45,9 +45,9 @@
  * 进程制造的所有操作系统级 TOCTOU 竞态。
  */
 
-import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
-import { lstat, open, realpath, rename, rm } from 'node:fs/promises';
+import { basename, extname, isAbsolute, join, relative, sep } from 'node:path';
+import { createHash } from 'node:crypto';
+import { lstat, open, realpath } from 'node:fs/promises';
 import {
   MAX_TXT_FILE_BYTES,
   type LineEnding,
@@ -63,42 +63,14 @@ import {
   readBoundedTextBytes,
   type FileStatLike,
 } from './read-text-document';
+import {
+  defaultTempWriteFactory,
+  removeTempFile,
+  replaceFile,
+  type TempWriteHandle,
+} from './write-safety';
 
-/** 排他创建的临时写入句柄：完整写入、刷盘、关闭。 */
-export interface TempWriteHandle {
-  /** 临时文件绝对路径（与目标同目录），只供保存器内部使用，绝不进入跨进程结果。 */
-  readonly tempPath: string;
-  /** 完整写入全部字节；实现必须循环处理短写。 */
-  write(bytes: Uint8Array): Promise<void>;
-  /** 刷盘到持久存储。 */
-  sync(): Promise<void>;
-  /** 关闭句柄。 */
-  close(): Promise<void>;
-}
-
-/** `FileHandle.write` 的最小写入契约，便于确定性测试短写。 */
-export interface WritableFileHandle {
-  readonly write: (
-    buffer: Uint8Array,
-    offset: number,
-    length: number,
-  ) => Promise<{ readonly bytesWritten: number }>;
-}
-
-/**
- * 循环写入直至全部字节写完或失败。
- * 单次 `FileHandle.write` 允许短写，不能把一次返回不足误判为结束。
- */
-export async function writeAllBytes(handle: WritableFileHandle, bytes: Uint8Array): Promise<void> {
-  let offset = 0;
-  while (offset < bytes.byteLength) {
-    const { bytesWritten } = await handle.write(bytes, offset, bytes.byteLength - offset);
-    if (bytesWritten <= 0) {
-      throw new Error('wenshu: 临时文件写入无进展');
-    }
-    offset += bytesWritten;
-  }
-}
+export { writeAllBytes, type TempWriteHandle, type WritableFileHandle } from './write-safety';
 
 /** 保存器文件系统适配器；生产环境为 `node:fs/promises`，测试环境可注入 mock。 */
 export interface SaveTextAdapters {
@@ -130,20 +102,9 @@ export const defaultSaveTextAdapters: SaveTextAdapters = Object.freeze({
       await handle.close();
     }
   },
-  createTempFile: async (targetPath: string) => {
-    const tempPath = join(dirname(targetPath), `.wenshu-${randomUUID()}.tmp`);
-    const handle = await open(tempPath, 'wx');
-    return {
-      tempPath,
-      write: (bytes: Uint8Array) => writeAllBytes(handle, bytes),
-      sync: () => handle.sync(),
-      close: () => handle.close(),
-    };
-  },
-  replace: (tempPath: string, targetPath: string) => rename(tempPath, targetPath),
-  removeTemp: async (tempPath: string) => {
-    await rm(tempPath, { force: true });
-  },
+  createTempFile: (targetPath: string) => defaultTempWriteFactory.create(targetPath),
+  replace: (tempPath: string, targetPath: string) => replaceFile(tempPath, targetPath),
+  removeTemp: (tempPath: string) => removeTempFile(tempPath),
 });
 
 /** 稳定保存错误快捷构造。 */
