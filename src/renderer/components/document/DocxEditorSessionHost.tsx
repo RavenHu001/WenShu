@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Editor, type Content } from '@tiptap/core';
+import { Editor, Extension, type Content } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import { TextStyle, FontSize } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
@@ -59,6 +59,7 @@ export function DocxEditorSessionHost({
   tab,
   editable,
   onContentChange,
+  onSaveRequest,
   onEditorRegister,
 }: {
   readonly tab: DocxDocumentTabState;
@@ -66,16 +67,20 @@ export function DocxEditorSessionHost({
   readonly editable: boolean;
   /** 内容实际变化（docChanged 事务）时上报新模型。 */
   readonly onContentChange: (tabId: string, model: DocxDocumentModel) => void;
+  /** Ctrl+S 保存请求（与 TXT 编辑器宿主一致）。 */
+  readonly onSaveRequest: (tabId: string) => void;
   /** 注册/注销编辑器实例（工具栏操作与测试定位）。 */
   readonly onEditorRegister: (tabId: string, editor: Editor | null) => void;
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const contentChangeRef = useRef(onContentChange);
+  const saveRequestRef = useRef(onSaveRequest);
   const registerRef = useRef(onEditorRegister);
 
   useEffect(() => {
     contentChangeRef.current = onContentChange;
+    saveRequestRef.current = onSaveRequest;
     registerRef.current = onEditorRegister;
   });
 
@@ -85,9 +90,18 @@ export function DocxEditorSessionHost({
     if (container === null) {
       return;
     }
+    const saveKeymap = Extension.create({
+      name: 'wenshu-docx-save-keymap',
+      addKeyboardShortcuts: () => ({
+        'Mod-s': () => {
+          saveRequestRef.current(tab.id);
+          return true;
+        },
+      }),
+    });
     const editor = new Editor({
       element: container,
-      extensions: DOCX_EDITOR_EXTENSIONS,
+      extensions: [...DOCX_EDITOR_EXTENSIONS, saveKeymap],
       content: docxModelToTiptapJson(
         tab.model ?? { schemaVersion: 1, blocks: [] },
       ) as unknown as Content,

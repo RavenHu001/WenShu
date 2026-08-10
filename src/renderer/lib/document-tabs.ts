@@ -79,6 +79,8 @@ export interface DocxDocumentTabState {
    * 确认只对当前 revision 有效，重新读取不同 revision 后必须重新确认。
    */
   readonly compatibilityConfirmationRevision: string | null;
+  /** 最近一次成功保存的滚动备份相对路径（`<文件名>.wenshu.bak`）；用于备份提示。 */
+  readonly lastBackupRelativePath: string | null;
 }
 
 /* ======================= 判别联合与运行时 ======================= */
@@ -318,6 +320,7 @@ export function openDocxTab(model: DocumentTabsModel, relativePath: string): Doc
     saving: false,
     error: null,
     compatibilityConfirmationRevision: null,
+    lastBackupRelativePath: null,
   };
   return {
     state: { tabs: [...model.state.tabs, tab], activeTabId: tab.id },
@@ -544,6 +547,8 @@ export function applyDocxReadResult(
       error: null,
       // 新 revision：旧确认失效（第 4.2 节：确认只对当前 revision 有效）
       compatibilityConfirmationRevision: null,
+      // 重新读取后旧备份提示失效
+      lastBackupRelativePath: null,
     };
     return updateTabRuntime(
       updateTab(model, tabId, () => nextTab),
@@ -662,6 +667,8 @@ export function completeDocxSave(
           model: stillClean ? savedDocument.model : target.model,
           dirty: !stillClean,
           error: null,
+          // 备份提示：本次保存前的滚动备份相对路径
+          lastBackupRelativePath: result.backupRelativePath,
         };
       }),
       tabId,

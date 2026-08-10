@@ -170,6 +170,7 @@ export function DocumentPane({
               tab={tab}
               editable={isEditable(tab)}
               onContentChange={onDocxContentChange}
+              onSaveRequest={onSave}
               onEditorRegister={registerDocxEditor}
             />
           </div>
@@ -198,7 +199,10 @@ function isEditable(tab: DocumentTabState): boolean {
 function saveStatusLabel(tab: DocumentTabState): string {
   switch (tab.status) {
     case 'loaded-clean':
-      return '已保存';
+      // 备份提示：DOCX 保存成功后展示本次滚动备份文件名
+      return isDocxTab(tab) && tab.lastBackupRelativePath !== null
+        ? `已保存（备份 ${tab.lastBackupRelativePath}）`
+        : '已保存';
     case 'loaded-dirty':
       return '未保存';
     case 'saving':
