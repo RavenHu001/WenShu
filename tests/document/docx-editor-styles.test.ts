@@ -1,0 +1,48 @@
+// @vitest-environment jsdom
+
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+
+const appCss = readFileSync(resolve('src/renderer/styles/app.css'), 'utf8');
+
+function installApplicationStyles(): HTMLStyleElement {
+  const style = document.createElement('style');
+  style.textContent = appCss;
+  document.head.append(style);
+  return style;
+}
+
+afterEach(() => {
+  document.head.replaceChildren();
+  document.body.replaceChildren();
+});
+
+describe('DOCX editor visual isolation and CJK italic rendering', () => {
+  it('keeps an inactive editor host out of layout even though active hosts use flex', () => {
+    installApplicationStyles();
+    const host = document.createElement('div');
+    host.className = 'docx-editor-host';
+    host.hidden = true;
+    document.body.append(host);
+
+    expect(getComputedStyle(host).display).toBe('none');
+  });
+
+  it('allows synthetic italic only inside DOCX document content', () => {
+    installApplicationStyles();
+    const editor = document.createElement('div');
+    editor.className = 'docx-editor';
+    const proseMirror = document.createElement('div');
+    proseMirror.className = 'ProseMirror';
+    proseMirror.innerHTML = '<p><em>斜体汉字</em></p>';
+    editor.append(proseMirror);
+    document.body.append(editor);
+
+    expect(getComputedStyle(document.documentElement).getPropertyValue('font-synthesis')).toBe(
+      'none',
+    );
+    expect(getComputedStyle(proseMirror).getPropertyValue('font-synthesis')).toBe('style');
+    expect(getComputedStyle(proseMirror.querySelector('em')!).fontStyle).toBe('italic');
+  });
+});

@@ -164,6 +164,17 @@ describe('scanWorkspace', () => {
     expect(names).toEqual(['a1.txt', 'a2.txt', 'a10.txt', 'z.txt']);
   });
 
+  it('hides internal DOCX rolling backup files from every workspace level', async () => {
+    const readDir = createReadDir({
+      [root]: [f('a.docx'), f('a.docx.wenshu.bak'), d('nested')],
+      [p('nested')]: [f('b.docx'), f('B.DOCX.WENSHU.BAK')],
+    });
+
+    const snapshot = await scanWorkspace(root, readDir);
+    expect(snapshot.entries.map((entry) => entry.name)).toEqual(['nested', 'a.docx']);
+    expect(snapshot.entries[0]!.children?.map((entry) => entry.name)).toEqual(['b.docx']);
+  });
+
   it('files are leaf nodes without children', async () => {
     const readDir = createReadDir({
       [root]: [f('readme.txt')],

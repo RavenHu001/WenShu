@@ -127,6 +127,12 @@ async function scanDir(
   const results: WorkspaceEntry[] = [];
 
   for (const raw of rawEntries) {
+    // DOCX 安全保存器会在原文件旁保留最近一次保存前版本。它是内部恢复文件，
+    // 不应作为普通工作区条目暴露给用户；目录同名时仍按正常目录处理。
+    if (raw.isFile() && raw.name.toLowerCase().endsWith('.wenshu.bak')) {
+      continue;
+    }
+
     const kind = classifyKind(raw);
     // relativePath 使用 `/` 拼接，跨平台一致，仅作为 UI 标识
     const relativePath = relativeDir ? `${relativeDir}/${raw.name}` : raw.name;

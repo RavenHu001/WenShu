@@ -1246,6 +1246,11 @@ body {
   background: #ffffff;
 }
 
+/* 作者样式的 display:flex 会覆盖浏览器内建的 [hidden] 规则，需显式隐藏非活动会话。 */
+.docx-editor-host[hidden] {
+  display: none;
+}
+
 /* 已加载 DOCX 标签的横幅容器：只占自身高度，不参与编辑器区域高度竞争 */
 .docx-banner-host {
   flex: 0 0 auto;
@@ -1263,6 +1268,8 @@ body {
   min-height: 100%;
   outline: none;
   white-space: pre-wrap;
+  /* 微软雅黑等中文字体通常没有斜体字形，仅在文档正文中允许浏览器合成斜体。 */
+  font-synthesis: style;
 }
 
 .docx-editor .ProseMirror p {
