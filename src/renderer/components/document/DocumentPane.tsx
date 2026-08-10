@@ -1,17 +1,20 @@
 /**
- * 中央文档区 —— TASK-005 WP4：多标签渲染、每标签 CodeMirror 会话与保存工具条。
+ * 中央文档区 —— 多类型标签渲染（TASK-007 WP5）：每标签 CodeMirror（TXT）/
+ * Tiptap（DOCX）会话与保存工具条。
  *
- * - 标签栏与正文使用同一份 activeTabId 快照，避免标签标题与正文错位；
- * - 无标签时显示欢迎页（不创建伪文档标签）；
- * - 活动标签正文按状态渲染：loading 提示、read-error 错误面板/横幅、
- *   CodeMirror 编辑器宿主（每标签会话缓存，见 use-editor-sessions.ts）；
- * - 保存工具条（保存按钮与状态文本）、保存失败/冲突横幅与重新读取入口
- *   全部从目标标签状态派生，目标标签绑定 tabId；
- * - 编辑器只挂载活动标签，切换时卸载/挂载并由会话缓存保存与恢复
- *   光标、选区、滚动位置与撤销历史。
+ * - 标签栏与正文使用同一份 activeTabId 快照；
+ * - 无标签时显示欢迎页；
+ * - TXT 标签沿用 CodeMirror 宿主与会话缓存；DOCX 标签使用 Tiptap 宿主，
+ *   全部 DOCX 宿主保持挂载（非活动标签以 `hidden` 隐藏），切换不销毁会话，
+ *   选择/滚动/撤销历史天然隔离；
+ * - DOCX 兼容性提示与格式工具栏只对活动 DOCX 标签显示；
+ * - 保存工具条（保存按钮与状态文本）、失败/冲突横幅与重新读取入口
+ *   全部从目标标签状态派生，目标标签绑定 tabId。
  */
 
-import { useMemo, type RefObject } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
+import type { Editor } from '@tiptap/core';
+import type { DocxDocumentModel } from '../../../shared/docx';
 import { TabBar } from './TabBar';
 import {
   EditorSessionHost,
@@ -20,7 +23,15 @@ import {
   type EditorSearchMode,
 } from './EditorSessionHost';
 import { useEditorSessions } from '../../lib/use-editor-sessions';
+import {
+  isDocxTab,
+  type DocxDocumentTabState,
+  type DocumentTabState,
+} from '../../lib/document-tabs';
 import type { TextDocumentTabState } from '../../lib/text-document-tabs';
+import { DocxEditorSessionHost } from './DocxEditorSessionHost';
+import { DocxToolbar } from './DocxToolbar';
+import { DocxCompatibilityNotice } from './DocxCompatibilityNotice';
 
 export function DocumentPane({
   tabs,
@@ -29,7 +40,9 @@ export function DocumentPane({
   onCloseTab,
   onRetryRead,
   onContentChange,
+  onDocxContentChange,
   onSave,
+  onConfirmCompatibility,
   onReloadRequest,
   locateTarget,
   locateNotice,
@@ -38,19 +51,23 @@ export function DocumentPane({
   onSearchPanelRequest,
   onSearchControlsChange,
 }: {
-  readonly tabs: readonly TextDocumentTabState[];
+  readonly tabs: readonly DocumentTabState[];
   readonly activeTabId: string | null;
   readonly onActivateTab: (tabId: string) => void;
   readonly onCloseTab: (tabId: string) => void;
   /** read-error 标签的重试入口（目标标签绑定 tabId）。 */
   readonly onRetryRead: (tabId: string) => void;
-  /** 编辑器正文变化：目标标签绑定 tabId。 */
+  /** TXT 编辑器正文变化：目标标签绑定 tabId。 */
   readonly onContentChange: (tabId: string, content: string) => void;
-  /** 保存按钮与 Ctrl+S 共用入口：只保存活动标签（目标标签绑定 tabId）。 */
+  /** DOCX 编辑器模型变化：目标标签绑定 tabId。 */
+  readonly onDocxContentChange: (tabId: string, model: DocxDocumentModel) => void;
+  /** 保存按钮共用入口：只保存活动标签（按类型分派，目标标签绑定 tabId）。 */
   readonly onSave: (tabId: string) => void;
+  /** degraded 文档的兼容性确认（绑定当前基线 revision）。 */
+  readonly onConfirmCompatibility: (tabId: string) => void;
   /** 冲突状态下请求"放弃本地修改并重新读取"（确认由 App 绑定 tabId 完成）。 */
   readonly onReloadRequest: (tabId: string) => void;
-  /** 待应用的搜索结果定位目标（含目标 tabId；只对匹配的标签生效）。 */
+  /** 待应用的搜索结果定位目标（含目标 tabId；只对匹配的 TXT 标签生效）。 */
   readonly locateTarget?: (EditorLocateTarget & { readonly tabId: string }) | null;
   /** 非破坏性"搜索结果已过期"提示文案；null 不显示。 */
   readonly locateNotice?: string | null;
@@ -63,6 +80,23 @@ export function DocumentPane({
   const sessions = useEditorSessions(liveTabIds);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const editable = activeTab !== null && isEditable(activeTab);
+  /** 活动 DOCX 标签的编辑器实例注册表（状态驱动：注册/注销触发工具栏重渲染）。 */
+  const [docxEditors, setDocxEditors] = useState<ReadonlyMap<string, Editor>>(() => new Map());
+
+  const registerDocxEditor = (tabId: string, editor: Editor | null): void => {
+    setDocxEditors((previous) => {
+      const next = new Map(previous);
+      if (editor === null) {
+        next.delete(tabId);
+      } else {
+        next.set(tabId, editor);
+      }
+      return next;
+    });
+  };
+
+  const activeDocxEditor =
+    activeTab !== null && isDocxTab(activeTab) ? (docxEditors.get(activeTab.id) ?? null) : null;
 
   return (
     <>
@@ -87,6 +121,12 @@ export function DocumentPane({
               {saveStatusLabel(activeTab)}
             </span>
           )}
+        </div>
+      )}
+      {activeTab !== null && isDocxTab(activeTab) && (
+        <div className="docx-editor-header">
+          <DocxCompatibilityNotice tab={activeTab} onConfirm={onConfirmCompatibility} />
+          <DocxToolbar editor={activeDocxEditor} disabled={!editable} />
         </div>
       )}
       {activeTab === null ? (
@@ -117,23 +157,45 @@ export function DocumentPane({
           onSearchControlsChange={onSearchControlsChange}
         />
       )}
+      {/* 全部已加载 DOCX 标签的宿主保持挂载（非活动以 hidden 隐藏），
+          切换标签不销毁会话，选择/滚动/撤销历史隔离 */}
+      {tabs
+        .filter(
+          (tab): tab is DocxDocumentTabState =>
+            isDocxTab(tab) && tab.model !== null && tab.status !== 'loading',
+        )
+        .map((tab) => (
+          <div key={tab.id} hidden={tab.id !== activeTabId}>
+            <DocxEditorSessionHost
+              tab={tab}
+              editable={isEditable(tab)}
+              onContentChange={onDocxContentChange}
+              onEditorRegister={registerDocxEditor}
+            />
+          </div>
+        ))}
     </>
   );
 }
 
-/** 可编辑状态：沿用 TASK-004 的判定（read-error 仅在有成功快照时可编辑）。 */
-function isEditable(tab: TextDocumentTabState): boolean {
-  return (
+/** 可编辑状态：TXT 沿用 TASK-004 判定；DOCX 为 loaded/saving/save-error/conflict 与带快照的 read-error。 */
+function isEditable(tab: DocumentTabState): boolean {
+  if (
     tab.status === 'loaded-clean' ||
     tab.status === 'loaded-dirty' ||
     tab.status === 'saving' ||
     tab.status === 'save-error' ||
-    tab.status === 'conflict' ||
-    (tab.status === 'read-error' && tab.document !== null)
-  );
+    tab.status === 'conflict'
+  ) {
+    return true;
+  }
+  if (tab.status === 'read-error') {
+    return tab.document !== null;
+  }
+  return false;
 }
 
-function saveStatusLabel(tab: TextDocumentTabState): string {
+function saveStatusLabel(tab: DocumentTabState): string {
   switch (tab.status) {
     case 'loaded-clean':
       return '已保存';
@@ -145,6 +207,8 @@ function saveStatusLabel(tab: TextDocumentTabState): string {
       return '保存失败';
     case 'conflict':
       return '外部冲突';
+    case 'read-only':
+      return '只读';
     default:
       return '';
   }
@@ -205,7 +269,7 @@ function TabBody({
   onSearchPanelRequest,
   onSearchControlsChange,
 }: {
-  readonly tab: TextDocumentTabState;
+  readonly tab: DocumentTabState;
   readonly sessions: ReturnType<typeof useEditorSessions>;
   readonly onRetryRead: (tabId: string) => void;
   readonly onContentChange: (tabId: string, content: string) => void;
@@ -243,7 +307,7 @@ function TabBody({
         )}
         <p>无法读取文件 {tab.name}</p>
         <span>{tab.error?.message}</span>
-        <span>请在工作区文件树中选择其他 TXT 文件重试。</span>
+        <span>请在工作区文件树中选择其他文件重试。</span>
         <button className="ws-btn" type="button" onClick={() => onRetryRead(tab.id)}>
           重试
         </button>
@@ -265,6 +329,29 @@ function TabBody({
               action: { label: '重试', target: onRetryRead },
             }
           : null;
+
+  const body = (): React.JSX.Element => {
+    if (isDocxTab(tab)) {
+      // 已加载 DOCX 标签的编辑器宿主在 DocumentPane 的稳定列表中以 hidden 切换渲染；
+      // 此处只渲染空容器，避免活动/隐藏切换导致宿主重挂载（会话丢失）。
+      return <div className="doc-pane-body" />;
+    }
+    return (
+      <EditorSessionHost
+        key={tab.id}
+        tabId={tab.id}
+        content={tab.content}
+        lineSeparator={editorLineSeparator(tab)}
+        sessions={sessions}
+        onContentChange={(content) => onContentChange(tab.id, content)}
+        onSaveRequest={() => onSave(tab.id)}
+        {...(locateTarget !== null ? { locateTarget } : {})}
+        {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
+        {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
+        {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
+      />
+    );
+  };
 
   return (
     <div className="doc-pane-body">
@@ -297,19 +384,7 @@ function TabBody({
           )}
         </div>
       )}
-      <EditorSessionHost
-        key={tab.id}
-        tabId={tab.id}
-        content={tab.content}
-        lineSeparator={editorLineSeparator(tab)}
-        sessions={sessions}
-        onContentChange={(content) => onContentChange(tab.id, content)}
-        onSaveRequest={() => onSave(tab.id)}
-        {...(locateTarget !== null ? { locateTarget } : {})}
-        {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
-        {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
-        {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
-      />
+      {body()}
     </div>
   );
 }
