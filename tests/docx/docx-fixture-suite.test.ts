@@ -1,20 +1,20 @@
 // @vitest-environment node
 /**
- * TASK-007 WP0 DOCX 夹具与库能力验证（任务第 3.3 / 3.4 节）。
+ * TASK-007 DOCX 夹具与库能力验证（WP0 第 3.3 / 3.4 节；WP1 起使用正式模型与纯转换）。
  *
  * 覆盖：
- * - 夹具本身：ZIP/OOXML 结构、条目预算、失败样本形状；
+ * - 夹具本身：ZIP/OOXML 结构、条目预算（引用 `src/shared/docx.ts` 固定常量）、失败样本形状；
  * - Mammoth 导入能力：段落/空段落/标题/粗体/斜体/下划线/字号/列表/对齐/中文/emoji，
  *   以及"文字颜色不在 Mammoth 模型中、需要 JSZip 有限补充读取"的固定结论；
  * - 复杂样本的可检测性：图片、表格、批注、页眉页脚、修订、超链接；
  * - 失败样本：损坏 ZIP、伪装扩展名、缺失关键部件、加密模拟、超限文件；
- * - 最小闭环：Mammoth 导入 → 项目结构化中间模型（临时 MiniModel）→ `docx` 导出
- *   → 重新导入，正文与受支持格式语义一致；
+ * - 最小闭环：Mammoth 导入 → DocxImportSource → `importSourceToDocxModel` →
+ *   `docxModelToExportDescription` → `docx` 导出 → 重新导入，正文与受支持格式语义一致；
  * - Tiptap/ProseMirror 最小 schema：节点/标记集合、JSON 往返；
  * - 性能冒烟：普通文档构造、解析、导出在秒级预算内。
  *
- * 说明：本文件中的 MiniModel 与转换是 WP0 的验证脚手架；WP1 将用
- * `src/shared/docx.ts` 的正式模型与纯转换替换，并扩展完整测试。
+ * 说明：Mammoth 文档树 → DocxImportSource 的映射是本文件内的测试脚手架
+ * （WP2 实现正式导入器）；`exportDescriptionToDocx` 同理（WP3 实现正式导出器）。
  */
 
 import { describe, expect, it } from 'vitest';
@@ -30,39 +30,28 @@ import {
   Paragraph,
   TextRun,
 } from 'docx';
+import {
+  DOCX_MAX_KEY_XML_UNCOMPRESSED_BYTES,
+  DOCX_MAX_TOTAL_UNCOMPRESSED_BYTES,
+  DOCX_MAX_ZIP_ENTRIES,
+  validateDocxDocumentModel,
+  type DocxAlignment,
+  type DocxDocumentModel,
+  type DocxImportBlock,
+  type DocxImportRun,
+  type DocxImportRunFeature,
+  type DocxImportSource,
+  type DocxTextMark,
+  type DocxTextRun,
+} from '../../src/shared/docx';
+import {
+  docxModelToExportDescription,
+  importSourceToDocxModel,
+  type DocxExportDescription,
+} from '../../src/shared/docx-convert';
 import { buildDocxFixtures } from './docx-fixture-builder';
 
-/* ======================= 临时 MiniModel 与转换（WP1 替换） ======================= */
-
-type MiniAlignment = 'left' | 'center' | 'right' | 'both';
-
-interface MiniRun {
-  readonly text: string;
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly underline: boolean;
-  readonly fontSize: number | null;
-  readonly color: string | null;
-}
-
-type MiniBlock =
-  | {
-      readonly kind: 'paragraph';
-      readonly alignment: MiniAlignment | null;
-      readonly runs: readonly MiniRun[];
-    }
-  | { readonly kind: 'heading'; readonly level: 1 | 2 | 3; readonly runs: readonly MiniRun[] }
-  | {
-      readonly kind: 'list';
-      readonly ordered: boolean;
-      readonly level: number;
-      readonly blocks: readonly MiniBlock[];
-    };
-
-interface MiniModel {
-  readonly schemaVersion: 1;
-  readonly blocks: readonly MiniBlock[];
-}
+/* ======================= Mammoth 文档树接口（测试脚手架） ======================= */
 
 interface MammothParagraphLike {
   readonly type?: string;
@@ -89,50 +78,138 @@ interface MammothDocumentLike {
   readonly comments?: readonly unknown[];
 }
 
-/** 从 Mammoth 文档模型导入为 MiniModel（仅支持内容；不支持内容由兼容性检测另行处理）。 */
-function importMini(document: MammothDocumentLike): MiniModel {
-  const blocks: MiniBlock[] = [];
+/** Mammoth 缺失样式/对齐以字符串 "null" 表示，归一化为 null。 */
+function normStyleValue(value: unknown): string | null {
+  return typeof value === 'string' && value !== 'null' && value.length > 0 ? value : null;
+}
+
+function normAlignment(value: unknown): DocxAlignment | null {
+  return value === 'left' || value === 'center' || value === 'right' || value === 'both'
+    ? value
+    : null;
+}
+
+function mapMammothRun(
+  run: MammothRunLike,
+  extraFeatures: readonly DocxImportRunFeature[],
+): DocxImportRun {
+  const features: DocxImportRunFeature[] = [...extraFeatures];
+  let text = '';
+  for (const part of run.children ?? []) {
+    if (part.type === 'text' && typeof part.value === 'string') {
+      text += part.value;
+    } else if (part.type === 'image') {
+      features.push('image');
+    } else if (part.type !== 'text') {
+      features.push('other');
+    }
+  }
+  return {
+    text,
+    isBold: run.isBold === true,
+    isItalic: run.isItalic === true,
+    isUnderline: run.isUnderline === true,
+    fontSize: run.fontSize ?? null,
+    color: null,
+    features,
+  };
+}
+
+/** Mammoth 文档树 → DocxImportSource（WP2 正式导入器的测试版脚手架）。 */
+function mammothToImportSource(document: MammothDocumentLike): DocxImportSource {
+  const blocks: DocxImportBlock[] = [];
   for (const node of document.children ?? []) {
+    if (node.type === 'table') {
+      blocks.push({ type: 'table' });
+      continue;
+    }
     if (node.type !== 'paragraph') {
+      blocks.push({ type: 'other' });
       continue;
     }
-    const styleName = String(node.styleName ?? '');
-    const styleId = String(node.styleId ?? '');
-    const headingMatch =
-      styleName.match(/^Heading ([1-6])$/i) ?? styleId.match(/^Heading([1-6])$/i);
-    const level = headingMatch === null ? null : Number(headingMatch[1]);
-    if (level !== null && level <= 3) {
-      blocks.push({ kind: 'heading', level: level as 1 | 2 | 3, runs: runsOf(node) });
-      continue;
+    const runs: DocxImportRun[] = [];
+    for (const child of node.children ?? []) {
+      if (child.type === 'run') {
+        runs.push(mapMammothRun(child, []));
+      } else if (child.type === 'hyperlink') {
+        for (const inner of child.children ?? []) {
+          if (inner.type === 'run') {
+            runs.push(mapMammothRun(inner, ['hyperlink']));
+          }
+        }
+      } else if (child.type === 'commentReference') {
+        runs.push({
+          text: '',
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          fontSize: null,
+          color: null,
+          features: ['comment-reference'],
+        });
+      } else if (child.type === 'image') {
+        runs.push({
+          text: '',
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          fontSize: null,
+          color: null,
+          features: ['image'],
+        });
+      } else {
+        runs.push({
+          text: '',
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          fontSize: null,
+          color: null,
+          features: ['other'],
+        });
+      }
     }
-    if (node.numbering !== null && node.numbering !== undefined) {
-      blocks.push({
-        kind: 'list',
-        ordered: node.numbering.isOrdered === true,
-        level: Number(node.numbering.level ?? 0),
-        blocks: [{ kind: 'paragraph', alignment: alignmentOf(node), runs: runsOf(node) }],
-      });
-      continue;
-    }
-    blocks.push({ kind: 'paragraph', alignment: alignmentOf(node), runs: runsOf(node) });
+    const numbering =
+      node.numbering === null || node.numbering === undefined
+        ? null
+        : { ordered: node.numbering.isOrdered === true, level: Number(node.numbering.level ?? 0) };
+    blocks.push({
+      type: 'paragraph',
+      styleId: normStyleValue(node.styleId),
+      styleName: normStyleValue(node.styleName),
+      alignment: normAlignment(node.alignment),
+      numbering,
+      runs,
+    });
   }
-  return { schemaVersion: 1, blocks };
+  return { documentFeatures: [], blocks };
 }
 
-function alignmentOf(node: MammothParagraphLike): MiniAlignment | null {
-  switch (node.alignment) {
-    case 'left':
-    case 'center':
-    case 'right':
-    case 'both':
-      return node.alignment;
-    default:
-      return null;
+/** 从 Mammoth 树经正式导入转换得到模型（测试脚手架 + 产品转换）。 */
+function importFixtureModel(document: MammothDocumentLike): DocxDocumentModel {
+  const result = importSourceToDocxModel(mammothToImportSource(document));
+  expect(result.status).toBe('ok');
+  if (result.status !== 'ok') {
+    throw new Error('unreachable');
   }
+  return result.model;
 }
 
-function runsOf(node: MammothParagraphLike): readonly MiniRun[] {
-  const runs: MiniRun[] = [];
+/** 仅保留 Mammoth 无法携带的断言：mammoth run 的文本与 mark 标志（测试脚手架）。 */
+function mammothRunsOf(node: MammothParagraphLike): readonly {
+  readonly text: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+  readonly fontSize: number | null;
+}[] {
+  const runs: {
+    text: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    fontSize: number | null;
+  }[] = [];
   for (const child of node.children ?? []) {
     if (child.type !== 'run') {
       continue;
@@ -147,29 +224,43 @@ function runsOf(node: MammothParagraphLike): readonly MiniRun[] {
       italic: child.isItalic === true,
       underline: child.isUnderline === true,
       fontSize: child.fontSize ?? null,
-      color: null,
     });
   }
   return runs;
 }
 
-function docxAlignment(alignment: MiniAlignment | null) {
-  switch (alignment) {
-    case 'center':
-      return AlignmentType.CENTER;
-    case 'right':
-      return AlignmentType.RIGHT;
-    case 'both':
-      return AlignmentType.JUSTIFIED;
-    default:
-      return undefined;
-  }
-}
-
-/** 把 MiniModel 导出为 DOCX 字节（`docx` 库基础重建）。 */
-async function exportMini(model: MiniModel): Promise<Buffer> {
-  const children = blocksToDocx(model.blocks);
-  const doc = new Document({
+/** 导出描述 → `docx` 库 Document（WP3 正式导出器的测试版脚手架）。 */
+function exportDescriptionToDocx(description: DocxExportDescription): Document {
+  const children = description.paragraphs.map((entry) => {
+    const options: Record<string, unknown> = { children: entry.runs.map(runToTextRun) };
+    if (entry.kind === 'heading' && entry.headingLevel !== null) {
+      options.heading =
+        entry.headingLevel === 1
+          ? HeadingLevel.HEADING_1
+          : entry.headingLevel === 2
+            ? HeadingLevel.HEADING_2
+            : HeadingLevel.HEADING_3;
+    }
+    if (entry.alignment !== null) {
+      options.alignment =
+        entry.alignment === 'center'
+          ? AlignmentType.CENTER
+          : entry.alignment === 'right'
+            ? AlignmentType.RIGHT
+            : entry.alignment === 'both'
+              ? AlignmentType.JUSTIFIED
+              : AlignmentType.LEFT;
+    }
+    if (entry.list !== null) {
+      if (entry.list.ordered) {
+        options.numbering = { reference: 'mini-ordered', level: entry.list.level };
+      } else {
+        options.bullet = { level: entry.list.level };
+      }
+    }
+    return new Paragraph(options as ConstructorParameters<typeof Paragraph>[0]);
+  });
+  return new Document({
     creator: 'wenshu-roundtrip',
     title: 'wenshu-roundtrip',
     description: 'wenshu-roundtrip',
@@ -191,104 +282,51 @@ async function exportMini(model: MiniModel): Promise<Buffer> {
     },
     sections: [{ children }],
   });
-  return (await Packer.toBuffer(doc)) as Buffer;
 }
 
-function blocksToDocx(blocks: readonly MiniBlock[]): readonly Paragraph[] {
-  const out: Paragraph[] = [];
-  for (const block of blocks) {
-    if (block.kind === 'paragraph') {
-      const alignment = docxAlignment(block.alignment);
-      out.push(
-        new Paragraph({
-          children: runsToDocx(block.runs),
-          ...(alignment === undefined ? {} : { alignment }),
-        }),
-      );
-    } else if (block.kind === 'heading') {
-      const heading =
-        block.level === 1
-          ? HeadingLevel.HEADING_1
-          : block.level === 2
-            ? HeadingLevel.HEADING_2
-            : HeadingLevel.HEADING_3;
-      out.push(new Paragraph({ children: runsToDocx(block.runs), heading }));
-    } else if (block.kind === 'list') {
-      for (const inner of block.blocks) {
-        if (inner.kind !== 'paragraph') {
-          continue;
-        }
-        out.push(
-          new Paragraph({
-            children: runsToDocx(inner.runs),
-            ...(block.ordered
-              ? { numbering: { reference: 'mini-ordered', level: block.level } }
-              : { bullet: { level: block.level } }),
-          }),
-        );
-      }
+function runToTextRun(run: DocxTextRun): TextRun {
+  const options: { text: string } & Record<string, unknown> = { text: run.text };
+  for (const mark of run.marks) {
+    if (mark.type === 'bold') {
+      options.bold = true;
+    } else if (mark.type === 'italic') {
+      options.italics = true;
+    } else if (mark.type === 'underline') {
+      options.underline = {};
+    } else if (mark.type === 'font-size') {
+      options.size = mark.value * 2;
+    } else {
+      options.color = mark.value;
     }
   }
-  return out;
+  return new TextRun(options as ConstructorParameters<typeof TextRun>[0]);
 }
 
-function runsToDocx(runs: readonly MiniRun[]): readonly TextRun[] {
-  return runs.map((run) => {
-    const options: { text: string } & Record<string, unknown> = { text: run.text };
-    if (run.bold) {
-      options.bold = true;
-    }
-    if (run.italic) {
-      options.italics = true;
-    }
-    if (run.underline) {
-      options.underline = {};
-    }
-    if (run.fontSize !== null) {
-      options.size = run.fontSize * 2;
-    }
-    if (run.color !== null) {
-      options.color = run.color;
-    }
-    return new TextRun(options as ConstructorParameters<typeof TextRun>[0]);
-  });
-}
-
-/** 归一化 MiniModel（去 null、去空 run、颜色字段统一为 null），用于语义比较。 */
-function normalizeModel(model: MiniModel): unknown {
-  const normRuns = (runs: readonly MiniRun[]): readonly MiniRun[] =>
-    runs.filter((run) => run.text.length > 0).map((run) => ({ ...run, color: null }));
-  const normBlocks = (blocks: readonly MiniBlock[]): readonly MiniBlock[] =>
-    blocks
-      .filter((block) => {
-        if (block.kind === 'list') {
-          return block.blocks.length > 0;
-        }
-        return block.runs.some((run) => run.text.length > 0);
-      })
-      .map((block) =>
-        block.kind === 'list'
-          ? { ...block, blocks: normBlocks(block.blocks) }
-          : { ...block, runs: normRuns(block.runs) },
-      );
-  return normBlocks(model.blocks);
+/** 深拷贝模型并去掉 color marks（Mammoth 模型不含颜色，round-trip 比较用）。 */
+function stripColorMarks(model: DocxDocumentModel): DocxDocumentModel {
+  const stripMarks = (marks: readonly DocxTextMark[]): readonly DocxTextMark[] =>
+    marks.filter((mark) => mark.type !== 'color');
+  const stripRuns = (runs: readonly DocxTextRun[]): readonly DocxTextRun[] =>
+    runs.map((r) => ({ text: r.text, marks: stripMarks(r.marks) }));
+  const stripBlocks = (blocks: DocxDocumentModel['blocks']): DocxDocumentModel['blocks'] =>
+    blocks.map((block) => {
+      if (block.kind === 'paragraph') {
+        return { kind: 'paragraph', alignment: block.alignment, runs: stripRuns(block.runs) };
+      }
+      if (block.kind === 'heading') {
+        return { kind: 'heading', level: block.level, runs: stripRuns(block.runs) };
+      }
+      return { kind: block.kind, level: block.level, blocks: stripBlocks(block.blocks) };
+    });
+  return { schemaVersion: 1, blocks: stripBlocks(model.blocks) };
 }
 
 /* ======================= 夹具结构 ======================= */
 
-const ZIP_BUDGETS = {
-  /** 单个关键 XML 解压上限：1 MiB（WP0 冻结，见报告第 5 节）。 */
-  maxKeyXmlUncompressed: 1024 * 1024,
-  /** 总解压上限：64 MiB。 */
-  maxTotalUncompressed: 64 * 1024 * 1024,
-  /** 条目数上限：128。 */
-  maxEntries: 128,
-};
-
 async function loadZip(bytes: Buffer): Promise<JSZip> {
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: false });
   const entries = Object.keys(zip.files);
-  expect(entries.length).toBeLessThanOrEqual(ZIP_BUDGETS.maxEntries);
+  expect(entries.length).toBeLessThanOrEqual(DOCX_MAX_ZIP_ENTRIES);
   let total = 0;
   for (const name of entries) {
     if (!zip.files[name]?.dir) {
@@ -296,7 +334,7 @@ async function loadZip(bytes: Buffer): Promise<JSZip> {
       total += object._data.uncompressedSize;
     }
   }
-  expect(total).toBeLessThanOrEqual(ZIP_BUDGETS.maxTotalUncompressed);
+  expect(total).toBeLessThanOrEqual(DOCX_MAX_TOTAL_UNCOMPRESSED_BYTES);
   return zip;
 }
 
@@ -316,7 +354,7 @@ describe('DOCX 夹具（TASK-007 WP0，第 3.3 节）', () => {
         expect(names).toContain('word/document.xml');
         expect(names).toContain('word/styles.xml');
         const docXml = await zip.file('word/document.xml')?.async('string');
-        expect(docXml?.length ?? 0).toBeLessThanOrEqual(ZIP_BUDGETS.maxKeyXmlUncompressed);
+        expect(docXml?.length ?? 0).toBeLessThanOrEqual(DOCX_MAX_KEY_XML_UNCOMPRESSED_BYTES);
       }
       if (id === 'fail-missing-parts' || id === 'fail-encrypted-sim') {
         expect(names).not.toContain('word/document.xml');
@@ -367,13 +405,15 @@ async function importWithMammoth(bytes: Buffer): Promise<MammothDocumentLike> {
 }
 
 describe('Mammoth 导入映射（TASK-007 WP0，第 3.4 节结论 1/2）', () => {
-  it('普通段落、空段落、中文、英文、emoji 保留', async () => {
+  it('普通段落、空段落、中文、英文、emoji 保留（Mammoth 树 → 正式模型）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-plain']!);
-    const texts = (doc.children ?? []).map((p) =>
-      runsOf(p)
-        .map((r) => r.text)
-        .join(''),
+    const model = importFixtureModel(doc);
+    expect(validateDocxDocumentModel(model)).toEqual([]);
+    const texts = model.blocks.map((block) =>
+      block.kind === 'paragraph' || block.kind === 'heading'
+        ? block.runs.map((r) => r.text).join('')
+        : '',
     );
     expect(texts).toEqual([
       '第一段：中文内容 English text.',
@@ -387,19 +427,16 @@ describe('Mammoth 导入映射（TASK-007 WP0，第 3.4 节结论 1/2）', () =>
   it('标题 1-3 通过 styleName/styleId 识别', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-headings']!);
-    const blocks = importMini(doc).blocks;
-    expect(blocks.map((b) => (b.kind === 'heading' ? `${b.kind}:${b.level}` : b.kind))).toEqual([
-      'heading:1',
-      'heading:2',
-      'heading:3',
-      'paragraph',
-    ]);
+    const model = importFixtureModel(doc);
+    expect(
+      model.blocks.map((b) => (b.kind === 'heading' ? `${b.kind}:${b.level}` : b.kind)),
+    ).toEqual(['heading:1', 'heading:2', 'heading:3', 'paragraph']);
   });
 
-  it('粗体/斜体/下划线进入 run 模型（下划线在模型而非 HTML）', async () => {
+  it('粗体/斜体/下划线进入 Mammoth run 模型（下划线在模型而非 HTML）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-marks']!);
-    const runs = runsOf((doc.children ?? [])[0]!);
+    const runs = mammothRunsOf((doc.children ?? [])[0]!);
     expect(runs.map((r) => ({ t: r.text, b: r.bold, i: r.italic, u: r.underline }))).toEqual([
       { t: '粗体', b: true, i: false, u: false },
       { t: ' 斜体', b: false, i: true, u: false },
@@ -407,12 +444,25 @@ describe('Mammoth 导入映射（TASK-007 WP0，第 3.4 节结论 1/2）', () =>
       { t: ' 粗斜下', b: true, i: true, u: true },
       { t: ' 无格式', b: false, i: false, u: false },
     ]);
+    // 正式模型中的 marks 与规范顺序一致
+    const model = importFixtureModel(doc);
+    const runs2 = model.blocks[0];
+    expect(runs2).toBeDefined();
+    if (runs2?.kind === 'paragraph') {
+      expect(runs2.runs.map((r) => r.marks.map((m) => m.type))).toEqual([
+        ['bold'],
+        ['italic'],
+        ['underline'],
+        ['bold', 'italic', 'underline'],
+        [],
+      ]);
+    }
   });
 
-  it('字号进入 run 模型（fontSize 点数），文字颜色不在 Mammoth 模型中', async () => {
+  it('字号进入 Mammoth run 模型（fontSize 点数），文字颜色不在 Mammoth 模型中', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-font-size-color']!);
-    const runs = runsOf((doc.children ?? [])[0]!);
+    const runs = mammothRunsOf((doc.children ?? [])[0]!);
     expect(runs.map((r) => r.fontSize)).toEqual([9, 10.5, 14, null, null]);
     // WP0 固定结论：Mammoth 模型不含 color，需要 JSZip 对 w:color 做有限补充读取
     const raw = (doc.children ?? [])[0] as MammothParagraphLike;
@@ -433,34 +483,56 @@ describe('Mammoth 导入映射（TASK-007 WP0，第 3.4 节结论 1/2）', () =>
     expect(colors.map((m) => m[1])).toEqual(['FF0000', '336699']);
   });
 
-  it('项目符号与编号列表进入 numbering 模型（含层级）', async () => {
+  it('项目符号与编号列表进入正式模型（含层级与嵌套）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-lists']!);
-    const raw = doc.children ?? [];
-    const listInfo = raw
-      .filter((p) => p.numbering !== null && p.numbering !== undefined)
-      .map((p) => ({
-        ordered: p.numbering?.isOrdered,
-        level: Number(p.numbering?.level ?? 0),
-        text: runsOf(p)
-          .map((r) => r.text)
-          .join(''),
-      }));
-    expect(listInfo).toEqual([
-      { ordered: false, level: 0, text: '项目一' },
-      { ordered: false, level: 0, text: '项目二' },
-      { ordered: false, level: 1, text: '嵌套项目' },
-      { ordered: true, level: 0, text: '编号一' },
-      { ordered: true, level: 0, text: '编号二' },
-      { ordered: true, level: 1, text: '嵌套编号' },
-    ]);
+    const model = importFixtureModel(doc);
+    expect(validateDocxDocumentModel(model)).toEqual([]);
+    expect(
+      model.blocks.map((b) =>
+        b.kind === 'bullet-list' || b.kind === 'ordered-list'
+          ? `${b.kind}:${b.level}(${b.blocks.length})`
+          : b.kind,
+      ),
+    ).toEqual(['bullet-list:0(3)', 'ordered-list:0(3)']);
+    const bullet = model.blocks[0];
+    expect(bullet).toBeDefined();
+    if (bullet === undefined) {
+      return;
+    }
+    expect(bullet.kind).toBe('bullet-list');
+    if (bullet.kind === 'bullet-list') {
+      expect(bullet.blocks.map((b) => (b.kind === 'paragraph' ? runText(b) : 'nested'))).toEqual([
+        '项目一',
+        '项目二',
+        'nested',
+      ]);
+      const nested = bullet.blocks[2];
+      expect(nested).toBeDefined();
+      if (nested !== undefined && nested.kind === 'bullet-list') {
+        expect(nested.level).toBe(1);
+      }
+    }
+    const ordered = model.blocks[1];
+    expect(ordered).toBeDefined();
+    if (ordered === undefined) {
+      return;
+    }
+    expect(ordered.kind).toBe('ordered-list');
+    if (ordered.kind === 'ordered-list') {
+      const nested = ordered.blocks[2];
+      expect(nested).toBeDefined();
+      if (nested !== undefined && nested.kind === 'ordered-list') {
+        expect(nested.level).toBe(1);
+      }
+    }
   });
 
-  it('段落对齐进入 alignment 模型（justify 映射为 both）', async () => {
+  it('段落对齐进入正式模型（justify 映射为 both）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-alignment']!);
-    const blocks = importMini(doc).blocks;
-    expect(blocks.map((b) => (b.kind === 'paragraph' ? b.alignment : null))).toEqual([
+    const model = importFixtureModel(doc);
+    expect(model.blocks.map((b) => (b.kind === 'paragraph' ? b.alignment : null))).toEqual([
       'left',
       'center',
       'right',
@@ -472,14 +544,21 @@ describe('Mammoth 导入映射（TASK-007 WP0，第 3.4 节结论 1/2）', () =>
   it('空文档无块', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['ok-empty']!);
-    expect(importMini(doc).blocks).toEqual([]);
+    expect(importFixtureModel(doc).blocks).toEqual([]);
   });
 });
+
+function runText(block: {
+  readonly kind: string;
+  readonly runs?: readonly { readonly text: string }[];
+}): string {
+  return (block.runs ?? []).map((r) => r.text).join('');
+}
 
 /* ======================= 复杂样本可检测性 ======================= */
 
 describe('复杂样本可检测性（TASK-007 WP0，兼容性矩阵）', () => {
-  it('图片：进入 run 子节点 image 类型（降级/省略）', async () => {
+  it('图片：进入 Mammoth run 子节点 image 类型（降级/省略）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['complex-image']!);
     const para = (doc.children ?? [])[0] as MammothParagraphLike;
@@ -489,13 +568,13 @@ describe('复杂样本可检测性（TASK-007 WP0，兼容性矩阵）', () => {
     expect(childTypes).toContain('image');
   });
 
-  it('表格：进入 table 类型节点（降级/省略）', async () => {
+  it('表格：进入 Mammoth table 类型节点（降级/省略）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['complex-table']!);
     expect((doc.children ?? []).map((n) => n.type)).toContain('table');
   });
 
-  it('批注：进入 comments 模型与 commentReference 子节点', async () => {
+  it('批注：进入 Mammoth comments 模型与 commentReference 子节点', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['complex-comment']!);
     expect(doc.comments?.length ?? 0).toBeGreaterThan(0);
@@ -523,7 +602,7 @@ describe('复杂样本可检测性（TASK-007 WP0，兼容性矩阵）', () => {
     // WP0 固定结论：Mammoth 把修订内容当普通正文（w:delText 也进入正文）
     const text = (doc.children ?? [])
       .map((p) =>
-        runsOf(p)
+        mammothRunsOf(p)
           .map((r) => r.text)
           .join(''),
       )
@@ -541,7 +620,7 @@ describe('复杂样本可检测性（TASK-007 WP0，兼容性矩阵）', () => {
     expect(plainXml).not.toContain('<w:ins ');
   });
 
-  it('超链接：进入 hyperlink 类型节点（降级为可见文本）', async () => {
+  it('超链接：进入 Mammoth hyperlink 类型节点（降级为可见文本）', async () => {
     const fixtures = await buildDocxFixtures();
     const doc = await importWithMammoth(fixtures.files['complex-link']!);
     const para = (doc.children ?? [])[0] as MammothParagraphLike;
@@ -577,135 +656,64 @@ describe('失败样本（TASK-007 WP0，第 3.3 节）', () => {
 
 /* ======================= 最小闭环：导入 → 模型 → 导出 → 重新打开 ======================= */
 
-describe('最小闭环（TASK-007 WP0 门禁：导入/编辑 schema/导出/重新打开）', () => {
-  it('ok-lists 导出后重新导入：正文、编号/项目符号与层级保持', async () => {
+describe('最小闭环（TASK-007 门禁：导入/编辑 schema/导出/重新打开）', () => {
+  it('ok-lists 导出后重新导入：正式模型完全一致（列表分组/层级/正文）', async () => {
     const fixtures = await buildDocxFixtures();
-    const first = importMini(await importWithMammoth(fixtures.files['ok-lists']!));
-    const exported = await exportMini(first);
-    const second = importMini(await importWithMammoth(exported));
-    const a = normalizeModel(first) as { kind: string; ordered: boolean; level: number }[];
-    const b = normalizeModel(second) as { kind: string; ordered: boolean; level: number }[];
-    // 列表块按 (ordered, level) 逐块对齐比较；同一 (ordered, level) 的连续段落合并为一块
-    const collapse = (blocks: { kind: string; ordered: boolean; level: number }[]): string[] => {
-      const out: string[] = [];
-      let pending: string | null = null;
-      let prevKey: string | null = null;
-      for (const block of blocks) {
-        if (block.kind !== 'list') {
-          if (pending !== null) {
-            out.push(pending);
-            pending = null;
-          }
-          prevKey = null;
-          out.push('para');
-          continue;
-        }
-        const key = `${block.ordered ? 'ol' : 'ul'}:${block.level}`;
-        if (pending === null) {
-          pending = key;
-          prevKey = key;
-        } else if (key === prevKey) {
-          prevKey = key;
-        } else {
-          out.push(pending);
-          pending = key;
-          prevKey = key;
-        }
-      }
-      if (pending !== null) {
-        out.push(pending);
-      }
-      return out;
-    };
-    expect(collapse(b)).toEqual(collapse(a));
+    const first = importFixtureModel(await importWithMammoth(fixtures.files['ok-lists']!));
+    const exported = await Packer.toBuffer(
+      exportDescriptionToDocx(docxModelToExportDescription(first)),
+    );
+    const second = importFixtureModel(await importWithMammoth(exported));
+    expect(second).toEqual(first);
+    expect(validateDocxDocumentModel(second)).toEqual([]);
   });
 
   it('混合文档（标题+marks+字号+对齐+空段落+编号列表）导出后重新导入语义一致', async () => {
-    const model: MiniModel = {
+    const model: DocxDocumentModel = {
       schemaVersion: 1,
       blocks: [
-        {
-          kind: 'heading',
-          level: 1,
-          runs: [
-            {
-              text: '标题',
-              bold: false,
-              italic: false,
-              underline: false,
-              fontSize: null,
-              color: null,
-            },
-          ],
-        },
+        { kind: 'heading', level: 1, runs: [{ text: '标题', marks: [] }] },
         {
           kind: 'paragraph',
           alignment: 'center',
           runs: [
-            {
-              text: '粗体',
-              bold: true,
-              italic: false,
-              underline: false,
-              fontSize: null,
-              color: null,
-            },
+            { text: '粗体', marks: [{ type: 'bold' }] },
             {
               text: ' 红色',
-              bold: false,
-              italic: false,
-              underline: false,
-              fontSize: 14,
-              color: 'FF0000',
-            },
-          ],
-        },
-        {
-          kind: 'paragraph',
-          alignment: null,
-          runs: [
-            { text: '', bold: false, italic: false, underline: false, fontSize: null, color: null },
-          ],
-        },
-        {
-          kind: 'list',
-          ordered: true,
-          level: 0,
-          blocks: [
-            {
-              kind: 'paragraph',
-              alignment: null,
-              runs: [
-                {
-                  text: '编号一',
-                  bold: false,
-                  italic: false,
-                  underline: false,
-                  fontSize: null,
-                  color: null,
-                },
+              marks: [
+                { type: 'color', value: '#FF0000' },
+                { type: 'font-size', value: 14 },
               ],
             },
           ],
         },
+        { kind: 'paragraph', alignment: null, runs: [] },
+        {
+          kind: 'ordered-list',
+          level: 0,
+          blocks: [{ kind: 'paragraph', alignment: null, runs: [{ text: '编号一', marks: [] }] }],
+        },
       ],
     };
-    const exported = await exportMini(model);
-    const reimported = importMini(await importWithMammoth(exported));
-    // 文字颜色经 JSZip 补充读取（Mammoth 模型不含）：往返比较归一化掉颜色字段，
+    const exported = await Packer.toBuffer(
+      exportDescriptionToDocx(docxModelToExportDescription(model)),
+    );
+    const reimported = importFixtureModel(await importWithMammoth(exported));
+    // 文字颜色经 JSZip 补充读取（Mammoth 模型不含）：比较时去掉 color marks，
     // 并在下方直接断言导出字节包含 w:color（导出映射正确）
-    expect(normalizeModel(reimported)).toEqual(normalizeModel(model));
+    expect(stripColorMarks(reimported)).toEqual(stripColorMarks(model));
     const exportedZip = await loadZip(exported);
     const xml = await exportedZip.file('word/document.xml')?.async('string');
     expect(xml).toContain('<w:color w:val="FF0000"/>');
     expect(xml).toContain('<w:sz w:val="28"/>');
-    expect(JSON.stringify(reimported)).toContain('"color":null');
   });
 
   it('round-trip 产物仍被 Mammoth 识别为合法 DOCX（重新打开成功）', async () => {
     const fixtures = await buildDocxFixtures();
-    const model = importMini(await importWithMammoth(fixtures.files['ok-headings']!));
-    const exported = await exportMini(model);
+    const model = importFixtureModel(await importWithMammoth(fixtures.files['ok-headings']!));
+    const exported = await Packer.toBuffer(
+      exportDescriptionToDocx(docxModelToExportDescription(model)),
+    );
     const zip = await loadZip(exported);
     expect(Object.keys(zip.files)).toContain('word/document.xml');
     expect(Object.keys(zip.files)).toContain('word/styles.xml');
@@ -794,7 +802,7 @@ describe('Tiptap/ProseMirror 最小 schema（TASK-007 WP0，第 3.4 节结论 3�
     ).content;
     expect(marks[1]?.marks?.[0]?.attrs?.color).toBe('#FF0000');
     expect(marks[1]?.marks?.[0]?.attrs?.fontSize).toBe('18px');
-    // 默认属性（如 color:null）会被物化：字符串比较不相等但语义等价（WP1 转换时归一化）
+    // 默认属性（如 color:null）会被物化：字符串比较不相等但语义等价（转换时归一化）
     expect(JSON.stringify(back)).not.toBe(JSON.stringify(jsonDoc));
   });
 });
@@ -841,8 +849,10 @@ describe('性能冒烟（TASK-007 WP0，第 3.4 节结论 6）', () => {
     });
     const started = Date.now();
     const bytes = (await Packer.toBuffer(doc)) as Buffer;
-    const imported = importMini(await importWithMammoth(bytes));
-    const exported = await exportMini(imported);
+    const model = importFixtureModel(await importWithMammoth(bytes));
+    const exported = await Packer.toBuffer(
+      exportDescriptionToDocx(docxModelToExportDescription(model)),
+    );
     const elapsed = Date.now() - started;
     expect(bytes.byteLength).toBeGreaterThan(0);
     expect(exported.byteLength).toBeGreaterThan(0);
