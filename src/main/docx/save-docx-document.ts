@@ -8,7 +8,8 @@
  * 2. 重新校验工作区、相对路径、扩展名、符号链接、真实路径与普通文件；
  * 3. 有界读取磁盘文件并计算 SHA-256，与 `expectedRevision` 不一致返回 `CONFLICT`
  *    （此时不创建任何文件）；
- * 4. 重新导入磁盘文件判断兼容性（第 4.2 / 5.3 节不变量 10-11）：
+ * 4. 重新导入磁盘文件判断兼容性（0 字节占位文件按 supported 空白文档处理；
+ *    其余输入遵循第 4.2 / 5.3 节不变量 10-11）：
  *    `read-only` → READ_ONLY_DOCUMENT；`degraded` 且没有
  *    `compatibilityConfirmationRevision === expectedRevision`（绑定当前磁盘 revision
  *    的用户确认）→ COMPATIBILITY_CONFIRMATION_REQUIRED；
@@ -60,7 +61,7 @@ import {
 } from '../document/write-safety';
 import { exportDocxDocument, verifyGeneratedDocxDocument } from './export-docx';
 import { inspectDocxPackage } from './inspect-docx-package';
-import { importDocxDocument } from './import-docx';
+import { importDocxDocument, isEmptyDocxPlaceholder } from './import-docx';
 
 /** 保存器文件系统与产物适配器；生产环境为默认实现，测试环境可注入 mock。 */
 export interface SaveDocxAdapters {
@@ -220,23 +221,27 @@ export async function saveDocxDocument(
     return { status: 'error', error: docxDocumentError('CONFLICT') };
   }
 
-  // 5. 重新导入磁盘文件判断兼容性（revision 一致 ⇒ 磁盘内容 = 用户打开并确认过的文档）
-  const diskInspection = await inspectDocxPackage(diskBytes);
-  if (diskInspection.status === 'error') {
-    return { status: 'error', error: diskInspection.error };
-  }
-  const diskImported = await importDocxDocument(diskBytes, diskInspection.inspection);
-  if (diskImported.status === 'error') {
-    return { status: 'error', error: docxDocumentError('READ_FAILED') };
-  }
-  if (diskImported.compatibility.level === 'read-only') {
-    return { status: 'error', error: docxDocumentError('READ_ONLY_DOCUMENT') };
-  }
-  if (
-    diskImported.compatibility.level === 'degraded' &&
-    request.compatibilityConfirmationRevision !== request.expectedRevision
-  ) {
-    return { status: 'error', error: docxDocumentError('COMPATIBILITY_CONFIRMATION_REQUIRED') };
+  // 5. 重新导入磁盘文件判断兼容性（revision 一致 ⇒ 磁盘内容 = 用户打开并确认过的文档）。
+  // 0 字节占位文件在读取阶段已被定义为 supported 空白文档；首次保存时跳过 OOXML 复检，
+  // 但仍执行 revision、备份、生成产物验证与替换协议。非零输入继续严格复检。
+  if (!isEmptyDocxPlaceholder(diskBytes)) {
+    const diskInspection = await inspectDocxPackage(diskBytes);
+    if (diskInspection.status === 'error') {
+      return { status: 'error', error: diskInspection.error };
+    }
+    const diskImported = await importDocxDocument(diskBytes, diskInspection.inspection);
+    if (diskImported.status === 'error') {
+      return { status: 'error', error: docxDocumentError('READ_FAILED') };
+    }
+    if (diskImported.compatibility.level === 'read-only') {
+      return { status: 'error', error: docxDocumentError('READ_ONLY_DOCUMENT') };
+    }
+    if (
+      diskImported.compatibility.level === 'degraded' &&
+      request.compatibilityConfirmationRevision !== request.expectedRevision
+    ) {
+      return { status: 'error', error: docxDocumentError('COMPATIBILITY_CONFIRMATION_REQUIRED') };
+    }
   }
 
   // 6. 滚动备份：写入自身排他临时文件 → 刷盘 → 关闭 → 安全替换备份

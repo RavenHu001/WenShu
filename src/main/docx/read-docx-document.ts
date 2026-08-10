@@ -11,8 +11,9 @@
  * 5. 读取前大小检查（≤ 20 MiB）；
  * 6. 有界读取（最多 20 MiB + 1 字节）并再次确认实际长度；
  * 7. 对原始完整字节计算 SHA-256 revision；
- * 8. ZIP/OOXML 结构与资源预算检查（`inspectDocxPackage`）；
- * 9. 语义导入（`importDocxDocument`）生成模型与兼容性报告；
+ * 8. 0 字节 `.docx` 占位文件直接映射为空白模型；其余输入执行 ZIP/OOXML 结构与资源预算检查
+ *    （`inspectDocxPackage`）；
+ * 9. 非占位输入执行语义导入（`importDocxDocument`）生成模型与兼容性报告；
  * 10. 返回文档快照，或把失败映射为稳定错误。
  *
  * ## 安全边界
@@ -39,7 +40,12 @@ import {
   type FileStatLike,
 } from '../document/path-validation';
 import { inspectDocxPackage } from './inspect-docx-package';
-import { importDocxDocument } from './import-docx';
+import {
+  importDocxDocument,
+  importEmptyDocxPlaceholder,
+  isEmptyDocxPlaceholder,
+  type ImportDocxResult,
+} from './import-docx';
 
 /** 文件系统适配函数集合；生产环境为 `node:fs/promises`，测试环境可注入 mock。 */
 export interface ReadDocxAdapters {
@@ -138,16 +144,21 @@ export async function readDocxDocument(
   // 7. revision 基于原始完整字节（含全部结构，不依赖解析结果）
   const revision = createHash('sha256').update(bytes).digest('hex');
 
-  // 8. ZIP/OOXML 结构与资源预算检查
-  const inspection = await inspectDocxPackage(bytes);
-  if (inspection.status === 'error') {
-    return { status: 'error', error: inspection.error };
-  }
-
-  // 9. 语义导入 → 模型与兼容性报告
-  const imported = await importDocxDocument(bytes, inspection.inspection);
-  if (imported.status === 'error') {
-    return { status: 'error', error: imported.error };
+  // 8-9. 0 字节 `.docx` 是 Windows/WPS 惰性占位文件：按空白文档加载；
+  // 其余输入仍必须通过 ZIP/OOXML 结构预算检查与语义导入，不能把一般损坏文件当作空白文档。
+  let imported: Extract<ImportDocxResult, { status: 'ok' }>;
+  if (isEmptyDocxPlaceholder(bytes)) {
+    imported = importEmptyDocxPlaceholder();
+  } else {
+    const inspection = await inspectDocxPackage(bytes);
+    if (inspection.status === 'error') {
+      return { status: 'error', error: inspection.error };
+    }
+    const result = await importDocxDocument(bytes, inspection.inspection);
+    if (result.status === 'error') {
+      return { status: 'error', error: result.error };
+    }
+    imported = result;
   }
 
   // 10. 返回只读快照

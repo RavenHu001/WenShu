@@ -307,6 +307,18 @@ describe('readDocxDocument', () => {
     }
   });
 
+  it('0 字节 .docx 占位文件按可编辑空白文档加载', async () => {
+    await writeFile(join(workspaceRoot, 'zero-placeholder.docx'), Buffer.alloc(0));
+    const result = await readDocxDocument(workspaceRoot, 'zero-placeholder.docx');
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.document.size).toBe(0);
+      expect(result.document.revision).toBe(sha256Of(Buffer.alloc(0)));
+      expect(result.document.model.blocks).toEqual([]);
+      expect(result.document.compatibility).toEqual({ level: 'supported', warnings: [] });
+    }
+  });
+
   it('空白文档变体：无 w:body / 空 body / 仅 sectPr / 空段落均按空白文档加载（不拒绝）', async () => {
     const ns =
       ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';

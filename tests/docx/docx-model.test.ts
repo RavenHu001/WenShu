@@ -395,5 +395,8 @@ describe('docxCompatibilityReport', () => {
       expect(warning.message.length).toBeGreaterThan(0);
       expect(JSON.stringify(warning)).not.toContain('\\');
     }
+    expect(docxCompatibilityWarning('encrypted-protected').message).toBe(
+      '文档启用了编辑保护，只能只读显示',
+    );
   });
 });

@@ -153,7 +153,7 @@ describe('inspectDocxPackage：文档级特性', () => {
     expect(inspection.documentFeatures).toContain('revision');
   });
 
-  it('settings.xml 的 w:documentProtection → encrypted-protected 特性', async () => {
+  it('settings.xml 中启用的 w:documentProtection → encrypted-protected 特性', async () => {
     const settings =
       '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:documentProtection w:edit="readOnly" w:enforcement="1"/></w:settings>';
     const bytes = await minimalDocx('<w:document><w:body><w:p/></w:body></w:document>', {
@@ -161,6 +161,45 @@ describe('inspectDocxPackage：文档级特性', () => {
     });
     const inspection = await okInspection(bytes);
     expect(inspection.documentFeatures).toContain('encrypted-protected');
+  });
+
+  it.each(['0', 'false', 'off'])(
+    'WPS/OOXML 未启用的 documentProtection（enforcement=%s）不降级为只读',
+    async (enforcement) => {
+      const settings =
+        `<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+        `<w:documentProtection w:enforcement="${enforcement}"/></w:settings>`;
+      const bytes = await minimalDocx(
+        '<w:document><w:body><w:p><w:r><w:t>WPS 正文</w:t></w:r></w:p></w:body></w:document>',
+        { 'word/settings.xml': settings },
+      );
+      const inspection = await okInspection(bytes);
+      expect(inspection.documentFeatures).not.toContain('encrypted-protected');
+    },
+  );
+
+  it.each(['1', 'true', 'on'])(
+    'documentProtection 的 OOXML 真值（enforcement=%s）均启用只读保护',
+    async (enforcement) => {
+      const settings =
+        `<?xml version="1.0"?><x:settings xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+        `<x:documentProtection x:enforcement='${enforcement}'/></x:settings>`;
+      const bytes = await minimalDocx('<w:document><w:body><w:p/></w:body></w:document>', {
+        'word/settings.xml': settings,
+      });
+      const inspection = await okInspection(bytes);
+      expect(inspection.documentFeatures).toContain('encrypted-protected');
+    },
+  );
+
+  it('缺少 enforcement、XML 注释中的保护标记均不启用保护', async () => {
+    const settings =
+      '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><!-- <w:documentProtection w:enforcement="1"/> --><w:documentProtection w:edit="readOnly"/></w:settings>';
+    const bytes = await minimalDocx('<w:document><w:body><w:p/></w:body></w:document>', {
+      'word/settings.xml': settings,
+    });
+    const inspection = await okInspection(bytes);
+    expect(inspection.documentFeatures).not.toContain('encrypted-protected');
   });
 
   it('word/embeddings/ 部件或 vbaProject → embedded-object 特性', async () => {
@@ -173,7 +212,7 @@ describe('inspectDocxPackage：文档级特性', () => {
 
   it('特性去重且顺序确定', async () => {
     const settings =
-      '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:documentProtection w:edit="readOnly"/></w:settings>';
+      '<?xml version="1.0"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:documentProtection w:edit="readOnly" w:enforcement="1"/></w:settings>';
     const bytes = await minimalDocx(
       '<w:document><w:body><w:p><w:ins w:id="1"><w:r><w:t>x</w:t></w:r></w:ins><w:del w:id="2"><w:r><w:delText>y</w:delText></w:r></w:del></w:p></w:body></w:document>',
       {

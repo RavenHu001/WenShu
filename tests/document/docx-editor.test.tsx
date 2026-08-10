@@ -278,6 +278,37 @@ describe('文件树 .docx 选择与加载（第 8.6 节）', () => {
     expect(api.readDocx).toHaveBeenCalledTimes(2);
     expect(docxEditorText()).toContain('修复后的正文');
   });
+
+  it('0 字节 DOCX 占位文件的空模型可挂载编辑器并正常产生 dirty', async () => {
+    const api = mockDesktop();
+    api.readDocx.mockResolvedValue({
+      status: 'loaded',
+      document: docxSnapshot(
+        { schemaVersion: DOCX_MODEL_SCHEMA_VERSION, blocks: [] },
+        { name: 'empty.docx', relativePath: 'empty.docx', revision: 'empty-rev', size: 0 },
+      ),
+    });
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot([entry('empty.docx')]),
+    } as OpenWorkspaceResult);
+
+    render(<App />);
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
+    });
+    await openDocxFromTree(api, 'empty.docx');
+
+    const editor = docxEditor();
+    expect(editor).not.toBeNull();
+    expect(editor?.view.state.doc.textContent).toBe('');
+    expect(dirtyMarkers()).toBe(0);
+    await act(async () => {
+      editor?.commands.insertContent('占位文档正文');
+    });
+    expect(docxEditorText()).toBe('占位文档正文');
+    expect(dirtyMarkers()).toBe(1);
+  });
 });
 
 describe('DOCX 编辑、工具栏与会话隔离（第 8.6 节）', () => {

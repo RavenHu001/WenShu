@@ -67,7 +67,7 @@ brace-expansion），非本任务引入。Tiptap v3.29.2 peer 支持 React 19；
 
 - 检查顺序：大小（20 MiB，解析前）→ ZIP 元数据预算 → 关键部件（`[Content_Types].xml` +
   `word/document.xml`）→ 有限扫描（顶层段落 run 颜色序列；`w:ins`/`w:del`；header/footer
-  部件；settings.xml `w:documentProtection`；embeddings/vbaProject）；
+  部件；settings.xml 中明确启用的 `w:documentProtection`；embeddings/vbaProject）；
 - 导入：`mammoth.convertToHtml({buffer}, {transformDocument})`（选项是第二参数）的文档树 →
   库无关 `DocxImportSource` → `importSourceToDocxModel`；行内换行 → `\n`、超长 run 无损拆分、
   相邻同 marks run 合并；颜色按序合并（数量不一致时保守放弃）；

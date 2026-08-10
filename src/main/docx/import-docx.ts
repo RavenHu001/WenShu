@@ -207,6 +207,20 @@ export type ImportDocxResult =
     }
   | { readonly status: 'error'; readonly error: DocxDocumentError };
 
+/** 0 字节 `.docx` 是 Windows/WPS 可产生的惰性占位文件，不是 OOXML ZIP。 */
+export function isEmptyDocxPlaceholder(bytes: Uint8Array): boolean {
+  return bytes.byteLength === 0;
+}
+
+/** 把 0 字节 DOCX 占位文件映射为可编辑空白模型；首次保存会物化为合法 OOXML。 */
+export function importEmptyDocxPlaceholder(): Extract<ImportDocxResult, { status: 'ok' }> {
+  return {
+    status: 'ok',
+    model: { schemaVersion: 1, blocks: [] },
+    compatibility: { level: 'supported', warnings: [] },
+  };
+}
+
 /**
  * 把 DOCX 原始字节导入为结构化模型与兼容性报告。
  * 解析失败 → INVALID_DOCX；模型预算超限 → RESOURCE_LIMIT_EXCEEDED；其余不抛出。

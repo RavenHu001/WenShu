@@ -121,6 +121,39 @@ describe('saveDocxDocument：成功路径与滚动备份（第 8.4 节）', () =
     await noWenshuTemps(workspaceRoot);
   });
 
+  it('0 字节 DOCX 占位文件首次保存后物化为有效 DOCX，并保留空字节备份', async () => {
+    await writeFile(join(workspaceRoot, 'a.docx'), Buffer.alloc(0));
+    const read = await readDocxDocument(workspaceRoot, 'a.docx');
+    expect(read.status).toBe('loaded');
+    if (read.status !== 'loaded') {
+      return;
+    }
+
+    const result = await saveDocxDocument(
+      workspaceRoot,
+      makeRequest({ expectedRevision: read.document.revision, model: sampleModel('首次保存') }),
+    );
+    expect(result.status).toBe('saved');
+    if (result.status !== 'saved') {
+      return;
+    }
+
+    expect((await readFile(join(workspaceRoot, 'a.docx.wenshu.bak'))).byteLength).toBe(0);
+    const diskBytes = await readFile(join(workspaceRoot, 'a.docx'));
+    expect(diskBytes.byteLength).toBeGreaterThan(0);
+    const reload = await readDocxDocument(workspaceRoot, 'a.docx');
+    expect(reload.status).toBe('loaded');
+    if (reload.status === 'loaded') {
+      expect(reload.document.compatibility.level).toBe('supported');
+      const block = reload.document.model.blocks[0];
+      expect(block?.kind).toBe('paragraph');
+      if (block?.kind === 'paragraph') {
+        expect(block.runs.map((run) => run.text).join('')).toBe('首次保存');
+      }
+    }
+    await noWenshuTemps(workspaceRoot);
+  });
+
   it('revision 不一致返回 CONFLICT 且零写入（无备份、无临时文件）', async () => {
     const fixtures = await buildDocxFixtures();
     const original = fixtures.files['ok-plain']!;

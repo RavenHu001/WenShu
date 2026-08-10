@@ -403,7 +403,7 @@ export const DOCX_COMPATIBILITY_WARNING_MESSAGES: Readonly<
   hyperlink: '超链接将保存为普通文本',
   'unknown-style': '文档包含未识别样式，格式可能丢失',
   'heading-level-unsupported': '文档包含 4 级及以上标题，将按普通段落处理',
-  'encrypted-protected': '文档受保护或加密，只能只读显示',
+  'encrypted-protected': '文档启用了编辑保护，只能只读显示',
   'other-unrecognized': '文档包含未识别内容，保存后可能丢失',
 };
 

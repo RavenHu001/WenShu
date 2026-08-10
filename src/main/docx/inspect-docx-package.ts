@@ -8,7 +8,7 @@
  * - 文档级特性检测（有限属性读取）：
  *   - 页眉页脚：`word/header*.xml` / `word/footer*.xml` 部件存在性；
  *   - 嵌入对象/宏：`word/embeddings/*` 或 `word/vbaProject.bin`；
- *   - 保护：settings.xml 中的 `w:documentProtection`；
+ *   - 保护：settings.xml 中已启用的 `w:documentProtection`（`w:enforcement` 为 OOXML 真值）；
  *   - 修订：document.xml 中的 `w:ins` / `w:del`；
  * - 文字颜色补充读取：按 w:p（顶层，表格内除外）→ w:r 顺序提取 `w:color w:val`，
  *   与 Mammoth run 顺序对齐，供导入器合并（数量不一致时导入器保守放弃该段颜色）；
@@ -49,6 +49,40 @@ function colorValueFromAttrText(attrText: string): string | null {
   }
   const raw = match[1]!;
   return /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toUpperCase()}` : null;
+}
+
+/**
+ * 判断 settings.xml 是否启用了文档编辑保护。
+ *
+ * `w:documentProtection` 元素可能被 WPS 写入为 `<w:documentProtection
+ * w:enforcement="0"/>`，它只声明了未启用的默认设置，不能据此把文档降级为只读。
+ * OOXML 的 ST_OnOff 真值为 `1` / `true` / `on`；缺少 enforcement 与其他值均按未启用处理。
+ * 扫描时按局部名识别元素和属性，兼容非 `w` 命名空间前缀，并先去除 XML 注释，避免注释误报。
+ */
+export function isDocumentProtectionEnforced(settingsXml: string): boolean {
+  const xmlWithoutComments = settingsXml.replace(/<!--[\s\S]*?-->/g, '');
+  const tagPattern = /<(\/?)([A-Za-z_][A-Za-z0-9_.:-]*)((?:[^"'/>]|"[^"]*"|'[^']*')*)(\/?)>/g;
+  const enforcementPattern =
+    /(?:^|\s)(?:[A-Za-z_][A-Za-z0-9_.-]*:)?enforcement\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(xmlWithoutComments)) !== null) {
+    const closing = match[1] === '/';
+    const name = match[2]!;
+    const localName = name.includes(':') ? name.slice(name.lastIndexOf(':') + 1) : name;
+    if (closing || localName !== 'documentProtection') {
+      continue;
+    }
+    const enforcement = enforcementPattern.exec(match[3] ?? '');
+    if (enforcement === null) {
+      continue;
+    }
+    const value = (enforcement[1] ?? enforcement[2] ?? '').trim().toLowerCase();
+    if (value === '1' || value === 'true' || value === 'on') {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -202,7 +236,7 @@ export async function inspectDocxPackage(bytes: Uint8Array): Promise<InspectDocx
   if (settingsEntry !== undefined) {
     try {
       const settingsXml = await settingsEntry.async('string');
-      if (settingsXml.includes('<w:documentProtection')) {
+      if (isDocumentProtectionEnforced(settingsXml)) {
         features.push('encrypted-protected');
       }
     } catch {
