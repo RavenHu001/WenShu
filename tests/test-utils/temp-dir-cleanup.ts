@@ -15,14 +15,21 @@
  * - 只对 `EBUSY` / `EPERM` 两个瞬时错误码重试（最多 `attempts` 次，固定短延时）；
  * - 其他错误码立即抛出；重试耗尽后抛出原始错误，不吞掉真实失败；
  * - 与 `fs.rm(recursive, force)` 语义一致：目录不存在时安全无操作。
+ *
+ * ## 2026-08-15 后续调整（TASK-008 WP3 期间的并行负载实测）
+ *
+ * 4 个含 junction 探测的测试文件在多 fork（maxForks 4）并行加载时，系统索引/杀毒组件
+ * 对同时新建的多个 junction 的锁定窗口可超过 1 秒（串行运行与单文件运行均不出现，
+ * 连续两次并行全量/多文件运行复现）。默认重试预算由 5×200ms 调整为 10×250ms（约 2.5s），
+ * 仍为固定有界重试：只对瞬时错误码生效，重试耗尽仍抛出原始错误，不掩盖真实失败。
  */
 
 import { rm } from 'node:fs/promises';
 
 export interface RemoveDirWithRetryOptions {
-  /** 最大尝试次数（含首次），默认 5。 */
+  /** 最大尝试次数（含首次），默认 10。 */
   readonly attempts?: number;
-  /** 失败重试间隔毫秒，默认 200。 */
+  /** 失败重试间隔毫秒，默认 250。 */
   readonly delayMs?: number;
 }
 
@@ -37,8 +44,8 @@ export async function removeDirWithRetry(
   path: string,
   options: RemoveDirWithRetryOptions = {},
 ): Promise<void> {
-  const attempts = options.attempts ?? 5;
-  const delayMs = options.delayMs ?? 200;
+  const attempts = options.attempts ?? 10;
+  const delayMs = options.delayMs ?? 250;
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {

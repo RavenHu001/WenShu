@@ -31,7 +31,8 @@ const desktopApi: DesktopApi = Object.freeze({
       ipcRenderer.invoke('document:save-docx', request),
   }),
   // search 命名空间只映射固定的两个搜索通道，不接受根路径、绝对路径或任意通道：
-  // 请求与取消都经过主进程运行时校验，取消只能引用当前窗口已知的 requestId。
+  // 请求与取消都经过主进程运行时校验，取消只能引用当前窗口已知的 requestId；
+  // 搜索覆盖磁盘上已保存的 TXT 与 DOCX 规范正文（主进程按 kind 分派受控读取）。
   search: Object.freeze({
     textWorkspace: (request: WorkspaceTextSearchRequest) =>
       ipcRenderer.invoke('search:text-workspace', request),

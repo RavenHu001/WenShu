@@ -474,6 +474,12 @@ export const App = (): React.JSX.Element => {
   );
 
   const selectedFilePath = activeTab(model)?.relativePath ?? null;
+  // 活动文档类型（TASK-008 第 4.10 节）：查找替换仅支持 TXT，活动 DOCX 时侧栏显示不可用说明。
+  const activeDocumentTab = activeTab(model);
+  const currentDocumentKind: 'txt' | 'docx' | null =
+    activeDocumentTab === null ? null : isDocxTab(activeDocumentTab) ? 'docx' : 'txt';
+  const currentDocumentAvailable =
+    currentDocumentKind === 'txt' && activeDocumentTab?.document != null;
 
   return (
     <div className="app-shell">
@@ -534,7 +540,8 @@ export const App = (): React.JSX.Element => {
               focusTarget={searchFocusTarget}
               onFocusTargetChange={setSearchFocusTarget}
               currentDocumentPanelHostRef={currentDocumentSearchPanelHostRef}
-              currentDocumentAvailable={activeTab(model)?.document != null}
+              currentDocumentKind={currentDocumentKind}
+              currentDocumentAvailable={currentDocumentAvailable}
               onOpenCurrentDocumentSearch={handleOpenCurrentDocumentSearch}
               onMatchActivate={handleMatchActivate}
             />

@@ -45,12 +45,22 @@ function FileResultGroup({
   readonly file: WorkspaceTextSearchFileResult;
   readonly onMatchActivate?: SearchResultsProps['onMatchActivate'];
 }): React.JSX.Element {
+  const kindLabel = file.kind === 'docx' ? 'DOCX' : 'TXT';
   return (
     <div className="search-file-group">
       <div className="search-file-path" title={file.relativePath}>
+        <span
+          className={`search-file-kind${file.kind === 'docx' ? ' is-docx' : ''}`}
+          aria-label={`文件类型：${kindLabel}`}
+        >
+          {kindLabel}
+        </span>
         {file.relativePath}
         {file.truncated ? <span className="search-file-truncated">（已截断）</span> : null}
       </div>
+      {file.kind === 'docx' && (
+        <div className="search-file-kind-note">行列基于 DOCX 提取正文，不是 Word 页面坐标。</div>
+      )}
       <ul className="search-match-list">
         {file.matches.map((match, index) => (
           <MatchRow
