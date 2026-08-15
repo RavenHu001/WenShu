@@ -50,6 +50,8 @@ import {
   type DocxExportDescription,
 } from '../../src/shared/docx-convert';
 import { buildDocxFixtures } from './docx-fixture-builder';
+import { inspectDocxPackage } from '../../src/main/docx/inspect-docx-package';
+import { DOCX_MAX_FILE_BYTES } from '../../src/shared/docx';
 
 /* ======================= Mammoth 文档树接口（测试脚手架） ======================= */
 
@@ -385,6 +387,101 @@ describe('DOCX 夹具（TASK-007 WP0，第 3.3 节）', () => {
         expect(fa?.equals(fb ?? Buffer.alloc(0)), `fixture ${id} 部件 ${name} 不确定`).toBe(true);
       }
     }
+  });
+});
+
+/* ======================= TASK-008 WP0 夹具扩展 ======================= */
+
+describe('TASK-008 WP0 夹具扩展（第 3.3 节：read-only / 组合字符 / 投影混合 / 大文件）', () => {
+  it('ok-read-only：settings.xml 明确启用保护 → 检查器判为 encrypted-protected 特性', async () => {
+    const fixtures = await buildDocxFixtures();
+    const bytes = fixtures.files['ok-read-only']!;
+    const zip = await loadZip(bytes);
+    const settings = await zip.file('word/settings.xml')?.async('string');
+    expect(settings).toContain('<w:documentProtection w:edit="readOnly" w:enforcement="1"/>');
+    const inspection = await inspectDocxPackage(bytes);
+    expect(inspection.status).toBe('ok');
+    if (inspection.status === 'ok') {
+      expect(inspection.inspection.documentFeatures).toContain('encrypted-protected');
+    }
+    // 普通文档对照：无保护特性
+    const plain = await inspectDocxPackage(fixtures.files['ok-plain']!);
+    expect(plain.status).toBe('ok');
+    if (plain.status === 'ok') {
+      expect(plain.inspection.documentFeatures).not.toContain('encrypted-protected');
+    }
+  });
+
+  it('ok-combining-emoji：组合字符/代理对/run 内换行按原码位进入模型', async () => {
+    const fixtures = await buildDocxFixtures();
+    const doc = await importWithMammoth(fixtures.files['ok-combining-emoji']!);
+    const model = importFixtureModel(doc);
+    expect(validateDocxDocumentModel(model)).toEqual([]);
+    const text = runText(model.blocks[0] as { kind: string; runs: readonly { text: string }[] });
+    // 组合变音符号与基准字母保持两个独立 code unit；astral emoji 为代理对；不归一化
+    expect(text).toContain('e\u0301');
+    expect(text).toContain('a\u0300');
+    expect(text).toContain('\uD83C\uDF89'); // 🎉 的代理对
+    expect(text).toContain('\uD842\uDFB7'); // 𠮷 的代理对
+    expect(text).toContain('\n'); // run 内原生换行保留
+    // astral 字符在 UTF-16 中占两个 code unit：正文长度必然大于按码点计数的长度
+    expect('🎉'.length).toBe(2);
+    expect(text.length).toBeGreaterThan([...text].length);
+  });
+
+  it('ok-projection-mixed：标题/marks/空段/嵌套列表结构确定', async () => {
+    const fixtures = await buildDocxFixtures();
+    const doc = await importWithMammoth(fixtures.files['ok-projection-mixed']!);
+    const model = importFixtureModel(doc);
+    expect(validateDocxDocumentModel(model)).toEqual([]);
+    expect(
+      model.blocks.map((b) =>
+        b.kind === 'bullet-list' || b.kind === 'ordered-list'
+          ? `${b.kind}:${b.level}(${b.blocks.length})`
+          : b.kind,
+      ),
+    ).toEqual([
+      'heading',
+      'paragraph',
+      'paragraph',
+      'bullet-list:0(3)',
+      'ordered-list:0(3)',
+      'paragraph',
+    ]);
+    // 标题级别单独断言（1-3 级）
+    const headingBlock = model.blocks[0];
+    expect(headingBlock).toBeDefined();
+    if (headingBlock !== undefined && headingBlock.kind === 'heading') {
+      expect(headingBlock.level).toBe(1);
+    }
+    // 跨 run 段落：三个 run 文本连接（marks 不参与正文语义）
+    const marksPara = model.blocks[1];
+    expect(marksPara).toBeDefined();
+    if (marksPara !== undefined && marksPara.kind === 'paragraph') {
+      expect(marksPara.runs.map((r) => r.text)).toEqual([
+        '粗体',
+        '与',
+        '斜体',
+        ' 跨 run 可匹配 English text.',
+      ]);
+    }
+    // 嵌套列表条目按深度优先顺序
+    const bullet = model.blocks[3];
+    expect(bullet).toBeDefined();
+    if (bullet !== undefined && bullet.kind === 'bullet-list') {
+      expect(bullet.blocks.map((b) => (b.kind === 'paragraph' ? runText(b) : 'nested'))).toEqual([
+        '项目甲',
+        '项目乙',
+        'nested',
+      ]);
+    }
+  });
+
+  it('ok-large：恰好 20 MiB 且 ZIP 可解析（大小上限读取窗口验证用）', async () => {
+    const fixtures = await buildDocxFixtures();
+    const bytes = fixtures.files['ok-large']!;
+    expect(bytes.byteLength).toBe(DOCX_MAX_FILE_BYTES);
+    await expect(JSZip.loadAsync(bytes)).resolves.toBeDefined();
   });
 });
 

@@ -14,6 +14,7 @@ import {
   readTextDocument,
   type ReadTextAdapters,
 } from '../../src/main/document/read-text-document';
+import { removeDirWithRetry } from '../test-utils/temp-dir-cleanup';
 
 /** 原始字节的 SHA-256 十六进制，用于断言 revision 与磁盘字节严格一致。 */
 function sha256Of(bytes: Uint8Array): string {
@@ -85,7 +86,7 @@ describe('readTextDocument', () => {
       dirSymlinkSupported = false;
     }
 
-    await rm(probeDir, { recursive: true, force: true });
+    await removeDirWithRetry(probeDir);
   }, 60_000);
 
   afterAll(async () => {
@@ -97,7 +98,8 @@ describe('readTextDocument', () => {
   });
 
   afterEach(async () => {
-    await rm(workspaceRoot, { recursive: true, force: true });
+    // junction 用例在 workspaceRoot 内创建 junction：清理使用有界重试（EBUSY 瞬时锁）
+    await removeDirWithRetry(workspaceRoot);
   });
 
   it('读取根目录中的 UTF-8 TXT', async () => {

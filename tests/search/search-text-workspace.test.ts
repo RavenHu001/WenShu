@@ -21,6 +21,7 @@ import type { TextDocumentErrorCode, TextDocumentSnapshot } from '../../src/shar
 import type { DirEntry, ReadDirFn } from '../../src/main/workspace/scan-workspace';
 import { searchTextWorkspace } from '../../src/main/search/search-text-workspace';
 import type { ReadTextDocumentResult } from '../../src/shared/document';
+import { removeDirWithRetry } from '../test-utils/temp-dir-cleanup';
 
 /** mock 工作区根：只需绝对路径（目录读取与文件读取均注入 mock）。 */
 const mockRoot = join(tmpdir(), 'wenshu-search-mock-ws');
@@ -496,11 +497,12 @@ describe('searchTextWorkspace 真实文件系统集成', () => {
     } catch {
       realDirSymlinkSupported = false;
     }
-    await rm(probeDir, { recursive: true, force: true });
+    await removeDirWithRetry(probeDir);
   }, 60_000);
 
   afterAll(async () => {
-    await rm(ws, { recursive: true, force: true });
+    // 真实链接用例在 ws 内创建 junction：清理使用有界重试（EBUSY 瞬时锁）
+    await removeDirWithRetry(ws);
   });
 
   it('多层目录与大小写扩展名：结果、行列与统计正确（含非法 UTF-8 跳过）', async () => {
@@ -576,7 +578,7 @@ describe('searchTextWorkspace 真实文件系统集成', () => {
         expect(paths).not.toContain('link.txt');
         expect(paths).toContain('sub/gamma.txt');
       } finally {
-        await rm(join(ws, 'link-sub'), { recursive: true, force: true });
+        await removeDirWithRetry(join(ws, 'link-sub'));
         await rm(join(ws, 'link.txt'), { force: true });
       }
     },
