@@ -450,6 +450,7 @@ describe('TXT 搜索结果与 DOCX 标签共存（第 8.6 节）', () => {
         requestId: 1,
         files: [
           {
+            kind: 'txt',
             relativePath: 'a.txt',
             revision: 'rev-a.txt',
             truncated: false,

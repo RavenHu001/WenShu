@@ -25,7 +25,7 @@ function fileResult(
   matches: WorkspaceTextSearchFileResult['matches'],
   truncated = false,
 ): WorkspaceTextSearchFileResult {
-  return { relativePath, revision: `rev-${relativePath}`, matches, truncated };
+  return { kind: 'txt', relativePath, revision: `rev-${relativePath}`, matches, truncated };
 }
 
 describe('基础匹配（第 4.4 节）', () => {

@@ -1,8 +1,12 @@
 /**
- * TASK-008 WP0 冻结投影脚手架 —— 测试共享模块（WP1 将同一规则实现为产品模块
- * `src/shared/docx-search-text.ts`，届时本脚手架退役或被产品模块替换）。
+ * DOCX 规范正文投影 —— TASK-008 WP1（任务第 4.3 节与 WP0 冻结规则）。
  *
- * ## 冻结的投影规则（任务第 4.3 节）
+ * 将 Task 7 的 `DocxDocumentModel` 投影为确定性的可搜索正文与文本块映射，作为 DOCX
+ * 工作区搜索的唯一语义来源：不把 DOCX 当作 UTF-8 TXT，也不直接搜索 OOXML、Mammoth
+ * HTML 或编辑器 DOM（任务第一、4.2 节）。本模块是纯 TypeScript 模块，不依赖 Electron、
+ * Node.js、Mammoth、Tiptap/ProseMirror、DOM 或文件系统。
+ *
+ * ## 冻结的投影规则（任务第 4.3 节全部 10 条；WP0 实测冻结）
  *
  * 1. 按文档顺序深度优先遍历模型；
  * 2. 普通段落与标题各形成一个文本块；
@@ -16,13 +20,19 @@
  * 9. 投影结果携带仅供进程内映射使用的文本块序号、投影 `from/to` 与块正文；
  * 10. 投影函数不依赖 Electron、Node.js、Mammoth、Tiptap、ProseMirror、DOM 或文件系统。
  *
- * 附加冻结约束（WP0 实测）：产品模型（导入/转换）不产生空文本 run——空 run 在
- * `importRuns` 与 `parseInlineContent` 中都被跳过，且 ProseMirror `nodeFromJSON`
- * 拒绝空 text 节点；投影对空文本 run 视为无贡献，输出与真实模型一致。
+ * ## 输入前提（调用方保证）
+ *
+ * - 输入必须是经过 `validateDocxDocumentModel` 的合法模型（结构、预算、规范形式）；
+ *   投影本身不做完整重新校验，避免对每个候选文件重复 O(n) 校验（WP0 实测 20,000 块
+ *   模型投影约 7 ms）。
+ * - 附加冻结约束（WP0 实测）：产品模型（导入/转换）不产生空文本 run——空 run 在
+ *   `importRuns` 与 `parseInlineContent` 中都被跳过，且 ProseMirror `nodeFromJSON`
+ *   拒绝空 text 节点；投影对空文本 run 视为无贡献，输出与真实模型一致。
  */
 
-import type { DocxBlock, DocxDocumentModel } from '../../src/shared/docx';
+import type { DocxBlock, DocxDocumentModel } from './docx';
 
+/** 单个文本块在投影中的段映射（仅供进程内映射使用，不跨 IPC 传递模型或 PM 节点）。 */
 export interface DocxSearchTextBlock {
   /** 文本块序号（文档顺序，0 起始）。 */
   readonly ordinal: number;
@@ -34,6 +44,7 @@ export interface DocxSearchTextBlock {
   readonly text: string;
 }
 
+/** 规范正文投影：完整可搜索文本 + 深度优先文本块段映射。 */
 export interface DocxSearchTextProjection {
   /** 完整规范投影文本。 */
   readonly text: string;
@@ -42,7 +53,7 @@ export interface DocxSearchTextProjection {
 }
 
 /** 深度优先收集文本块：列表块不产生文字，只递归其条目。 */
-function collectBlocks(
+function collectTextBlocks(
   blocks: readonly DocxBlock[],
 ): readonly Extract<DocxBlock, { readonly kind: 'paragraph' | 'heading' }>[] {
   const out: Extract<DocxBlock, { readonly kind: 'paragraph' | 'heading' }>[] = [];
@@ -59,9 +70,13 @@ function collectBlocks(
   return out;
 }
 
-/** 冻结投影（第 4.3 节全部规则；测试脚手架，WP1 移植为产品模块）。 */
+/**
+ * 把 `DocxDocumentModel` 投影为规范可搜索正文与文本块映射（第 4.3 节全部规则）。
+ * 输入必须是合法模型（`validateDocxDocumentModel` 通过）；输出为确定性纯数据，
+ * 可被 WP2 搜索器直接送入现有 literal matcher，并供 WP4 做 ProseMirror 位置映射。
+ */
 export function projectDocxModelSearchText(model: DocxDocumentModel): DocxSearchTextProjection {
-  const textBlocks = collectBlocks(model.blocks);
+  const textBlocks = collectTextBlocks(model.blocks);
   const texts = textBlocks.map((block) => block.runs.map((run) => run.text).join(''));
   const text = texts.join('\n');
   const blocks: DocxSearchTextBlock[] = [];
@@ -69,7 +84,7 @@ export function projectDocxModelSearchText(model: DocxDocumentModel): DocxSearch
   for (let ordinal = 0; ordinal < texts.length; ordinal += 1) {
     const blockText = texts[ordinal]!;
     blocks.push({ ordinal, from: offset, to: offset + blockText.length, text: blockText });
-    offset += blockText.length + 1; // 相邻块之间一个 `\n`
+    offset += blockText.length + 1; // 相邻块之间恰好一个 `\n`
   }
   return { text, blocks };
 }

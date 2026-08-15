@@ -54,6 +54,7 @@ function fileResult(
   matchedText: string,
 ): WorkspaceTextSearchFileResult {
   return {
+    kind: 'txt',
     relativePath,
     revision,
     truncated: false,

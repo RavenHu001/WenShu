@@ -256,6 +256,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
         1,
         completedResult(1, [
           {
+            kind: 'txt',
             relativePath: 'a.txt',
             revision: 'r1',
             truncated: false,
@@ -288,12 +289,14 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
         1,
         completedResult(1, [
           {
+            kind: 'txt',
             relativePath: 'a.txt',
             revision: 'r1',
             truncated: false,
             matches: [match(6, 11, 1, 7, 'hello')],
           },
           {
+            kind: 'txt',
             relativePath: 'sub/b.txt',
             revision: 'r2',
             truncated: false,
@@ -436,6 +439,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
         2,
         completedResult(2, [
           {
+            kind: 'txt',
             relativePath: 'b.txt',
             revision: 'r2',
             truncated: false,

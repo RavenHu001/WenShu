@@ -265,6 +265,7 @@ export async function searchTextWorkspace(
     }
     if (outcome.matches.length > 0) {
       fileResults.push({
+        kind: 'txt',
         relativePath,
         revision: result.document.revision,
         matches: outcome.matches,

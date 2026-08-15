@@ -1,8 +1,8 @@
 // @vitest-environment node
 /**
- * TASK-008 WP0 技术验证：DOCX 规范正文投影与 ProseMirror 文本块映射（任务第 3.3 节）。
+ * TASK-008 DOCX 规范正文投影测试（任务第 8.2 节；第 4.3 节 WP0 冻结规则）。
  *
- * ## 冻结的投影规则（任务第 4.3 节，WP0 冻结后 WP1 固化到 `src/shared/docx-search-text.ts`）
+ * ## 冻结的投影规则（任务第 4.3 节，WP1 固化到 `src/shared/docx-search-text.ts`）
  *
  * 1. 按文档顺序深度优先遍历模型；
  * 2. 普通段落与标题各形成一个文本块；
@@ -16,10 +16,9 @@
  * 9. 投影结果携带仅供进程内映射使用的文本块序号、投影 `from/to` 与块正文；
  * 10. 投影函数不依赖 Electron、Node.js、Mammoth、Tiptap、ProseMirror、DOM 或文件系统。
  *
- * 本文件中的 `projectDocxModelSearchText` 是测试脚手架（与 TASK-007 WP0 的
- * `mammothToImportSource` 同类）：WP1 把同一规则实现为产品模块；本文件同时用
- * 真实 ProseMirror schema（与产品 DOCX_EDITOR_EXTENSIONS 相同扩展链）验证
- * "模型投影与由同一模型生成的 Tiptap/ProseMirror 文本块投影一致"。
+ * 本文件使用 WP1 产品模块 `projectDocxModelSearchText`，同时用真实 ProseMirror schema
+ * （与产品 DOCX_EDITOR_EXTENSIONS 相同扩展链）验证"模型投影与由同一模型生成的
+ * Tiptap/ProseMirror 文本块投影一致"。
  */
 
 import { describe, expect, it } from 'vitest';
@@ -35,12 +34,12 @@ import {
   type DocxDocumentModel,
   type DocxImportSource,
 } from '../../src/shared/docx';
+import { projectDocxModelSearchText } from '../../src/shared/docx-search-text';
 import { docxModelToTiptapJson, importSourceToDocxModel } from '../../src/shared/docx-convert';
 import { inspectDocxPackage } from '../../src/main/docx/inspect-docx-package';
 import { importDocxDocument } from '../../src/main/docx/import-docx';
 import { matchText } from '../../src/main/search/match-text';
 import { buildDocxFixtures } from './docx-fixture-builder';
-import { projectDocxModelSearchText } from './docx-search-projection-scaffold';
 
 /* ======================= ProseMirror 侧文本块投影（公开 API） ======================= */
 

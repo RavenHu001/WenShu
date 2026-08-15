@@ -12,8 +12,8 @@
  * - 协作式取消："已开始读取可完成、结果不再提交"（搜索器注入慢读取验证）；
  * - 双层并发：总并发 ≤4、DOCX 并发 ≤2（冻结池模式测试脚手架，WP2 固化）。
  *
- * 本文件中的 `runMixedSearch`（双层并发池）与 `projectDocxModelSearchText` 导入的
- * 投影脚手架均为测试脚手架：WP2 / WP1 把同一设计实现为产品模块。
+ * 本文件中的 `runMixedSearch`（双层并发池）为测试脚手架（WP2 把同一设计实现为产品
+ * 模块）；`projectDocxModelSearchText` 自 WP1 起导入产品模块 `src/shared/docx-search-text.ts`。
  */
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -32,7 +32,7 @@ import { searchTextWorkspace } from '../../src/main/search/search-text-workspace
 import type { DirEntry, ReadDirFn } from '../../src/main/workspace/scan-workspace';
 import type { ReadTextDocumentResult } from '../../src/shared/document';
 import { buildDocxFixtures } from './docx-fixture-builder';
-import { projectDocxModelSearchText } from './docx-search-projection-scaffold';
+import { projectDocxModelSearchText } from '../../src/shared/docx-search-text';
 
 class ResizeObserverMock {
   observe(): void {}
