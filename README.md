@@ -2,7 +2,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Pre-alpha / Task 7 已完成。** Task 1 至 Task 7 均已完成；下一任务为工作区 DOCX 正文搜索与结果定位（尚未规划）。当前应用具备工作区选择、只读文件树浏览，从文件树选择 UTF-8 TXT 或普通 `.docx` 后在中央区域以多标签页编辑：TXT 使用 CodeMirror，DOCX 经项目结构化中间模型导入并在 Tiptap/ProseMirror 富文本会话中编辑（段落、标题 1-3、粗体、斜体、下划线、基础字号、文字颜色、项目符号/编号列表、基础对齐），每个标签独立维护读取、正文/模型、未保存状态与保存状态，通过保存按钮或 `Ctrl+S` 显式保存；保存执行工作区边界、符号链接、真实路径与内容版本校验，采用同目录临时文件、刷盘、关闭和安全替换流程。DOCX 保存前生成同目录滚动备份 `<文件名>.wenshu.bak`，产物经过大小/结构/重新导入验证后才替换目标；`degraded` 文档需绑定 revision 的兼容性确认才能编辑与保存，`read-only` 文档不可编辑保存。外部修改会触发冲突提示；关闭 dirty 标签、切换工作区和关闭窗口均有未保存保护，正在保存的标签不会被丢弃。Task 6 已加入当前文件查找替换（`Ctrl+F`/`Ctrl+H`）与工作区 TXT 搜索（活动栏搜索 / `Ctrl+Shift+F`），搜索结果可打开或激活唯一 TXT 标签并在 revision 与正文范围仍有效时安全定位。自动保存、DOCX 搜索、文件管理与会话恢复仍不可用。
+> **当前阶段：Pre-alpha / Task 7 已完成。** Task 1 至 Task 7 均已完成；[Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)已规划、尚未实施。当前应用具备工作区选择、只读文件树浏览，从文件树选择 UTF-8 TXT 或普通 `.docx` 后在中央区域以多标签页编辑：TXT 使用 CodeMirror，DOCX 经项目结构化中间模型导入并在 Tiptap/ProseMirror 富文本会话中编辑（段落、标题 1-3、粗体、斜体、下划线、基础字号、文字颜色、项目符号/编号列表、基础对齐），每个标签独立维护读取、正文/模型、未保存状态与保存状态，通过保存按钮或 `Ctrl+S` 显式保存；保存执行工作区边界、符号链接、真实路径与内容版本校验，采用同目录临时文件、刷盘、关闭和安全替换流程。DOCX 保存前生成同目录滚动备份 `<文件名>.wenshu.bak`，产物经过大小/结构/重新导入验证后才替换目标；`degraded` 文档需绑定 revision 的兼容性确认才能编辑与保存，`read-only` 文档不可编辑保存。外部修改会触发冲突提示；关闭 dirty 标签、切换工作区和关闭窗口均有未保存保护，正在保存的标签不会被丢弃。Task 6 已加入当前文件查找替换（`Ctrl+F`/`Ctrl+H`）与工作区 TXT 搜索（活动栏搜索 / `Ctrl+Shift+F`），搜索结果可打开或激活唯一 TXT 标签并在 revision 与正文范围仍有效时安全定位。自动保存、DOCX 搜索、文件管理与会话恢复仍不可用。
 
 ## 当前能力
 
@@ -136,6 +136,7 @@
 - [x] [Task 5：多 TXT 标签页与独立编辑会话](./docs/TASK_005_MULTI_TXT_TABS.md)；
 - [x] [Task 6：工作区 TXT 搜索与当前文件查找替换](./docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md)；
 - [x] [Task 7：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)（已完成，见 [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)）。
+- [ ] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已规划，尚未实施）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
@@ -158,6 +159,7 @@
 - [TASK-006 完成报告](./docs/TASK_006_COMPLETION_REPORT.md)
 - [TASK-007：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)
 - [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)
+- [TASK-008：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)
 
 ## 项目结构
 
