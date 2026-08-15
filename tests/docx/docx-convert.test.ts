@@ -807,6 +807,43 @@ describe('tiptapJsonToDocxModel', () => {
     }
   });
 
+  it('Tiptap TextAlign 注入的 heading textAlign 属性被容忍并按矩阵降级忽略', () => {
+    // Tiptap TextAlign 扩展（types 含 heading）会在 heading 节点上注入
+    // `textAlign`（未设置为 null；工具栏可设置 left/center/right/justify）。
+    // DocxHeadingBlock 无法表示对齐：转换必须容忍该属性并丢弃（编辑含标题文档
+    // 时若不容忍，任何内容变化都会因转换失败而无法产生 dirty）。
+    for (const textAlign of [null, 'center', 'justify']) {
+      const result = tiptapJsonToDocxModel({
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 2, textAlign },
+            content: [{ type: 'text', text: '标题' }],
+          },
+        ],
+      });
+      expect(result.status, `textAlign=${String(textAlign)}`).toBe('ok');
+      if (result.status === 'ok') {
+        expect(result.model.blocks).toEqual([
+          { kind: 'heading', level: 2, runs: [{ text: '标题', marks: [] }] },
+        ]);
+      }
+    }
+    // 非对齐的未知 heading 属性仍然拒绝
+    const unknown = tiptapJsonToDocxModel({
+      type: 'doc',
+      content: [{ type: 'heading', attrs: { level: 2, bogus: 1 }, content: [] }],
+    });
+    expect(unknown.status).toBe('invalid');
+    // 非法 textAlign 值拒绝
+    const badAlign = tiptapJsonToDocxModel({
+      type: 'doc',
+      content: [{ type: 'heading', attrs: { level: 2, textAlign: 'diagonal' }, content: [] }],
+    });
+    expect(badAlign.status).toBe('invalid');
+  });
+
   it('列表嵌套深度超过上限拒绝', () => {
     let content: unknown = [{ type: 'paragraph', content: [{ type: 'text', text: 'deep' }] }];
     for (let i = 0; i <= DOCX_MAX_LIST_DEPTH; i += 1) {

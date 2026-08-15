@@ -703,10 +703,26 @@ function parseBlockNode(node: unknown, depth: number, context: ParseContext): Do
       return null;
     }
     for (const key of Object.keys(node.attrs)) {
-      if (key !== 'level') {
+      if (key !== 'level' && key !== 'textAlign') {
         fail(context, `heading 不允许属性 ${key}`);
         return null;
       }
+    }
+    // Tiptap TextAlign 扩展（types 含 heading）会给 heading 节点注入 `textAlign`
+    // （未设置时为 null，工具栏可设置 left/center/right/justify）；DocxHeadingBlock
+    // 无法表示对齐，按受支持矩阵降级忽略该属性（不进入模型，保存不承诺保留），
+    // 但必须容忍它存在，否则含标题文档的任何编辑都会因转换失败而无法产生 dirty。
+    const rawTextAlign = node.attrs.textAlign;
+    if (
+      rawTextAlign !== undefined &&
+      rawTextAlign !== null &&
+      rawTextAlign !== 'left' &&
+      rawTextAlign !== 'center' &&
+      rawTextAlign !== 'right' &&
+      rawTextAlign !== 'justify'
+    ) {
+      fail(context, `heading textAlign 值非法：${String(rawTextAlign)}`);
+      return null;
     }
     const level = node.attrs.level;
     if (level !== 1 && level !== 2 && level !== 3) {

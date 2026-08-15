@@ -71,13 +71,13 @@ function collectTextBlocks(
 }
 
 /**
- * 把 `DocxDocumentModel` 投影为规范可搜索正文与文本块映射（第 4.3 节全部规则）。
- * 输入必须是合法模型（`validateDocxDocumentModel` 通过）；输出为确定性纯数据，
- * 可被 WP2 搜索器直接送入现有 literal matcher，并供 WP4 做 ProseMirror 位置映射。
+ * 由文本块正文序列生成规范投影文本与块区间（第 4.3 节规则 5-7）：
+ * 相邻文本块之间插入恰好一个人工 `\n`，不在开头或结尾额外插入换行；
+ * 偏移使用 UTF-16 code unit，与 JavaScript 字符串和 ProseMirror 文本位置一致。
+ * 模型投影（`projectDocxModelSearchText`）与 ProseMirror 宿主侧投影（WP4）共用
+ * 同一规则，保证两侧文本块顺序与区间完全一致。
  */
-export function projectDocxModelSearchText(model: DocxDocumentModel): DocxSearchTextProjection {
-  const textBlocks = collectTextBlocks(model.blocks);
-  const texts = textBlocks.map((block) => block.runs.map((run) => run.text).join(''));
+export function joinDocxTextBlocks(texts: readonly string[]): DocxSearchTextProjection {
   const text = texts.join('\n');
   const blocks: DocxSearchTextBlock[] = [];
   let offset = 0;
@@ -87,4 +87,14 @@ export function projectDocxModelSearchText(model: DocxDocumentModel): DocxSearch
     offset += blockText.length + 1; // 相邻块之间恰好一个 `\n`
   }
   return { text, blocks };
+}
+
+/**
+ * 把 `DocxDocumentModel` 投影为规范可搜索正文与文本块映射（第 4.3 节全部规则）。
+ * 输入必须是合法模型（`validateDocxDocumentModel` 通过）；输出为确定性纯数据，
+ * 可被 WP2 搜索器直接送入现有 literal matcher，并供 WP4 做 ProseMirror 位置映射。
+ */
+export function projectDocxModelSearchText(model: DocxDocumentModel): DocxSearchTextProjection {
+  const textBlocks = collectTextBlocks(model.blocks);
+  return joinDocxTextBlocks(textBlocks.map((block) => block.runs.map((run) => run.text).join('')));
 }

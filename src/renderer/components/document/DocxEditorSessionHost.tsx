@@ -27,8 +27,10 @@ import { TextStyle, FontSize } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { docxModelToTiptapJson, tiptapJsonToDocxModel } from '../../../shared/docx-convert';
+import { joinDocxTextBlocks } from '../../../shared/docx-search-text';
 import type { DocxDocumentModel } from '../../../shared/docx';
 import type { DocxDocumentTabState } from '../../lib/document-tabs';
+import type { EditorLocateOutcome, EditorLocateTarget } from './EditorSessionHost';
 
 /** 最小扩展集（WP0 冻结结论 3）：StarterKit v3 已含下划线；link 输入能力关闭。 */
 export const DOCX_EDITOR_EXTENSIONS = [
@@ -50,6 +52,8 @@ export function DocxEditorSessionHost({
   onContentChange,
   onSaveRequest,
   onEditorRegister,
+  locateTarget = null,
+  onLocateOutcome,
 }: {
   readonly tab: DocxDocumentTabState;
   /** 是否可编辑（read-only / read-error 无快照时 false）。 */
@@ -60,6 +64,10 @@ export function DocxEditorSessionHost({
   readonly onSaveRequest: (tabId: string) => void;
   /** 注册/注销编辑器实例（工具栏操作与测试定位）。 */
   readonly onEditorRegister: (tabId: string, editor: Editor | null) => void;
+  /** 待应用的搜索结果定位目标（仅当目标标签与本宿主一致时生效；同一目标只应用一次）。 */
+  readonly locateTarget?: EditorLocateTarget | null;
+  /** 定位结果回报：`applied` 应用成功 / `stale` 二次校验失败（携带 locateId）。 */
+  readonly onLocateOutcome?: (locateId: number, outcome: EditorLocateOutcome) => void;
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -68,11 +76,15 @@ export function DocxEditorSessionHost({
   const contentChangeRef = useRef(onContentChange);
   const saveRequestRef = useRef(onSaveRequest);
   const registerRef = useRef(onEditorRegister);
+  const locateOutcomeRef = useRef(onLocateOutcome);
+  /** 已应用过的定位目标：同一对象只应用一次（rerender 不重复抢焦点）。 */
+  const appliedLocateRef = useRef<EditorLocateTarget | null>(null);
 
   useEffect(() => {
     contentChangeRef.current = onContentChange;
     saveRequestRef.current = onSaveRequest;
     registerRef.current = onEditorRegister;
+    locateOutcomeRef.current = onLocateOutcome;
   });
 
   // 创建编辑器（只创建一次；模型变化经下方 effect 同步内容）
@@ -152,6 +164,61 @@ export function DocxEditorSessionHost({
       applyingExternalModelRef.current = false;
     }
   }, [tab.model]);
+
+  // 搜索结果定位：从当前 ProseMirror 文档的公开节点 API 生成同规则文本块投影并二次校验
+  // （防止 App 校验后到本 effect 前发生编辑），命中则映射为 PM 位置并设置选区、滚动与聚焦。
+  // 同一目标对象只应用一次（appliedLocateRef 守卫），普通 rerender 不会重复抢焦点（第 4.8 节步骤 13）。
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor === null || locateTarget === null || appliedLocateRef.current === locateTarget) {
+      return;
+    }
+    appliedLocateRef.current = locateTarget;
+    const report = (outcome: EditorLocateOutcome): void => {
+      locateOutcomeRef.current?.(locateTarget.locateId, outcome);
+    };
+    const { from, to, matchedText } = locateTarget;
+    // 1. 公开节点 API 收集全部 textblock（顺序与模型深度优先一致，不读取私有 DOM）
+    const pmBlocks: { readonly text: string; readonly pos: number }[] = [];
+    editor.view.state.doc.descendants((node, pos) => {
+      if (node.isTextblock) {
+        pmBlocks.push({ text: node.textContent, pos });
+      }
+      return true;
+    });
+    // 2. 与模型侧共用同一 join 规则生成实时投影（规则一致性由 joinDocxTextBlocks 保证）
+    const live = joinDocxTextBlocks(pmBlocks.map((block) => block.text));
+    // 3. 二次校验：范围在投影内且投影片段精确等于匹配文本
+    if (
+      from < 0 ||
+      to > live.text.length ||
+      to < from ||
+      live.text.slice(from, to) !== matchedText
+    ) {
+      report('stale');
+      return;
+    }
+    // 4. 匹配必须完整位于一个真实文本块内（查询不含换行，正常必成立；防御性校验，
+    //    结构变化导致块映射不一致时按过期处理，不按块序号强行跳转）
+    const blockIndex = live.blocks.findIndex((block) => block.from <= from && to <= block.to);
+    if (blockIndex === -1) {
+      report('stale');
+      return;
+    }
+    const block = live.blocks[blockIndex]!;
+    const pmBlock = pmBlocks[blockIndex]!;
+    // 5. 映射公式（WP0 冻结）：PM 位置 = textblock 内容起点（pos + 1）+ 块内 UTF-16 偏移
+    const pmFrom = pmBlock.pos + 1 + (from - block.from);
+    const pmTo = pmFrom + (to - from);
+    // 6. 公开命令设置选区、滚动与聚焦（read-only 视图 focus 为安全 no-op，不开放编辑）
+    if (!editor.commands.setTextSelection({ from: pmFrom, to: pmTo })) {
+      report('stale');
+      return;
+    }
+    editor.commands.scrollIntoView();
+    editor.commands.focus();
+    report('applied');
+  }, [locateTarget]);
 
   return <div ref={containerRef} className="docx-editor" aria-label={tab.name} />;
 }

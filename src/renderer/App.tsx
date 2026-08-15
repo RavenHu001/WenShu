@@ -9,9 +9,11 @@ import {
   hasDirtyTabs,
   hasSavingTabs,
   isDocxTab,
+  isTextTab,
   tabById,
   type DocumentTabState,
 } from './lib/document-tabs';
+import { projectDocxModelSearchText } from '../shared/docx-search-text';
 import type {
   EditorLocateTarget,
   EditorSearchControls,
@@ -57,7 +59,6 @@ export const App = (): React.JSX.Element => {
   const {
     model,
     openFile,
-    openTextFile,
     activateTab,
     editTab,
     editDocxTab,
@@ -407,9 +408,10 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   /**
-   * 搜索结果点击 → "打开/激活 → 验证 → 定位"闭环（第 4.9 节）：
-   * 打开或激活唯一标签并等待读取完成；revision、范围与实际匹配文本全部有效时
-   * 下发定位目标，由编辑器宿主设置选区、滚动并聚焦；任何过期情况只提示，不选中、不改正文。
+   * 搜索结果点击 → "打开/激活 → 验证 → 定位"闭环（第 4.8 / 4.9 节）：
+   * 通用 `openFile` 打开或激活唯一标签并等待读取完成；kind、revision、实时正文/
+   * 规范投影范围与实际匹配文本全部有效时下发带 locateId 的定位目标，由编辑器宿主
+   * 二次校验并设置选区、滚动与聚焦；任何过期情况只提示，不选中、不改正文。
    */
   const handleMatchActivate = useCallback(
     (file: WorkspaceTextSearchFileResult, match: WorkspaceTextSearchMatch) => {
@@ -426,15 +428,15 @@ export const App = (): React.JSX.Element => {
       setLocateTarget(null); // 新定位请求作废旧定位目标
 
       void (async () => {
-        // 1. 打开或激活唯一标签；新标签等待读取完成（不创建第二标签）
-        const tab = await openTextFile(relativePath);
+        // 1. 通用打开或激活唯一标签（按扩展名分派 TXT / DOCX）；新标签等待读取完成
+        const tab = await openFile(relativePath);
         if (!isLocateCurrent(locateId, epoch)) {
           return; // 新定位请求或工作区切换已作废本次定位
         }
         if (tab === null) {
           return; // 标签已关闭或工作区已失效
         }
-        // 2. read-error 标签保留错误状态，不能伪造定位成功（第 4.9.6 节）
+        // 2. read-error 标签保留错误状态，不能伪造定位成功（第 4.8 节步骤 3）
         if (tab.status === 'read-error' || tab.document === null) {
           setStaleNotice(`搜索结果已过期：${tab.name} 读取失败。`);
           return;
@@ -442,36 +444,81 @@ export const App = (): React.JSX.Element => {
         if (!isLocateCurrent(locateId, epoch)) {
           return;
         }
-        // 3. 磁盘基线 revision 必须与结果一致（外部修改后只提示过期）
-        if (tab.document.revision !== file.revision) {
-          setStaleNotice(`搜索结果已过期：${tab.name} 的内容已被外部修改。`);
+        // 3. 搜索结果 kind 必须与实际标签类型一致（第 4.8 节步骤 3）
+        if (file.kind === 'docx' ? !isDocxTab(tab) : !isTextTab(tab)) {
+          setStaleNotice(`搜索结果已过期：${tab.name} 的类型已变化。`);
           return;
         }
-        // 4. 范围必须落在当前实时正文内，且与实际匹配文本精确一致；
-        //    dirty 但原范围仍一致时允许定位（不清除 dirty）
-        if (
-          match.from < 0 ||
-          match.to > tab.content.length ||
-          match.to < match.from ||
-          tab.content.slice(match.from, match.to) !== match.matchedText
-        ) {
-          setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+        // 4. 磁盘基线 revision 必须与结果一致（外部修改后只提示过期）
+        if (tab.document.revision !== file.revision) {
+          setStaleNotice(`搜索结果已过期：${tab.name} 的内容已被外部修改。`);
           return;
         }
         if (!isLocateCurrent(locateId, epoch)) {
           return;
         }
-        // 5. 下发定位目标：编辑器宿主应用选区、滚动与聚焦后消费
+        // 5. 按类型校验实时正文 / 规范投影范围与匹配文本（第 4.9 节）：
+        //    dirty 但原范围仍一致时允许定位；匹配前插入/删除正文、结构变化、
+        //    范围越界或文本不符一律判为过期
+        if (file.kind === 'docx') {
+          if (!isDocxTab(tab) || tab.model === null) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 读取失败。`);
+            return;
+          }
+          const projection = projectDocxModelSearchText(tab.model);
+          if (
+            match.from < 0 ||
+            match.to > projection.text.length ||
+            match.to < match.from ||
+            projection.text.slice(match.from, match.to) !== match.matchedText
+          ) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+            return;
+          }
+        } else {
+          if (!isTextTab(tab)) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 的类型已变化。`);
+            return;
+          }
+          if (
+            match.from < 0 ||
+            match.to > tab.content.length ||
+            match.to < match.from ||
+            tab.content.slice(match.from, match.to) !== match.matchedText
+          ) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+            return;
+          }
+        }
+        if (!isLocateCurrent(locateId, epoch)) {
+          return;
+        }
+        // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用
         setLocateTarget({
           tabId: relativePath,
+          locateId,
           from: match.from,
           to: match.to,
           matchedText: match.matchedText,
         });
       })();
     },
-    [openTextFile, search.state.result, workspace.epoch, isLocateCurrent],
+    [openFile, search.state.result, workspace.epoch, isLocateCurrent],
   );
+
+  /**
+   * 宿主定位结果回报（第 4.8 节步骤 12-13）：只接收当前定位请求的回报，
+   * 迟到回报不污染最新定位状态；宿主二次校验失败（App 校验后到宿主应用前发生
+   * 编辑/结构变化）时显示非破坏性过期提示。
+   */
+  const handleLocateOutcome = useCallback((locateId: number, outcome: 'applied' | 'stale') => {
+    if (locateId !== latestLocateIdRef.current) {
+      return;
+    }
+    if (outcome === 'stale') {
+      setStaleNotice('搜索结果已过期：匹配位置已失效。');
+    }
+  }, []);
 
   const selectedFilePath = activeTab(model)?.relativePath ?? null;
   // 活动文档类型（TASK-008 第 4.10 节）：查找替换仅支持 TXT，活动 DOCX 时侧栏显示不可用说明。
@@ -563,6 +610,7 @@ export const App = (): React.JSX.Element => {
             locateTarget={locateTarget}
             locateNotice={staleNotice}
             onDismissLocateNotice={() => setStaleNotice(null)}
+            onLocateOutcome={handleLocateOutcome}
             searchPanelHostRef={currentDocumentSearchPanelHostRef}
             onSearchPanelRequest={handleCurrentDocumentSearchRequest}
             onSearchControlsChange={(controls) => {

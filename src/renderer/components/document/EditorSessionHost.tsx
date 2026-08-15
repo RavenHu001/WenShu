@@ -29,8 +29,15 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search';
 import type { EditorSession, EditorSessions } from '../../lib/use-editor-sessions';
 
-/** 搜索结果定位目标：由 App 校验通过后下发，宿主在视图就绪时应用选区并滚动聚焦。 */
+/** 定位结果：宿主应用成功或校验失败（TASK-008 第 4.8 节步骤 12）。 */
+export type EditorLocateOutcome = 'applied' | 'stale';
+
+/**
+ * 搜索结果定位目标：由 App 校验通过后下发，宿主在视图就绪时应用选区并滚动聚焦。
+ * `locateId` 是唯一定位请求编号：宿主回报 applied/stale 时携带，App 只接收当前请求的回报。
+ */
 export interface EditorLocateTarget {
+  readonly locateId: number;
   readonly from: number;
   readonly to: number;
   readonly matchedText: string;
@@ -63,6 +70,8 @@ export interface EditorSessionHostProps {
    * 同一目标对象只应用一次（appliedLocateRef 守卫），防止普通 rerender 重复抢焦点（第 6.7 节）。
    */
   readonly locateTarget?: EditorLocateTarget | null;
+  /** 定位结果回报：`applied` 应用成功 / `stale` 二次校验失败（携带 locateId）。 */
+  readonly onLocateOutcome?: (locateId: number, outcome: EditorLocateOutcome) => void;
   /** 每标签会话缓存。 */
   readonly sessions: EditorSessions;
   /** 搜索侧栏中的 CodeMirror 面板挂载点；避免面板继续占用编辑区底部。 */
@@ -223,6 +232,7 @@ export function EditorSessionHost({
   onContentChange,
   onSaveRequest,
   locateTarget = null,
+  onLocateOutcome,
   sessions,
   searchPanelHostRef,
   onSearchPanelRequest,
@@ -233,6 +243,7 @@ export function EditorSessionHost({
   const contentChangeRef = useRef(onContentChange);
   const saveRequestRef = useRef(onSaveRequest);
   const searchPanelRequestRef = useRef(onSearchPanelRequest);
+  const locateOutcomeRef = useRef(onLocateOutcome);
   const contentRef = useRef(content);
   const sessionsRef = useRef(sessions);
   /** 已应用过的定位目标：同一对象只应用一次（rerender 不重复抢焦点）。 */
@@ -242,6 +253,7 @@ export function EditorSessionHost({
     contentChangeRef.current = onContentChange;
     saveRequestRef.current = onSaveRequest;
     searchPanelRequestRef.current = onSearchPanelRequest;
+    locateOutcomeRef.current = onLocateOutcome;
   });
   useEffect(() => {
     contentRef.current = content;
@@ -336,10 +348,14 @@ export function EditorSessionHost({
       return;
     }
     appliedLocateRef.current = locateTarget;
+    const report = (outcome: EditorLocateOutcome): void => {
+      locateOutcomeRef.current?.(locateTarget.locateId, outcome);
+    };
     const sourceFrom = Math.max(0, Math.min(locateTarget.from, content.length));
     const sourceTo = Math.max(sourceFrom, Math.min(locateTarget.to, content.length));
     if (content.slice(sourceFrom, sourceTo) !== locateTarget.matchedText) {
       // React 持有的实时序列化正文已变化：不把失效的磁盘偏移映射进编辑器
+      report('stale');
       return;
     }
     const editorFrom = toEditorOffset(content, sourceFrom);
@@ -349,6 +365,7 @@ export function EditorSessionHost({
     const safeTo = Math.max(safeFrom, Math.min(editorTo, doc.length));
     if (doc.sliceString(safeFrom, safeTo) !== locateTarget.matchedText) {
       // 实时正文与结果匹配文本不一致：不选中、不改正文
+      report('stale');
       return;
     }
     view.dispatch({
@@ -356,6 +373,7 @@ export function EditorSessionHost({
       effects: EditorView.scrollIntoView(safeFrom, { y: 'center' }),
     });
     view.focus();
+    report('applied');
   }, [content, locateTarget, tabId]);
 
   return <div className="doc-editor" ref={containerRef} aria-label="TXT 编辑器" />;
