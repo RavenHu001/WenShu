@@ -7,16 +7,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_CANDIDATE_FILES,
+  MAX_DOCX_CANDIDATE_FILES,
+  MAX_DOCX_READ_CONCURRENCY,
   MAX_FILE_READ_CONCURRENCY,
   MAX_MATCHES_PER_FILE,
   MAX_PREVIEW_LENGTH,
   MAX_QUERY_LENGTH,
   MAX_TOTAL_MATCHES,
+  WORKSPACE_SEARCH_TRUNCATION_PRIORITY,
+  isWorkspaceSearchDocumentKind,
   validateWorkspaceTextSearchCancelRequest,
   validateWorkspaceTextSearchRequest,
 } from '../../src/shared/search';
 
-describe('固定资源上限常量（第 4.5 节，WP0 冻结项 5）', () => {
+describe('固定资源上限常量（第 4.5 节，WP0 冻结项 5；TASK-008 第 4.5 节）', () => {
   it('查询长度 256、候选文件 1000、单文件匹配 200、总匹配 2000、预览 160、并发 4', () => {
     expect(MAX_QUERY_LENGTH).toBe(256);
     expect(MAX_CANDIDATE_FILES).toBe(1000);
@@ -24,6 +28,38 @@ describe('固定资源上限常量（第 4.5 节，WP0 冻结项 5）', () => {
     expect(MAX_TOTAL_MATCHES).toBe(2000);
     expect(MAX_PREVIEW_LENGTH).toBe(160);
     expect(MAX_FILE_READ_CONCURRENCY).toBe(4);
+  });
+
+  it('TASK-008 新增：DOCX 候选 200、DOCX 并发 2（总并发 4 内的独立上限）', () => {
+    expect(MAX_DOCX_CANDIDATE_FILES).toBe(200);
+    expect(MAX_DOCX_READ_CONCURRENCY).toBe(2);
+    expect(MAX_DOCX_CANDIDATE_FILES).toBeLessThan(MAX_CANDIDATE_FILES);
+    expect(MAX_DOCX_READ_CONCURRENCY).toBeLessThanOrEqual(MAX_FILE_READ_CONCURRENCY);
+  });
+});
+
+describe('搜索文件 kind 判别（TASK-008 第 4.6 节，第 8.4 节）', () => {
+  it('isWorkspaceSearchDocumentKind 只接受 txt / docx', () => {
+    expect(isWorkspaceSearchDocumentKind('txt')).toBe(true);
+    expect(isWorkspaceSearchDocumentKind('docx')).toBe(true);
+    for (const bad of ['md', 'TXT', 'DOCX', 'text', '', null, undefined, 0, 1, {}, ['txt']]) {
+      expect(isWorkspaceSearchDocumentKind(bad), String(bad)).toBe(false);
+    }
+  });
+});
+
+describe('截断原因与优先级（TASK-008 第 4.5 节，第 8.4 节）', () => {
+  it('截断原因包含新增的 docx-file-limit，且优先级固定为 file-limit > docx-file-limit > total-matches-limit > matches-per-file-limit', () => {
+    expect(WORKSPACE_SEARCH_TRUNCATION_PRIORITY).toEqual([
+      'file-limit',
+      'docx-file-limit',
+      'total-matches-limit',
+      'matches-per-file-limit',
+    ]);
+    // 优先级数组去重且覆盖全部原因（运行时与类型契约一致）
+    expect(new Set(WORKSPACE_SEARCH_TRUNCATION_PRIORITY).size).toBe(
+      WORKSPACE_SEARCH_TRUNCATION_PRIORITY.length,
+    );
   });
 });
 
@@ -70,6 +106,12 @@ describe('搜索请求运行时校验（第 4.6/4.7 节）', () => {
       'encoding',
       'channel',
       'strategy',
+      // TASK-008 明确不在请求内的文件类型 / 解析 / 预算字段（第 4.6 / 7.2 节）
+      'fileTypes',
+      'includeDocx',
+      'docxOnly',
+      'maxDocxFiles',
+      'parseOptions',
     ]) {
       expect(validateWorkspaceTextSearchRequest({ ...validRequest(), [extra]: 1 }).ok).toBe(false);
     }

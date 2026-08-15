@@ -221,6 +221,61 @@ describe('search:text-workspace 处理器', () => {
     });
   });
 
+  it('completed 结果原样透传：TXT/DOCX 分组的 kind、匹配与统计不被改动且可结构化克隆', async () => {
+    const mixed: WorkspaceTextSearchResult = {
+      status: 'completed',
+      requestId: 7,
+      files: [
+        {
+          kind: 'txt',
+          relativePath: 'a.txt',
+          revision: 'r1',
+          truncated: false,
+          matches: [
+            {
+              from: 0,
+              to: 1,
+              line: 1,
+              column: 1,
+              matchedText: 'x',
+              preview: 'x',
+              previewMatchFrom: 0,
+              previewMatchTo: 1,
+            },
+          ],
+        },
+        {
+          kind: 'docx',
+          relativePath: 'b.docx',
+          revision: 'r2',
+          truncated: false,
+          matches: [
+            {
+              from: 2,
+              to: 3,
+              line: 2,
+              column: 3,
+              matchedText: 'y',
+              preview: 'y',
+              previewMatchFrom: 0,
+              previewMatchTo: 1,
+            },
+          ],
+        },
+      ],
+      statistics: { scannedFiles: 2, matchedFiles: 2, totalMatches: 2, skippedFiles: 0 },
+      truncated: false,
+      truncatedReason: null,
+    };
+    searcherMock.mockResolvedValueOnce(mixed);
+    const result = await invoke({ requestId: 7, query: 'x', caseSensitive: true });
+    expect(result).toEqual(mixed);
+    // 结构化克隆安全：结果可 JSON 序列化，不含模型、Buffer、Error、函数或类实例
+    const json = JSON.stringify(result);
+    expect(json).toContain('"kind":"docx"');
+    expect(json).toContain('"kind":"txt"');
+  });
+
   it('同一窗口新搜索取消旧搜索：旧任务停止回调生效且旧结果不标记 completed', async () => {
     gate = new Promise<void>((resolve) => {
       resolveGate = resolve;

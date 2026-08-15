@@ -9,9 +9,11 @@ import {
   hasDirtyTabs,
   hasSavingTabs,
   isDocxTab,
+  isTextTab,
   tabById,
   type DocumentTabState,
 } from './lib/document-tabs';
+import { projectDocxModelSearchText } from '../shared/docx-search-text';
 import type {
   EditorLocateTarget,
   EditorSearchControls,
@@ -25,6 +27,12 @@ import { ConfirmDialog } from './components/common/ConfirmDialog';
 
 /** 活动栏面板：文件 / 搜索为真实可访问入口；设置保持不可用占位（第 4.10 节）。 */
 type ActivityPanel = 'files' | 'search';
+
+/** App 层定位身份：编辑器目标外继续绑定来源搜索与标签。 */
+type AppLocateTarget = EditorLocateTarget & {
+  readonly requestId: number;
+  readonly tabId: string;
+};
 
 const activityItems = [
   { id: 'files', label: '文', title: '文件' },
@@ -57,7 +65,6 @@ export const App = (): React.JSX.Element => {
   const {
     model,
     openFile,
-    openTextFile,
     activateTab,
     editTab,
     editDocxTab,
@@ -75,6 +82,11 @@ export const App = (): React.JSX.Element => {
     workspaceAvailable: workspace.state.workspace !== null,
     workspaceEpoch: workspace.epoch,
   });
+  const completedSearchRequestId =
+    search.state.result?.status === 'completed' ? search.state.result.requestId : null;
+  /** 当前可定位的 completed 搜索身份；异步链始终读最新值。 */
+  const completedSearchRequestIdRef = useRef<number | null>(completedSearchRequestId);
+  completedSearchRequestIdRef.current = completedSearchRequestId;
   const [activity, setActivity] = useState<ActivityPanel>('files');
   const [searchFocusTarget, setSearchFocusTarget] = useState<'workspace' | 'current-document'>(
     'workspace',
@@ -82,20 +94,20 @@ export const App = (): React.JSX.Element => {
   const currentDocumentSearchPanelHostRef = useRef<HTMLDivElement | null>(null);
   const editorSearchControlsRef = useRef<EditorSearchControls | null>(null);
   /** 待应用的搜索结果定位目标（App 校验通过后下发给编辑器宿主）。 */
-  const [locateTarget, setLocateTarget] = useState<
-    (EditorLocateTarget & { readonly tabId: string }) | null
-  >(null);
+  const [locateTarget, setLocateTarget] = useState<AppLocateTarget | null>(null);
   /** 非破坏性"搜索结果已过期"提示文案。 */
   const [staleNotice, setStaleNotice] = useState<string | null>(null);
   /** 定位请求编号：全局单调递增，新定位请求作废旧请求（第 4.9.7 节）。 */
   const locateCounterRef = useRef(0);
   /** 最新定位请求编号：异步完成时校验仍是最新请求。 */
   const latestLocateIdRef = useRef(0);
+  /** 最新定位所属的搜索 requestId；新搜索/取消会使旧定位失效。 */
+  const latestLocateSearchRequestIdRef = useRef<number | null>(null);
+  /** 最新定位所属的工作区 epoch；宿主迟到回报也必须复验。 */
+  const latestLocateEpochRef = useRef<number | null>(null);
   /** 发起定位时的工作区 epoch 快照。 */
   const workspaceEpochRef = useRef(workspace.epoch);
-  useEffect(() => {
-    workspaceEpochRef.current = workspace.epoch;
-  });
+  workspaceEpochRef.current = workspace.epoch;
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
   const pendingRef = useRef<PendingDiscard | null>(null);
@@ -401,15 +413,36 @@ export const App = (): React.JSX.Element => {
     setStaleNotice(null);
   }, [workspace.epoch]);
 
-  /** 定位请求是否仍有效：工作区 epoch 未变化且没有更新的定位请求（第 5.3 节）。 */
-  const isLocateCurrent = useCallback((locateId: number, epoch: number): boolean => {
-    return workspaceEpochRef.current === epoch && latestLocateIdRef.current === locateId;
-  }, []);
+  // 新搜索、取消或搜索结果替换时，立即作废仍在等待文件读取/宿主回报的旧定位。
+  useEffect(() => {
+    const locateRequestId = latestLocateSearchRequestIdRef.current;
+    if (locateRequestId !== null && locateRequestId !== completedSearchRequestId) {
+      latestLocateIdRef.current = ++locateCounterRef.current;
+      latestLocateSearchRequestIdRef.current = null;
+      latestLocateEpochRef.current = null;
+      setLocateTarget(null);
+    }
+  }, [completedSearchRequestId]);
 
   /**
-   * 搜索结果点击 → "打开/激活 → 验证 → 定位"闭环（第 4.9 节）：
-   * 打开或激活唯一标签并等待读取完成；revision、范围与实际匹配文本全部有效时
-   * 下发定位目标，由编辑器宿主设置选区、滚动并聚焦；任何过期情况只提示，不选中、不改正文。
+   * 定位请求是否仍有效：同时绑定工作区 epoch、搜索 requestId 与最新 locateId
+   * （第 5.3 节），任一身份变化均不得提交旧定位。
+   */
+  const isLocateCurrent = useCallback(
+    (locateId: number, epoch: number, requestId: number): boolean =>
+      workspaceEpochRef.current === epoch &&
+      latestLocateIdRef.current === locateId &&
+      latestLocateEpochRef.current === epoch &&
+      latestLocateSearchRequestIdRef.current === requestId &&
+      completedSearchRequestIdRef.current === requestId,
+    [],
+  );
+
+  /**
+   * 搜索结果点击 → "打开/激活 → 验证 → 定位"闭环（第 4.8 / 4.9 节）：
+   * 通用 `openFile` 打开或激活唯一标签并等待读取完成；kind、revision、实时正文/
+   * 规范投影范围与实际匹配文本全部有效时下发带 locateId 的定位目标，由编辑器宿主
+   * 二次校验并设置选区、滚动与聚焦；任何过期情况只提示，不选中、不改正文。
    */
   const handleMatchActivate = useCallback(
     (file: WorkspaceTextSearchFileResult, match: WorkspaceTextSearchMatch) => {
@@ -418,62 +451,127 @@ export const App = (): React.JSX.Element => {
       if (result === null || result.status !== 'completed') {
         return;
       }
+      // 参数必须仍是当前 completed 结果中的原始分组与匹配，不接受旧渲染或伪造对象。
+      if (!result.files.includes(file) || !file.matches.includes(match)) {
+        return;
+      }
       const locateId = ++locateCounterRef.current;
       latestLocateIdRef.current = locateId;
+      latestLocateSearchRequestIdRef.current = result.requestId;
+      const requestId = result.requestId;
       const epoch = workspace.epoch;
+      latestLocateEpochRef.current = epoch;
       const relativePath = file.relativePath;
       setStaleNotice(null);
       setLocateTarget(null); // 新定位请求作废旧定位目标
 
       void (async () => {
-        // 1. 打开或激活唯一标签；新标签等待读取完成（不创建第二标签）
-        const tab = await openTextFile(relativePath);
-        if (!isLocateCurrent(locateId, epoch)) {
+        // 1. 通用打开或激活唯一标签（按扩展名分派 TXT / DOCX）；新标签等待读取完成
+        const tab = await openFile(relativePath);
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return; // 新定位请求或工作区切换已作废本次定位
         }
         if (tab === null) {
           return; // 标签已关闭或工作区已失效
         }
-        // 2. read-error 标签保留错误状态，不能伪造定位成功（第 4.9.6 节）
+        // 2. read-error 标签保留错误状态，不能伪造定位成功（第 4.8 节步骤 3）
         if (tab.status === 'read-error' || tab.document === null) {
           setStaleNotice(`搜索结果已过期：${tab.name} 读取失败。`);
           return;
         }
-        if (!isLocateCurrent(locateId, epoch)) {
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
-        // 3. 磁盘基线 revision 必须与结果一致（外部修改后只提示过期）
+        // 3. 搜索结果 kind 必须与实际标签类型一致（第 4.8 节步骤 3）
+        if (file.kind === 'docx' ? !isDocxTab(tab) : !isTextTab(tab)) {
+          setStaleNotice(`搜索结果已过期：${tab.name} 的类型已变化。`);
+          return;
+        }
+        // 4. 磁盘基线 revision 必须与结果一致（外部修改后只提示过期）
         if (tab.document.revision !== file.revision) {
           setStaleNotice(`搜索结果已过期：${tab.name} 的内容已被外部修改。`);
           return;
         }
-        // 4. 范围必须落在当前实时正文内，且与实际匹配文本精确一致；
-        //    dirty 但原范围仍一致时允许定位（不清除 dirty）
-        if (
-          match.from < 0 ||
-          match.to > tab.content.length ||
-          match.to < match.from ||
-          tab.content.slice(match.from, match.to) !== match.matchedText
-        ) {
-          setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
-        if (!isLocateCurrent(locateId, epoch)) {
+        // 5. 按类型校验实时正文 / 规范投影范围与匹配文本（第 4.9 节）：
+        //    dirty 但原范围仍一致时允许定位；匹配前插入/删除正文、结构变化、
+        //    范围越界或文本不符一律判为过期
+        if (file.kind === 'docx') {
+          if (!isDocxTab(tab) || tab.model === null) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 读取失败。`);
+            return;
+          }
+          const projection = projectDocxModelSearchText(tab.model);
+          if (
+            match.from < 0 ||
+            match.to > projection.text.length ||
+            match.to < match.from ||
+            projection.text.slice(match.from, match.to) !== match.matchedText
+          ) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+            return;
+          }
+        } else {
+          if (!isTextTab(tab)) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 的类型已变化。`);
+            return;
+          }
+          if (
+            match.from < 0 ||
+            match.to > tab.content.length ||
+            match.to < match.from ||
+            tab.content.slice(match.from, match.to) !== match.matchedText
+          ) {
+            setStaleNotice(`搜索结果已过期：${tab.name} 的匹配位置已失效。`);
+            return;
+          }
+        }
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
-        // 5. 下发定位目标：编辑器宿主应用选区、滚动与聚焦后消费
+        // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用
         setLocateTarget({
           tabId: relativePath,
+          locateId,
+          requestId,
           from: match.from,
           to: match.to,
           matchedText: match.matchedText,
         });
       })();
     },
-    [openTextFile, search.state.result, workspace.epoch, isLocateCurrent],
+    [openFile, search.state.result, workspace.epoch, isLocateCurrent],
   );
 
+  /**
+   * 宿主定位结果回报（第 4.8 节步骤 12-13）：只接收当前定位请求的回报，
+   * 迟到回报不污染最新定位状态；宿主二次校验失败（App 校验后到宿主应用前发生
+   * 编辑/结构变化）时显示非破坏性过期提示。
+   */
+  const handleLocateOutcome = useCallback((locateId: number, outcome: 'applied' | 'stale') => {
+    const requestId = latestLocateSearchRequestIdRef.current;
+    if (
+      locateId !== latestLocateIdRef.current ||
+      requestId === null ||
+      latestLocateEpochRef.current !== workspaceEpochRef.current ||
+      completedSearchRequestIdRef.current !== requestId
+    ) {
+      return;
+    }
+    if (outcome === 'stale') {
+      setStaleNotice('搜索结果已过期：匹配位置已失效。');
+    }
+  }, []);
+
   const selectedFilePath = activeTab(model)?.relativePath ?? null;
+  // 活动文档类型（TASK-008 第 4.10 节）：查找替换仅支持 TXT，活动 DOCX 时侧栏显示不可用说明。
+  const activeDocumentTab = activeTab(model);
+  const currentDocumentKind: 'txt' | 'docx' | null =
+    activeDocumentTab === null ? null : isDocxTab(activeDocumentTab) ? 'docx' : 'txt';
+  const currentDocumentAvailable =
+    currentDocumentKind === 'txt' && activeDocumentTab?.document != null;
 
   return (
     <div className="app-shell">
@@ -534,7 +632,8 @@ export const App = (): React.JSX.Element => {
               focusTarget={searchFocusTarget}
               onFocusTargetChange={setSearchFocusTarget}
               currentDocumentPanelHostRef={currentDocumentSearchPanelHostRef}
-              currentDocumentAvailable={activeTab(model)?.document != null}
+              currentDocumentKind={currentDocumentKind}
+              currentDocumentAvailable={currentDocumentAvailable}
               onOpenCurrentDocumentSearch={handleOpenCurrentDocumentSearch}
               onMatchActivate={handleMatchActivate}
             />
@@ -556,6 +655,7 @@ export const App = (): React.JSX.Element => {
             locateTarget={locateTarget}
             locateNotice={staleNotice}
             onDismissLocateNotice={() => setStaleNotice(null)}
+            onLocateOutcome={handleLocateOutcome}
             searchPanelHostRef={currentDocumentSearchPanelHostRef}
             onSearchPanelRequest={handleCurrentDocumentSearchRequest}
             onSearchControlsChange={(controls) => {

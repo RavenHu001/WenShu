@@ -1,33 +1,41 @@
 /**
  * 工作区文本搜索共享契约 —— 纯 TypeScript 类型、常量与运行时校验，不依赖 Electron、Node.js、React 或浏览器运行时。
  *
- * ## 设计约束（TASK-006 第 4.8 节与 WP0 冻结记录）
+ * ## 设计约束（TASK-006 第 4.8 节、TASK-008 第 4.6 节与 WP0 冻结记录）
  *
  * 1. 所有接口字段均为 `readonly`，保证跨进程通过 Electron structured clone 安全传递；
  * 2. 不包含 `Error`、`Buffer`、`Uint8Array`、文件句柄、函数或类实例；
  * 3. 请求不携带工作区根、绝对路径、glob、扩展名、编码、上限、并发数或文件内容；
  * 4. 结果文件身份只使用规范工作区相对路径（`/` 分隔）；
- * 5. 匹配范围 `from` / `to` 以完整文件正文（BOM 已剥离）的 UTF-16 索引为基准；
+ * 5. 匹配范围 `from` / `to` 以完整文件正文的 UTF-16 索引为基准：TXT 为剥离 BOM 后的
+ *    原正文，DOCX 为规范正文投影（TASK-008 第 4.3 / 4.4 节）；
  * 6. 预览范围 `previewMatchFrom` / `previewMatchTo` 以 `preview` 自身为基准；
- * 7. 查询、命中正文、绝对路径与原始异常不得进入日志或跨进程错误。
+ * 7. 查询、命中正文、绝对路径与原始异常不得进入日志或跨进程错误；
+ * 8. 结果文件分组携带必填 `kind` 判别字段（`txt` / `docx`），由主进程受控候选分类
+ *    产生，renderer 不从展示文案猜测（TASK-008 第 4.6 节）。
  *
  * ## 固定资源上限（第 4.5 节，WP0 冻结项 5）
  *
- * 首版搜索的全部可审计常量集中于此，主进程搜索器与测试共同引用。
+ * 全部可审计常量集中于此，主进程搜索器与测试共同引用。TASK-008 起 1000 是 TXT 与
+ * DOCX 合计候选预算，DOCX 另有 200 的独立上限。
  */
 
 /** 查询最大 UTF-16 code unit 数。 */
 export const MAX_QUERY_LENGTH = 256;
-/** 单次搜索候选 TXT 文件数上限。 */
+/** 单次搜索候选文件总数上限（TASK-008 起为 TXT + DOCX 合计预算）。 */
 export const MAX_CANDIDATE_FILES = 1000;
+/** 单次搜索 DOCX 候选文件数上限（TASK-008 第 4.5 节：控制 ZIP 检查/导入/模型内存压力）。 */
+export const MAX_DOCX_CANDIDATE_FILES = 200;
 /** 单个文件返回匹配数上限。 */
 export const MAX_MATCHES_PER_FILE = 200;
 /** 单次返回匹配总数上限。 */
 export const MAX_TOTAL_MATCHES = 2000;
 /** 单条预览最大 UTF-16 code unit 数。 */
 export const MAX_PREVIEW_LENGTH = 160;
-/** 候选文件读取并发上限。 */
+/** 候选文件读取并发上限（全部文件池）。 */
 export const MAX_FILE_READ_CONCURRENCY = 4;
+/** DOCX 同时读取/导入上限（TASK-008 第 4.5 节：总并发 4 内 DOCX 在途不超过 2）。 */
+export const MAX_DOCX_READ_CONCURRENCY = 2;
 
 /**
  * 工作区文本搜索请求（第 4.8 节固定形状）。
@@ -69,10 +77,24 @@ export interface WorkspaceTextSearchMatch {
 }
 
 /**
- * 单个文件的搜索结果分组（第 4.8 节固定形状）。
+ * 单个文件的搜索结果分组（第 4.8 节固定形状；TASK-008 第 4.6 节新增必填 `kind`）。
  * 文件身份只使用规范工作区相对路径；`revision` 为读取时原始字节的 SHA-256。
+ * TXT 的 `from` / `to` 指向剥离 BOM 后的原正文；DOCX 的 `from` / `to` 指向规范正文投影。
  */
+
+/** 搜索结果文件类型（TASK-008 第 4.6 节）：由主进程受控候选分类产生，不从展示文案猜测。 */
+export type WorkspaceSearchDocumentKind = 'txt' | 'docx';
+
+/** 运行时判定搜索文件 kind：只接受 `txt` / `docx`，其余值一律拒绝。 */
+export function isWorkspaceSearchDocumentKind(
+  value: unknown,
+): value is WorkspaceSearchDocumentKind {
+  return value === 'txt' || value === 'docx';
+}
+
 export interface WorkspaceTextSearchFileResult {
+  /** 文件类型判别字段：TXT 或 DOCX（主进程受控候选分类产生，renderer 不猜测）。 */
+  readonly kind: WorkspaceSearchDocumentKind;
   /** 规范工作区相对路径，`/` 分隔；同一结果集合内唯一。 */
   readonly relativePath: string;
   /** 读取时磁盘内容的 revision；结果生命周期内不可变，用于过期定位校验。 */
@@ -85,16 +107,28 @@ export interface WorkspaceTextSearchFileResult {
 
 /**
  * 截断原因（第 4.5 节固定枚举）：到达上限返回 `truncated: true` 与具体原因，不静默丢弃。
- * - `file-limit`：候选 TXT 文件数达到 1000；
+ * - `file-limit`：候选文件总数达到 1000（TXT + DOCX 合计）；
+ * - `docx-file-limit`：DOCX 候选数达到 200（TASK-008 第 4.5 节新增）；
  * - `matches-per-file-limit`：单文件匹配数达到 200；
  * - `total-matches-limit`：总匹配数达到 2000。
+ *
+ * 截断原因优先级固定为：`file-limit` > `docx-file-limit` > `total-matches-limit` >
+ * `matches-per-file-limit`（TASK-008 第 4.5 节；见 `WORKSPACE_SEARCH_TRUNCATION_PRIORITY`）。
  */
 export type WorkspaceTextSearchTruncatedReason =
-  'file-limit' | 'matches-per-file-limit' | 'total-matches-limit';
+  'file-limit' | 'docx-file-limit' | 'matches-per-file-limit' | 'total-matches-limit';
+
+/** 截断原因优先级（从高到低）：同时命中多个上限时报告优先级最高的原因。 */
+export const WORKSPACE_SEARCH_TRUNCATION_PRIORITY: readonly WorkspaceTextSearchTruncatedReason[] = [
+  'file-limit',
+  'docx-file-limit',
+  'total-matches-limit',
+  'matches-per-file-limit',
+];
 
 /** 搜索统计（第 4.5 / 4.8 节）。 */
 export interface WorkspaceTextSearchStatistics {
-  /** 实际尝试读取的候选 TXT 文件数。 */
+  /** 实际尝试读取的候选文件数（TXT + DOCX）。 */
   readonly scannedFiles: number;
   /** 命中文件数（返回结果中的文件分组数，与实际结果一致）。 */
   readonly matchedFiles: number;

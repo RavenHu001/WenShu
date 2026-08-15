@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../../src/renderer/App';
 import type {
@@ -18,6 +18,7 @@ import type {
   WorkspaceSnapshot,
 } from '../../src/shared/workspace';
 import type { ReadTextDocumentResult, SaveTextDocumentResult } from '../../src/shared/document';
+import type { ReadDocxDocumentResult, SaveDocxDocumentResult } from '../../src/shared/docx';
 import type {
   WorkspaceTextSearchFileResult,
   WorkspaceTextSearchMatch,
@@ -134,6 +135,22 @@ function makeDesktopMock(): {
         error: { code: 'NOT_FOUND', message: '文件不存在' },
       })),
       saveText: vi.fn(async (): Promise<SaveTextDocumentResult> => ({
+        status: 'error',
+        error: { code: 'WRITE_FAILED', message: '写入文件失败' },
+      })),
+      readDocx: vi.fn(async (): Promise<ReadDocxDocumentResult> => ({
+        status: 'loaded',
+        document: {
+          kind: 'docx',
+          name: 'b.docx',
+          relativePath: 'b.docx',
+          revision: 'rev-b.docx',
+          size: 10,
+          model: { schemaVersion: 1, blocks: [] },
+          compatibility: { level: 'supported', warnings: [] },
+        },
+      })),
+      saveDocx: vi.fn(async (): Promise<SaveDocxDocumentResult> => ({
         status: 'error',
         error: { code: 'WRITE_FAILED', message: '写入文件失败' },
       })),
@@ -256,6 +273,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
         1,
         completedResult(1, [
           {
+            kind: 'txt',
             relativePath: 'a.txt',
             revision: 'r1',
             truncated: false,
@@ -288,12 +306,14 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
         1,
         completedResult(1, [
           {
+            kind: 'txt',
             relativePath: 'a.txt',
             revision: 'r1',
             truncated: false,
             matches: [match(6, 11, 1, 7, 'hello')],
           },
           {
+            kind: 'txt',
             relativePath: 'sub/b.txt',
             revision: 'r2',
             truncated: false,
@@ -350,6 +370,114 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       );
     });
     expect(screen.getByText('结果已截断：总匹配数已达上限')).toBeDefined();
+  });
+
+  it('truncated docx-file-limit：展示 DOCX 候选上限文案', async () => {
+    const api = makeDesktopMock();
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot(),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await openWorkspace();
+
+    await submitSearch('hello');
+
+    await act(async () => {
+      api.resolveSearch(
+        1,
+        completedResult(1, [], { truncated: true, truncatedReason: 'docx-file-limit' }),
+      );
+    });
+    expect(screen.getByText('结果已截断：DOCX 候选文件数已达上限')).toBeDefined();
+  });
+
+  it('一次查询展示 TXT 与 DOCX 分组：类型标识、路径与 DOCX 提取正文说明', async () => {
+    const api = makeDesktopMock();
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot(),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await openWorkspace();
+
+    await submitSearch('hello');
+
+    await act(async () => {
+      api.resolveSearch(
+        1,
+        completedResult(1, [
+          {
+            kind: 'txt',
+            relativePath: 'a.txt',
+            revision: 'r1',
+            truncated: false,
+            matches: [match(6, 11, 1, 7, 'hello')],
+          },
+          {
+            kind: 'docx',
+            relativePath: 'b.docx',
+            revision: 'r2',
+            truncated: false,
+            matches: [match(0, 5, 2, 1, 'hello')],
+          },
+        ]),
+      );
+    });
+
+    expect(screen.getByText('a.txt')).toBeDefined();
+    expect(screen.getByText('b.docx')).toBeDefined();
+    // 类型标识为可访问文本节点（TXT / DOCX 各一个）
+    expect(screen.getAllByText('TXT')).toHaveLength(1);
+    expect(screen.getAllByText('DOCX')).toHaveLength(1);
+    expect(screen.getByLabelText('文件类型：DOCX')).toBeDefined();
+    // DOCX 行列明确属于提取正文
+    expect(screen.getByText('行列基于 DOCX 提取正文，不是 Word 页面坐标。')).toBeDefined();
+    expect(screen.getByText('1:7')).toBeDefined();
+    expect(screen.getByText('2:1')).toBeDefined();
+    expect(screen.getByText(/扫描 2 个文件/)).toBeDefined();
+  });
+
+  it('未保存正文提示明确：侧栏说明结果不包含未保存编辑', async () => {
+    const api = makeDesktopMock();
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot(),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await openWorkspace();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '搜' }));
+    expect(screen.getByText(/结果来自磁盘上已保存的文件，不包含未保存的编辑/)).toBeDefined();
+    expect(screen.getByText(/DOCX 仅覆盖已进入结构化模型的正文/)).toBeDefined();
+  });
+
+  it('活动 DOCX 时当前文档查找显示不可用说明，不出现假可用面板', async () => {
+    const api = makeDesktopMock();
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot({ entries: [f('b.docx', 'b.docx')] }),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await openWorkspace();
+
+    // 打开 DOCX 标签（mock readDocx 返回 loaded 空文档）
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('tree')).getByRole('button', { name: 'b.docx' }));
+    });
+    await act(async () => {});
+    await act(async () => {});
+
+    // 打开搜索侧栏并切到"查找与替换"
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    });
+    fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
+    expect(screen.getByText('当前文件查找替换仅支持 TXT 文档。')).toBeDefined();
+    // 不可用时 CodeMirror 面板挂载点为空（无假可用输入框）
+    const panel = document.querySelector('.current-document-search-panel');
+    expect(panel?.textContent ?? '').toBe('');
   });
 
   it('cancelled：主动取消后展示已取消且结果不恢复', async () => {
@@ -436,6 +564,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
         2,
         completedResult(2, [
           {
+            kind: 'txt',
             relativePath: 'b.txt',
             revision: 'r2',
             truncated: false,

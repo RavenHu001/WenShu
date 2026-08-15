@@ -204,9 +204,9 @@ Task 7 已完成（见 [TASK-007：基础 DOCX 阅读、编辑与安全保存](.
 - 按文件显示匹配结果；
 - 点击结果打开对应文件。
 
-Task 6 已完成 TXT 查找与搜索闭环（见 [TASK-006 完成报告](./TASK_006_COMPLETION_REPORT.md)）：当前文件查找替换作用于活动编辑器的实时正文（`Ctrl+F` / `Ctrl+H`，普通文字查询、大小写选项、上一个/下一个、替换当前项与全部替换，替换经 CodeMirror 编辑事务进入撤销历史）；工作区 TXT 搜索作用于磁盘已保存内容，通过主进程受控异步遍历、固定并发 4、取消和结果上限（候选 1000 / 单文件 200 / 总匹配 2000）完成。搜索结果以规范相对路径和内容 revision 标识文件，点击后复用多标签的打开/激活能力；revision 或正文范围已失效时只提示结果过期，不错误定位或覆盖内容。首版不实现工作区替换、工作区正则搜索、持久全文索引或 DOCX 搜索。具体实施边界与验收见 [TASK-006 规划](./TASK_006_TXT_SEARCH_FIND_REPLACE.md)。
+Task 6 已完成 TXT 查找与搜索闭环（见 [TASK-006 完成报告](./TASK_006_COMPLETION_REPORT.md)）：当前文件查找替换作用于活动编辑器的实时正文（`Ctrl+F` / `Ctrl+H`，普通文字查询、大小写选项、上一个/下一个、替换当前项与全部替换，替换经 CodeMirror 编辑事务进入撤销历史）；工作区 TXT 搜索作用于磁盘已保存内容，通过主进程受控异步遍历、固定并发 4、取消和结果上限（候选 1000 / 单文件 200 / 总匹配 2000）完成。搜索结果以规范相对路径和内容 revision 标识文件，点击后复用多标签的打开/激活能力；revision 或正文范围已失效时只提示结果过期，不错误定位或覆盖内容。Task 6 首版不实现工作区替换、工作区正则搜索、持久全文索引或 DOCX 搜索（DOCX 搜索由 Task 8 完成）。具体实施边界与验收见 [TASK-006 规划](./TASK_006_TXT_SEARCH_FIND_REPLACE.md)。
 
-Task 7 仍不把 DOCX 隐式加入 Task 6 的 TXT 搜索器。工作区 DOCX 正文搜索需要在基础 DOCX 读取、结构化模型和富文本定位稳定后单独规划，复用搜索任务身份、取消、预算和 revision 过期原则，但单独设计正文提取与段落位置映射。
+Task 7 仍不把 DOCX 隐式加入 Task 6 的 TXT 搜索器。Task 8 已完成（见 [TASK-008 完成报告](./TASK_008_COMPLETION_REPORT.md)）：工作区 DOCX 正文搜索与富文本结果定位复用搜索任务身份、取消、预算和 revision 过期原则，但为 DOCX 单独设计基于结构化模型（`DocxDocumentModel`）的规范正文投影（`src/shared/docx-search-text.ts`，深度优先文本块 + 人工 `\n` 分隔的纯函数）、文本块位置映射与 ProseMirror 公开 API 定位；主进程混合搜索执行总候选 1000（其中 DOCX 200）、总并发 4（其中 DOCX 并发 2）；结果定位必须通过 kind、revision、范围与匹配文本双重校验（App 实时投影校验 + DOCX 宿主同规则投影二次校验），任何过期、结构变化或映射失败只显示非破坏性提示，不错误定位、不修改正文；搜索不写工作区、不建立索引。
 
 ### 5.7 设置
 
@@ -438,6 +438,8 @@ Task 5 已在不扩大文件系统权限的前提下把单文档编辑扩展为�
 Task 6 已在 CodeMirror 会话中增加当前文件查找替换（`@codemirror/search` 直接依赖），并为工作区 TXT 搜索增加独立的主进程只读搜索能力。renderer 只提交有界查询和请求身份（requestId），不能提交工作区根或任意文件系统参数；主进程负责受控遍历、TXT 读取、固定并发 4、取消、结果上限（候选 1000 / 单文件 200 / 总匹配 2000）和错误隔离。首版搜索不建立持久索引，不写工作区；结果定位绑定 requestId、工作区 epoch、相对路径、revision 与稳定 tabId，过期只提示不覆盖正文。具体实施边界见 [TASK-006 规划](./TASK_006_TXT_SEARCH_FIND_REPLACE.md)。
 
 Task 7 已采用 Tiptap/ProseMirror 作为 DOCX renderer 编辑会话，编辑器实例不跨 IPC；项目自有 `DocxDocumentModel` 是导入、编辑状态和导出的稳定边界（`src/shared/docx.ts` 契约 + `src/shared/docx-convert.ts` 纯转换）。TXT 继续使用 CodeMirror，通用标签生命周期通过文件类型判别联合复用（`src/renderer/lib/document-tabs.ts`），TXT 与 DOCX 的正文模型和编辑器 runtime 保持隔离。具体实施结果见 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)。
+
+Task 8 已把工作区搜索扩展为 TXT + DOCX 混合搜索与富文本结果定位（见 [TASK-008 完成报告](./TASK_008_COMPLETION_REPORT.md)）：DOCX 搜索文本的唯一语义来源是 `DocxDocumentModel` 的规范正文投影（`src/shared/docx-search-text.ts`，深度优先文本块 + 人工 `\n` 分隔，UTF-16 偏移与 ProseMirror 文本位置一致），不把 DOCX 当作 UTF-8 TXT，也不直接搜索 OOXML、Mammoth HTML 或编辑器 DOM；主进程搜索器复用受控读取器并执行总候选 1000（DOCX 200）、总并发 4（DOCX 2）、协作式取消与单文件错误隔离；结果定位经 App 实时投影校验与 DOCX 宿主同规则投影二次校验后，用 ProseMirror 公开命令（`setTextSelection` / `scrollIntoView` / `focus`）设置选区、滚动与聚焦，任何过期或映射失败只显示非破坏性提示；搜索只读，不写工作区、不建索引或缓存。
 
 ### 8.4 DOCX 处理
 

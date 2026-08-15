@@ -1,14 +1,17 @@
 /**
- * 工作区搜索侧栏 —— TASK-006 WP4（任务第 6.6 节）。
+ * 工作区搜索侧栏 —— TASK-006 WP4 + TASK-008 WP3。
  *
  * 展示职责：搜索输入（草稿）、大小写选项、搜索 / 取消、状态、统计与分组结果；
  * 异步协调与迟到结果防护由 `useWorkspaceSearch` controller 负责。
  *
- * ## 边界（第 4.2 / 4.3 / 4.4 节）
+ * ## 边界（第 4.2 / 4.3 / 4.4 / 4.10 节）
  *
  * - 输入框内容只是草稿：输入变化不等于搜索完成结果，结果标题以已提交查询为准；
  * - 无工作区时显示明确空状态，不发起任何搜索 IPC；
+ * - 一次查询搜索磁盘上已保存的 TXT 与 DOCX 规范正文；结果分组携带 kind 类型标识，
+ *   DOCX 行列明确属于提取正文；
  * - 结果来自磁盘已保存快照，侧栏明确提示不包含未保存编辑；
+ * - 当前文件查找替换仍只支持 TXT：活动 DOCX 时显示不可用说明，不出现假可用状态；
  * - 片段由 React 文本节点渲染，不使用 `dangerouslySetInnerHTML`；
  * - 本组件不调用 Node API，不从展示字符串解析路径、行列或匹配范围。
  */
@@ -35,6 +38,8 @@ interface SearchSidebarProps {
   readonly onFocusTargetChange?: (target: 'workspace' | 'current-document') => void;
   /** CodeMirror 当前文档查找/替换面板的外部挂载点。 */
   readonly currentDocumentPanelHostRef?: RefObject<HTMLDivElement | null>;
+  /** 活动文档类型：`txt` / `docx` / 无活动文档为 null（TASK-008 第 4.10 节）。 */
+  readonly currentDocumentKind?: 'txt' | 'docx' | null;
   readonly currentDocumentAvailable?: boolean;
   readonly onOpenCurrentDocumentSearch?: (mode: EditorSearchMode) => void;
   /** 点击匹配结果后的打开 / 定位入口（WP5 接入）。 */
@@ -46,6 +51,7 @@ interface SearchSidebarProps {
 
 const TRUNCATED_REASON_LABEL: Readonly<Record<string, string>> = {
   'file-limit': '候选文件数已达上限',
+  'docx-file-limit': 'DOCX 候选文件数已达上限',
   'matches-per-file-limit': '单文件匹配数已达上限',
   'total-matches-limit': '总匹配数已达上限',
 };
@@ -57,6 +63,7 @@ export function SearchSidebar({
   focusTarget = 'workspace',
   onFocusTargetChange,
   currentDocumentPanelHostRef,
+  currentDocumentKind = null,
   currentDocumentAvailable = false,
   onOpenCurrentDocumentSearch,
   onMatchActivate,
@@ -132,7 +139,11 @@ export function SearchSidebar({
           aria-label="当前文档查找与替换"
         />
         {!currentDocumentAvailable && (
-          <div className="current-document-search-empty">打开一个 TXT 文件后可查找或替换。</div>
+          <div className="current-document-search-empty">
+            {currentDocumentKind === 'docx'
+              ? '当前文件查找替换仅支持 TXT 文档。'
+              : '打开一个 TXT 文件后可查找或替换。'}
+          </div>
         )}
       </section>
 
@@ -149,7 +160,7 @@ export function SearchSidebar({
           <div className="ws-idle">
             <div className="folder-icon" aria-hidden="true" />
             <p>尚未打开工作区</p>
-            <span>打开文件夹后可搜索已保存的 TXT 内容</span>
+            <span>打开文件夹后可搜索已保存的 TXT 和 DOCX 正文</span>
           </div>
         ) : (
           <>
@@ -160,7 +171,7 @@ export function SearchSidebar({
                 type="text"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="搜索已保存的 TXT 内容…"
+                placeholder="搜索已保存的 TXT 和 DOCX 正文…"
                 aria-label="搜索内容"
               />
               <label className="search-case-label">
@@ -188,7 +199,9 @@ export function SearchSidebar({
               </div>
             </form>
 
-            <div className="search-note">结果来自磁盘上已保存的文件，不包含未保存的编辑。</div>
+            <div className="search-note">
+              结果来自磁盘上已保存的文件，不包含未保存的编辑；DOCX 仅覆盖已进入结构化模型的正文。
+            </div>
 
             <div className="search-status-region">
               <SearchStatus search={search} onMatchActivate={onMatchActivate} />

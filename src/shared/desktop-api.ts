@@ -63,9 +63,14 @@ export interface DesktopApi {
   /**
    * 工作区搜索窄接口：固定开始与取消方法，不暴露 ipcRenderer、通用通道或事件总线。
    * 请求不得携带工作区根或绝对路径；取消只引用当前窗口已知的 requestId。
+   * "Text" 表示各受支持文档的规范可搜索文本（TXT 剥离 BOM 后的 UTF-8 正文；
+   * DOCX 为 `DocxDocumentModel` 的规范正文投影），不是只表示 `.txt` 扩展名。
    */
   readonly search: {
-    /** 对当前工作区磁盘上已保存的普通 UTF-8 TXT 执行一次有界、可取消的搜索。 */
+    /**
+     * 对当前工作区磁盘上已保存的 TXT 与 DOCX 规范正文执行一次有界、可取消的搜索。
+     * 结果文件分组携带 `kind`（`txt` / `docx`）；搜索只读，不写工作区、不建索引。
+     */
     readonly textWorkspace: (
       request: WorkspaceTextSearchRequest,
     ) => Promise<WorkspaceTextSearchResult>;

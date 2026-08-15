@@ -20,6 +20,7 @@
 
 import { Buffer } from 'node:buffer';
 import JSZip from 'jszip';
+import { DOCX_MAX_FILE_BYTES } from '../../src/shared/docx';
 import {
   AlignmentType,
   CommentRangeEnd,
@@ -344,6 +345,86 @@ async function buildFailureOversize(): Promise<Buffer> {
   return Buffer.concat([base, Buffer.alloc(OVERSIZE_PADDING_BYTES, 0x61)]);
 }
 
+/**
+ * TASK-008 WP0 只读夹具：普通文档 + settings.xml 注入明确启用的
+ * `w:documentProtection w:edit="readOnly" w:enforcement="1"`，经检查器应判为
+ * `encrypted-protected` 特性 → `read-only` 兼容性等级。
+ */
+async function buildReadOnly(): Promise<Buffer> {
+  const base = await buildPlain();
+  const zip = await JSZip.loadAsync(base);
+  const settings = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:documentProtection w:edit="readOnly" w:enforcement="1"/></w:settings>`;
+  zip.file('word/settings.xml', settings);
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+/**
+ * TASK-008 WP0 组合字符/代理对夹具：组合变音符号、astral emoji、CJK 扩展区字符与
+ * run 内原生换行。用于验证投影与 ProseMirror 位置都按 UTF-16 code unit 计数，
+ * 且不因归一化/代理对拆分改变偏移。
+ */
+async function buildCombiningEmoji(): Promise<Buffer> {
+  return pack(
+    makeDocument([
+      new Paragraph({
+        children: [
+          new TextRun({ text: '组合字符 e\u0301 与 a\u0300 保持原码位' }),
+          new TextRun({ text: '  astral emoji 🎉🚀\n行内换行后继续' }),
+          new TextRun({ text: '  CJK 扩展区 𠮷野家' }),
+        ],
+      }),
+    ]),
+  );
+}
+
+/**
+ * TASK-008 WP0 投影混合夹具：标题 + 跨 run marks 段落 + 空段落 + 嵌套项目符号/
+ * 编号列表 + 中文/英文/emoji 段落。用于冻结"普通段落、标题、空段落、marks 跨 run、
+ * 项目符号列表、编号列表和嵌套列表稳定映射"的投影规则。
+ */
+async function buildProjectionMixed(): Promise<Buffer> {
+  return pack(
+    new Document({
+      creator: 'wenshu-fixture',
+      title: 'wenshu-fixture',
+      description: 'wenshu-fixture',
+      numbering: NUMBERING,
+      sections: [
+        {
+          children: [
+            new Paragraph({ text: '投影标题', heading: HeadingLevel.HEADING_1 }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: '粗体', bold: true }),
+                new TextRun({ text: '与' }),
+                new TextRun({ text: '斜体', italics: true }),
+                new TextRun({ text: ' 跨 run 可匹配 English text.' }),
+              ],
+            }),
+            new Paragraph(''),
+            new Paragraph({ text: '项目甲', bullet: { level: 0 } }),
+            new Paragraph({ text: '项目乙', bullet: { level: 0 } }),
+            new Paragraph({ text: '嵌套项目', bullet: { level: 1 } }),
+            new Paragraph({ text: '编号一', numbering: { reference: 'ordered-list', level: 0 } }),
+            new Paragraph({ text: '编号二', numbering: { reference: 'ordered-list', level: 0 } }),
+            new Paragraph({
+              text: '嵌套编号',
+              numbering: { reference: 'ordered-list', level: 1 },
+            }),
+            new Paragraph({ text: '普通段落 emoji 🎉 结尾' }),
+          ],
+        },
+      ],
+    }),
+  );
+}
+
+/** TASK-008 WP0 大文件夹具：合法 DOCX 填充到恰好 20 MiB（读取耗时/取消窗口验证用）。 */
+async function buildLarge(): Promise<Buffer> {
+  const base = await buildPlain();
+  return Buffer.concat([base, Buffer.alloc(DOCX_MAX_FILE_BYTES - base.byteLength, 0x61)]);
+}
+
 export interface DocxFixtureSet {
   /** fixture id（不含 .docx 后缀）→ 文件字节。 */
   readonly files: Readonly<Record<string, Buffer>>;
@@ -373,6 +454,10 @@ export async function buildDocxFixtures(): Promise<DocxFixtureSet> {
     missingParts,
     encryptedSim,
     oversize,
+    readOnly,
+    combiningEmoji,
+    projectionMixed,
+    large,
   ] = await Promise.all([
     buildPlain(),
     buildEmpty(),
@@ -392,6 +477,10 @@ export async function buildDocxFixtures(): Promise<DocxFixtureSet> {
     buildFailureMissingParts(),
     buildFailureEncryptedSim(),
     buildFailureOversize(),
+    buildReadOnly(),
+    buildCombiningEmoji(),
+    buildProjectionMixed(),
+    buildLarge(),
   ]);
   return {
     files: {
@@ -402,6 +491,10 @@ export async function buildDocxFixtures(): Promise<DocxFixtureSet> {
       'ok-font-size-color': fontSizeColor,
       'ok-lists': lists,
       'ok-alignment': alignment,
+      'ok-read-only': readOnly,
+      'ok-combining-emoji': combiningEmoji,
+      'ok-projection-mixed': projectionMixed,
+      'ok-large': large,
       'complex-image': image,
       'complex-table': table,
       'complex-header-footer': headerFooter,

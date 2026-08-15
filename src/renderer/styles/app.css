@@ -1086,10 +1086,38 @@ body {
 }
 
 .search-file-path {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   color: #343a48;
   font-size: 12px;
   font-weight: 600;
   word-break: break-all;
+}
+
+.search-file-kind {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 1px solid #c9d4e8;
+  border-radius: 3px;
+  color: #4a6da7;
+  background: #eef3fb;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.search-file-kind.is-docx {
+  border-color: #d5c3e8;
+  color: #7a4da0;
+  background: #f6effb;
+}
+
+.search-file-kind-note {
+  margin-top: 4px;
+  color: #8b92a1;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .search-file-truncated {

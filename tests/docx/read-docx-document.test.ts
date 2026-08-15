@@ -23,6 +23,7 @@ import {
   type ReadDocxAdapters,
 } from '../../src/main/docx/read-docx-document';
 import { buildDocxFixtures } from './docx-fixture-builder';
+import { removeDirWithRetry } from '../test-utils/temp-dir-cleanup';
 
 /** 原始字节的 SHA-256 十六进制，用于断言 revision 与磁盘字节严格一致。 */
 function sha256Of(bytes: Uint8Array): string {
@@ -93,7 +94,7 @@ describe('readDocxDocument', () => {
       dirSymlinkSupported = false;
     }
 
-    await rm(probeDir, { recursive: true, force: true });
+    await removeDirWithRetry(probeDir);
   }, 60_000);
 
   afterAll(async () => {
@@ -111,7 +112,8 @@ describe('readDocxDocument', () => {
   });
 
   afterEach(async () => {
-    await rm(workspaceRoot, { recursive: true, force: true });
+    // junction 用例在 workspaceRoot 内创建 junction：清理使用有界重试（EBUSY 瞬时锁）
+    await removeDirWithRetry(workspaceRoot);
   });
 
   it('读取根目录 DOCX：快照字段完整，revision 基于原始字节', async () => {

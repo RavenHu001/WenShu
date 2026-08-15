@@ -18,6 +18,7 @@ import type { DocxDocumentModel } from '../../../shared/docx';
 import { TabBar } from './TabBar';
 import {
   EditorSessionHost,
+  type EditorLocateOutcome,
   type EditorLocateTarget,
   type EditorSearchControls,
   type EditorSearchMode,
@@ -47,6 +48,7 @@ export function DocumentPane({
   locateTarget,
   locateNotice,
   onDismissLocateNotice,
+  onLocateOutcome,
   searchPanelHostRef,
   onSearchPanelRequest,
   onSearchControlsChange,
@@ -67,11 +69,13 @@ export function DocumentPane({
   readonly onConfirmCompatibility: (tabId: string) => void;
   /** 冲突状态下请求"放弃本地修改并重新读取"（确认由 App 绑定 tabId 完成）。 */
   readonly onReloadRequest: (tabId: string) => void;
-  /** 待应用的搜索结果定位目标（含目标 tabId；只对匹配的 TXT 标签生效）。 */
+  /** 待应用的搜索结果定位目标（含目标 tabId；只对匹配的 TXT / DOCX 标签生效）。 */
   readonly locateTarget?: (EditorLocateTarget & { readonly tabId: string }) | null;
   /** 非破坏性"搜索结果已过期"提示文案；null 不显示。 */
   readonly locateNotice?: string | null;
   readonly onDismissLocateNotice?: () => void;
+  /** 定位结果回报（applied / stale，携带 locateId；App 只接收当前定位请求的回报）。 */
+  readonly onLocateOutcome?: (locateId: number, outcome: EditorLocateOutcome) => void;
   readonly searchPanelHostRef?: RefObject<HTMLElement | null>;
   readonly onSearchPanelRequest?: (mode: EditorSearchMode) => void;
   readonly onSearchControlsChange?: (controls: EditorSearchControls | null) => void;
@@ -144,6 +148,7 @@ export function DocumentPane({
             locateTarget !== undefined &&
             locateTarget.tabId === activeTab.id
               ? {
+                  locateId: locateTarget.locateId,
                   from: locateTarget.from,
                   to: locateTarget.to,
                   matchedText: locateTarget.matchedText,
@@ -152,6 +157,7 @@ export function DocumentPane({
           }
           locateNotice={locateNotice}
           onDismissLocateNotice={onDismissLocateNotice}
+          onLocateOutcome={onLocateOutcome}
           searchPanelHostRef={searchPanelHostRef}
           onSearchPanelRequest={onSearchPanelRequest}
           onSearchControlsChange={onSearchControlsChange}
@@ -173,6 +179,17 @@ export function DocumentPane({
               onContentChange={onDocxContentChange}
               onSaveRequest={onSave}
               onEditorRegister={registerDocxEditor}
+              locateTarget={
+                locateTarget !== null && locateTarget !== undefined && locateTarget.tabId === tab.id
+                  ? {
+                      locateId: locateTarget.locateId,
+                      from: locateTarget.from,
+                      to: locateTarget.to,
+                      matchedText: locateTarget.matchedText,
+                    }
+                  : null
+              }
+              {...(onLocateOutcome !== undefined ? { onLocateOutcome } : {})}
             />
           </div>
         ))}
@@ -270,6 +287,7 @@ function TabBody({
   locateTarget,
   locateNotice,
   onDismissLocateNotice,
+  onLocateOutcome,
   searchPanelHostRef,
   onSearchPanelRequest,
   onSearchControlsChange,
@@ -283,6 +301,7 @@ function TabBody({
   readonly locateTarget: EditorLocateTarget | null;
   readonly locateNotice: string | null | undefined;
   readonly onDismissLocateNotice: (() => void) | undefined;
+  readonly onLocateOutcome: ((locateId: number, outcome: EditorLocateOutcome) => void) | undefined;
   readonly searchPanelHostRef: RefObject<HTMLElement | null> | undefined;
   readonly onSearchPanelRequest: ((mode: EditorSearchMode) => void) | undefined;
   readonly onSearchControlsChange: ((controls: EditorSearchControls | null) => void) | undefined;
@@ -388,6 +407,7 @@ function TabBody({
         onContentChange={(content) => onContentChange(tab.id, content)}
         onSaveRequest={() => onSave(tab.id)}
         {...(locateTarget !== null ? { locateTarget } : {})}
+        {...(onLocateOutcome !== undefined ? { onLocateOutcome } : {})}
         {...(searchPanelHostRef !== undefined ? { searchPanelHostRef } : {})}
         {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
         {...(onSearchControlsChange !== undefined ? { onSearchControlsChange } : {})}
