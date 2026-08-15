@@ -723,6 +723,25 @@ renderer 不得提交或获得：
 
 ## 十三、执行提示模板
 
+每个工作包建议使用以下固定提示，只替换工作包编号和内容：
+
+> 阅读 `README.md`、`docs/PROJECT_BASELINE.md`、`docs/DEVELOPMENT_ENVIRONMENT.md`、`docs/TESTING.md`、`docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md`、`docs/TASK_006_COMPLETION_REPORT.md`、`docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md`、`docs/TASK_007_COMPLETION_REPORT.md`、`docs/TASK_008_DOCX_WORKSPACE_SEARCH.md` 以及与当前工作包直接相关的源码和测试。只实现 TASK-008 的 WPx，不提前实现后续工作包，不进行无关重构，不添加 DOCX 当前文件查找替换、工作区替换、正则/模糊/语义搜索、持久索引、数据库、自动保存、新建/另存为、文件管理或 AI。DOCX 搜索正文的唯一语义来源是 Task 7 的 `DocxDocumentModel`，通过规范正文投影和文本块映射生成搜索文本，不把 DOCX 当作 UTF-8 TXT，也不直接搜索 OOXML、Mammoth HTML 或编辑器 DOM；结果定位必须通过 kind、revision、范围与匹配文本的双重校验，并使用 ProseMirror 公开 API 设置选区、滚动和聚焦，任何过期或映射失败都只显示非破坏性提示、不错误定位、不修改正文；根路径只能来自主进程工作区会话；所有读取必须遵守路径、链接、资源预算、候选上限、双层并发、协作式取消与过期语义。搜索全过程只读，不创建备份、临时文件、索引或缓存。不得削弱 TXT、多标签、DOCX 编辑保存、搜索定位、Electron sandbox 或未保存保护。修改后运行当前工作包要求的测试、完整 `check` 和 `build`。最终报告修改文件、关键决策、命令结果、夹具/兼容性证据、未解决问题和是否满足当前工作包门禁。
+
+执行规则：
+
+- 一次对话只完成一个工作包；
+- 先读当前工作包直接相关的文件和测试，不重复扫描无关依赖；
+- 不覆盖用户已有修改；
+- 每个工作包完成后审查 diff 并保留可审计的 Git 恢复点；
+- WP0 冻结投影规则、协议和预算，不向产品 UI 暴露 DOCX 搜索能力；
+- WP1 后复核投影确定性、UTF-16 偏移、空块/marks/列表映射和 TXT 契约回归；
+- WP2 后复核候选分类、双层并发、协作式取消、错误隔离和搜索只读性；
+- WP3 后复核 renderer 权限不扩大、类型标识和搜索侧栏语义；
+- WP4 后复核 kind/revision/范围/文本校验、宿主二次校验和过期不误定位；
+- WP5 后复核 loading/dirty/saving/read-only/degraded 生命周期与编辑保存门禁；
+- WP6 后复核性能、内存、取消响应和临时残留；
+- 只有 WP7 可以编写完成报告、勾选最终验收项并将状态改为`已完成`。
+
 每个工作包开始时记录：
 
 - 当前分支与工作树；
