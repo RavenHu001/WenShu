@@ -470,6 +470,40 @@ describe('searchTextWorkspace 预算与截断（第 8.3 节，第 4.5 节）', (
     );
   });
 
+  it('总候选预算在全局相对路径自然排序后应用，子目录不得提前耗尽预算', async () => {
+    const nestedNames = Array.from(
+      { length: MAX_CANDIDATE_FILES },
+      (_, i) => `${String(i).padStart(4, '0')}.txt`,
+    );
+    const readDir: ReadDirFn = async (path) => {
+      if (path === mockRoot) {
+        // 目录名 `a` 在根目录条目排序中早于 `a.txt`，但完整相对路径
+        // `a.txt` 早于 `a/0000.txt`；预算必须遵循后者的全局顺序。
+        return [dirent('a', 'dir'), dirent('a.txt', 'file')];
+      }
+      if (path === join(mockRoot, 'a')) {
+        return nestedNames.map((name) => dirent(name, 'file'));
+      }
+      return [];
+    };
+    const readPaths: string[] = [];
+    const result = completedFiles(
+      await searchTextWorkspace(mockRoot, request('匹配'), {
+        readDir,
+        readText: async (_root, relativePath) => {
+          readPaths.push(relativePath);
+          return txtLoaded(relativePath);
+        },
+      }),
+    );
+
+    expect(result.truncatedReason).toBe('file-limit');
+    expect(result.scannedFiles).toBe(MAX_CANDIDATE_FILES);
+    expect(readPaths).toContain('a.txt');
+    expect(readPaths).not.toContain(`a/${nestedNames[MAX_CANDIDATE_FILES - 1]}`);
+    expect(result.files[0]!.relativePath).toBe('a.txt');
+  });
+
   it('DOCX 候选 200：超出部分预算排除（不计跳过），报告 docx-file-limit 且优先于匹配级截断', async () => {
     // 400 TXT + 250 DOCX = 650 个候选（未到 1000 总预算）；
     // 读取列表 = 400 TXT + 200 DOCX = 600；每文件 4 个匹配 → 2400 > 2000 总匹配，

@@ -28,6 +28,12 @@ import { ConfirmDialog } from './components/common/ConfirmDialog';
 /** 活动栏面板：文件 / 搜索为真实可访问入口；设置保持不可用占位（第 4.10 节）。 */
 type ActivityPanel = 'files' | 'search';
 
+/** App 层定位身份：编辑器目标外继续绑定来源搜索与标签。 */
+type AppLocateTarget = EditorLocateTarget & {
+  readonly requestId: number;
+  readonly tabId: string;
+};
+
 const activityItems = [
   { id: 'files', label: '文', title: '文件' },
   { id: 'search', label: '搜', title: '搜索' },
@@ -76,6 +82,11 @@ export const App = (): React.JSX.Element => {
     workspaceAvailable: workspace.state.workspace !== null,
     workspaceEpoch: workspace.epoch,
   });
+  const completedSearchRequestId =
+    search.state.result?.status === 'completed' ? search.state.result.requestId : null;
+  /** 当前可定位的 completed 搜索身份；异步链始终读最新值。 */
+  const completedSearchRequestIdRef = useRef<number | null>(completedSearchRequestId);
+  completedSearchRequestIdRef.current = completedSearchRequestId;
   const [activity, setActivity] = useState<ActivityPanel>('files');
   const [searchFocusTarget, setSearchFocusTarget] = useState<'workspace' | 'current-document'>(
     'workspace',
@@ -83,20 +94,20 @@ export const App = (): React.JSX.Element => {
   const currentDocumentSearchPanelHostRef = useRef<HTMLDivElement | null>(null);
   const editorSearchControlsRef = useRef<EditorSearchControls | null>(null);
   /** 待应用的搜索结果定位目标（App 校验通过后下发给编辑器宿主）。 */
-  const [locateTarget, setLocateTarget] = useState<
-    (EditorLocateTarget & { readonly tabId: string }) | null
-  >(null);
+  const [locateTarget, setLocateTarget] = useState<AppLocateTarget | null>(null);
   /** 非破坏性"搜索结果已过期"提示文案。 */
   const [staleNotice, setStaleNotice] = useState<string | null>(null);
   /** 定位请求编号：全局单调递增，新定位请求作废旧请求（第 4.9.7 节）。 */
   const locateCounterRef = useRef(0);
   /** 最新定位请求编号：异步完成时校验仍是最新请求。 */
   const latestLocateIdRef = useRef(0);
+  /** 最新定位所属的搜索 requestId；新搜索/取消会使旧定位失效。 */
+  const latestLocateSearchRequestIdRef = useRef<number | null>(null);
+  /** 最新定位所属的工作区 epoch；宿主迟到回报也必须复验。 */
+  const latestLocateEpochRef = useRef<number | null>(null);
   /** 发起定位时的工作区 epoch 快照。 */
   const workspaceEpochRef = useRef(workspace.epoch);
-  useEffect(() => {
-    workspaceEpochRef.current = workspace.epoch;
-  });
+  workspaceEpochRef.current = workspace.epoch;
 
   const [pending, setPending] = useState<PendingDiscard | null>(null);
   const pendingRef = useRef<PendingDiscard | null>(null);
@@ -402,10 +413,30 @@ export const App = (): React.JSX.Element => {
     setStaleNotice(null);
   }, [workspace.epoch]);
 
-  /** 定位请求是否仍有效：工作区 epoch 未变化且没有更新的定位请求（第 5.3 节）。 */
-  const isLocateCurrent = useCallback((locateId: number, epoch: number): boolean => {
-    return workspaceEpochRef.current === epoch && latestLocateIdRef.current === locateId;
-  }, []);
+  // 新搜索、取消或搜索结果替换时，立即作废仍在等待文件读取/宿主回报的旧定位。
+  useEffect(() => {
+    const locateRequestId = latestLocateSearchRequestIdRef.current;
+    if (locateRequestId !== null && locateRequestId !== completedSearchRequestId) {
+      latestLocateIdRef.current = ++locateCounterRef.current;
+      latestLocateSearchRequestIdRef.current = null;
+      latestLocateEpochRef.current = null;
+      setLocateTarget(null);
+    }
+  }, [completedSearchRequestId]);
+
+  /**
+   * 定位请求是否仍有效：同时绑定工作区 epoch、搜索 requestId 与最新 locateId
+   * （第 5.3 节），任一身份变化均不得提交旧定位。
+   */
+  const isLocateCurrent = useCallback(
+    (locateId: number, epoch: number, requestId: number): boolean =>
+      workspaceEpochRef.current === epoch &&
+      latestLocateIdRef.current === locateId &&
+      latestLocateEpochRef.current === epoch &&
+      latestLocateSearchRequestIdRef.current === requestId &&
+      completedSearchRequestIdRef.current === requestId,
+    [],
+  );
 
   /**
    * 搜索结果点击 → "打开/激活 → 验证 → 定位"闭环（第 4.8 / 4.9 节）：
@@ -420,9 +451,16 @@ export const App = (): React.JSX.Element => {
       if (result === null || result.status !== 'completed') {
         return;
       }
+      // 参数必须仍是当前 completed 结果中的原始分组与匹配，不接受旧渲染或伪造对象。
+      if (!result.files.includes(file) || !file.matches.includes(match)) {
+        return;
+      }
       const locateId = ++locateCounterRef.current;
       latestLocateIdRef.current = locateId;
+      latestLocateSearchRequestIdRef.current = result.requestId;
+      const requestId = result.requestId;
       const epoch = workspace.epoch;
+      latestLocateEpochRef.current = epoch;
       const relativePath = file.relativePath;
       setStaleNotice(null);
       setLocateTarget(null); // 新定位请求作废旧定位目标
@@ -430,7 +468,7 @@ export const App = (): React.JSX.Element => {
       void (async () => {
         // 1. 通用打开或激活唯一标签（按扩展名分派 TXT / DOCX）；新标签等待读取完成
         const tab = await openFile(relativePath);
-        if (!isLocateCurrent(locateId, epoch)) {
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return; // 新定位请求或工作区切换已作废本次定位
         }
         if (tab === null) {
@@ -441,7 +479,7 @@ export const App = (): React.JSX.Element => {
           setStaleNotice(`搜索结果已过期：${tab.name} 读取失败。`);
           return;
         }
-        if (!isLocateCurrent(locateId, epoch)) {
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
         // 3. 搜索结果 kind 必须与实际标签类型一致（第 4.8 节步骤 3）
@@ -454,7 +492,7 @@ export const App = (): React.JSX.Element => {
           setStaleNotice(`搜索结果已过期：${tab.name} 的内容已被外部修改。`);
           return;
         }
-        if (!isLocateCurrent(locateId, epoch)) {
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
         // 5. 按类型校验实时正文 / 规范投影范围与匹配文本（第 4.9 节）：
@@ -490,13 +528,14 @@ export const App = (): React.JSX.Element => {
             return;
           }
         }
-        if (!isLocateCurrent(locateId, epoch)) {
+        if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
         // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用
         setLocateTarget({
           tabId: relativePath,
           locateId,
+          requestId,
           from: match.from,
           to: match.to,
           matchedText: match.matchedText,
@@ -512,7 +551,13 @@ export const App = (): React.JSX.Element => {
    * 编辑/结构变化）时显示非破坏性过期提示。
    */
   const handleLocateOutcome = useCallback((locateId: number, outcome: 'applied' | 'stale') => {
-    if (locateId !== latestLocateIdRef.current) {
+    const requestId = latestLocateSearchRequestIdRef.current;
+    if (
+      locateId !== latestLocateIdRef.current ||
+      requestId === null ||
+      latestLocateEpochRef.current !== workspaceEpochRef.current ||
+      completedSearchRequestIdRef.current !== requestId
+    ) {
       return;
     }
     if (outcome === 'stale') {

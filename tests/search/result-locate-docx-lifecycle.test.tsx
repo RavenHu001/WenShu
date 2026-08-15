@@ -504,6 +504,45 @@ describe('DOCX 定位生命周期：read-error / loading 关闭 / 工作区切�
     expect(screen.queryByText(/搜索结果已过期/)).toBeNull();
   });
 
+  it('定位等待读取期间提交新搜索：旧 requestId 的迟到读取不得定位或提示', async () => {
+    let resolveRead!: (result: ReadDocxDocumentResult) => void;
+    const readGate = new Promise<ReadDocxDocumentResult>((resolve) => {
+      resolveRead = resolve;
+    });
+    const api = mockDesktop(() => readGate);
+    api.open.mockResolvedValue({
+      status: 'selected',
+      workspace: snapshot(),
+    } as OpenWorkspaceResult);
+    render(<App />);
+    await openWorkspace();
+
+    const match = projectionMatch(PROJECTION, '文档标题');
+    await submitSearch('文档标题');
+    await act(async () => {
+      api.resolveSearch(
+        completedResult(1, [
+          docxFileResult('doc.docx', 'rev-doc', match.from, match.to, match.matchedText),
+        ]),
+      );
+    });
+    await clickMatch(0); // requestId=1 的定位正在等待 DOCX 读取
+    expect(document.querySelectorAll('.tab')).toHaveLength(1);
+
+    // 新搜索 requestId=2 立即作废旧定位，不需等待新搜索完成。
+    await submitSearch('新查询');
+    expect(api.textWorkspace).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveRead({ status: 'loaded', document: docxSnapshot('doc.docx', MODEL) });
+    });
+    await act(async () => {});
+
+    expect(docxEditor()).not.toBeNull();
+    expect(docxSelectionText(docxEditor()!)).toBe('');
+    expect(screen.queryByText(/搜索结果已过期/)).toBeNull();
+  });
+
   it('过期提示显示后切换工作区：提示与定位目标清空', async () => {
     const api = mockDesktop(async () => ({
       status: 'error',

@@ -32,8 +32,8 @@
  *   DOCX 超出 200 的候选在排序后被预算排除（不读取、不计跳过），返回 `docx-file-limit`；
  * - 截断原因优先级固定：`file-limit` > `docx-file-limit` > `total-matches-limit` >
  *   `matches-per-file-limit`（`WORKSPACE_SEARCH_TRUNCATION_PRIORITY`）；
- * - 每个目录内按名称自然排序遍历，保证预算截断可确定复现；候选按规范相对路径自然排序后
- *   应用 DOCX 预算并读取，读取完成顺序不影响最终排序；
+ * - 目录与候选由全局规范相对路径小顶堆驱动，保证总预算作用于自然排序后
+ *   的前 1000 项；随后应用 DOCX 预算并读取，读取完成顺序不影响最终排序；
  * - 单文件 200 与总匹配 2000 由 `match-text.ts` 的预算逻辑执行。
  *
  * ## 双层并发（第 4.5 / 4.7 节与 WP0 冻结假设）
@@ -116,17 +116,89 @@ export interface SearchTextWorkspaceOptions {
 const defaultReadDir: ReadDirFn = (path) =>
   readdir(path, { withFileTypes: true }) as Promise<readonly DirEntry[]>;
 
-/** 与 `scan-workspace.ts` 一致的自然排序器：目录内条目按名称排序，预算截断可确定复现。 */
-const entryNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-
 /** 遍历结果：混合候选、跳过统计与候选预算截断标志。 */
 interface TraversalOutcome {
   readonly candidates: readonly MixedCandidate[];
   readonly skippedDirectories: number;
   /** 总候选达到 1000（TXT + DOCX 合计）后遍历提前停止。 */
   readonly fileLimitHit: boolean;
-  /** 收集到的 DOCX 候选数（排序后由读取列表应用 200 上限）。 */
-  readonly docxCount: number;
+}
+
+type TraversalFrontierItem =
+  | {
+      readonly type: 'directory';
+      readonly absolutePath: string;
+      readonly relativePath: string;
+    }
+  | {
+      readonly type: 'candidate';
+      readonly candidate: MixedCandidate;
+      readonly relativePath: string;
+    };
+
+/**
+ * 小顶堆保持待遍历条目的全局相对路径自然顺序。目录先出队并展开其子项，
+ * 从而在不收集无界候选列表的前提下，保证预算应用于全局排序后的前 N 个候选。
+ */
+class TraversalFrontier {
+  private readonly items: TraversalFrontierItem[] = [];
+
+  get size(): number {
+    return this.items.length;
+  }
+
+  push(item: TraversalFrontierItem): void {
+    this.items.push(item);
+    let index = this.items.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.compare(this.items[parent]!, item) <= 0) {
+        break;
+      }
+      this.items[index] = this.items[parent]!;
+      index = parent;
+    }
+    this.items[index] = item;
+  }
+
+  pop(): TraversalFrontierItem | undefined {
+    const first = this.items[0];
+    const last = this.items.pop();
+    if (first === undefined || last === undefined || this.items.length === 0) {
+      return first;
+    }
+    let index = 0;
+    while (true) {
+      const left = index * 2 + 1;
+      if (left >= this.items.length) {
+        break;
+      }
+      const right = left + 1;
+      const smaller =
+        right < this.items.length && this.compare(this.items[right]!, this.items[left]!) < 0
+          ? right
+          : left;
+      if (this.compare(last, this.items[smaller]!) <= 0) {
+        break;
+      }
+      this.items[index] = this.items[smaller]!;
+      index = smaller;
+    }
+    this.items[index] = last;
+    return first;
+  }
+
+  private compare(a: TraversalFrontierItem, b: TraversalFrontierItem): number {
+    const natural = compareRelativePaths(a.relativePath, b.relativePath);
+    if (natural !== 0) {
+      return natural;
+    }
+    // Intl.Collator 在 sensitivity=base 下可能对不同字符串返回 0；原始字符串打破平局。
+    if (a.relativePath !== b.relativePath) {
+      return a.relativePath < b.relativePath ? -1 : 1;
+    }
+    return a.type === b.type ? 0 : a.type === 'directory' ? -1 : 1;
+  }
 }
 
 /**
@@ -134,8 +206,8 @@ interface TraversalOutcome {
  * - 不跟随符号链接 / junction / 其他重解析点；
  * - 只把大小写不敏感的普通 `.txt` / `.docx` 文件作为候选；
  * - 子目录读取失败隔离并计入跳过；根目录读取失败抛出（调用方映射为整体失败）；
- * - 总候选达到 1000 上限后立即停止遍历并标记截断（DOCX 不单独提前停止，以便在 1000
- *   总预算内继续收集 TXT；DOCX 的 200 上限在排序后应用）；
+ * - 目录与候选由全局相对路径小顶堆驱动，先按自然顺序取前 1000 个候选再截断；
+ *   DOCX 不单独提前停止，其 200 上限在总候选预算后应用；
  * - 在目录批次与每个条目处检查 `shouldStop`。
  */
 async function collectCandidates(
@@ -146,17 +218,18 @@ async function collectCandidates(
   const candidates: MixedCandidate[] = [];
   let skippedDirectories = 0;
   let fileLimitHit = false;
-  let docxCount = 0;
+  const frontier = new TraversalFrontier();
 
-  const walk = async (dir: string, relative: string): Promise<void> => {
-    if (fileLimitHit || shouldStop()) {
-      return;
-    }
+  const enqueueDirectory = async (
+    dir: string,
+    relative: string,
+    isRoot: boolean,
+  ): Promise<void> => {
     let entries: readonly DirEntry[];
     try {
       entries = await readDirFn(dir);
     } catch (err) {
-      if (relative === '') {
+      if (isRoot) {
         // 根目录不可读：整体失败（异常向上传播，消息不跨进程）
         throw err;
       }
@@ -164,9 +237,8 @@ async function collectCandidates(
       skippedDirectories += 1;
       return;
     }
-    const sorted = [...entries].sort((a, b) => entryNameCollator.compare(a.name, b.name));
-    for (const entry of sorted) {
-      if (fileLimitHit || shouldStop()) {
+    for (const entry of entries) {
+      if (shouldStop()) {
         return;
       }
       // 符号链接 / junction 先于目录判断：无论链接指向目录还是文件都不跟随、不计数
@@ -175,31 +247,44 @@ async function collectCandidates(
       }
       const relativePath = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
-        await walk(join(dir, entry.name), relativePath);
+        frontier.push({
+          type: 'directory',
+          absolutePath: join(dir, entry.name),
+          relativePath,
+        });
         continue;
       }
       if (entry.isFile()) {
         const ext = extname(entry.name).toLowerCase();
         if (ext === '.txt' || ext === '.docx') {
-          candidates.push({
+          const candidate: MixedCandidate = {
             kind: ext === '.docx' ? 'docx' : 'txt',
             relativePath,
-          });
-          if (ext === '.docx') {
-            docxCount += 1;
-          }
-          if (candidates.length >= MAX_CANDIDATE_FILES) {
-            fileLimitHit = true;
-            return;
-          }
+          };
+          frontier.push({ type: 'candidate', candidate, relativePath });
         }
       }
       // 其他文件类型与叶节点：政策性跳过，不计入 skippedFiles
     }
   };
 
-  await walk(workspaceRoot, '');
-  return { candidates, skippedDirectories, fileLimitHit, docxCount };
+  if (shouldStop()) {
+    return { candidates, skippedDirectories, fileLimitHit };
+  }
+  await enqueueDirectory(workspaceRoot, '', true);
+  while (frontier.size > 0 && !shouldStop()) {
+    const item = frontier.pop()!;
+    if (item.type === 'directory') {
+      await enqueueDirectory(item.absolutePath, item.relativePath, false);
+      continue;
+    }
+    candidates.push(item.candidate);
+    if (candidates.length >= MAX_CANDIDATE_FILES) {
+      fileLimitHit = true;
+      break;
+    }
+  }
+  return { candidates, skippedDirectories, fileLimitHit };
 }
 
 /**
