@@ -122,6 +122,7 @@ export const FILE_MANAGEMENT_ERROR_CODES = [
   'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
   'TOO_LARGE',
   'READ_ONLY_DOCUMENT',
+  'CROSS_DEVICE_NOT_ALLOWED',
 ] as const;
 
 export type FileManagementErrorCode = (typeof FILE_MANAGEMENT_ERROR_CODES)[number];
@@ -164,6 +165,7 @@ export const FILE_MANAGEMENT_ERROR_MESSAGES: Record<FileManagementErrorCode, str
   MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED: '文件包含混合换行，需要确认规范化规则',
   TOO_LARGE: '文件超过大小上限',
   READ_ONLY_DOCUMENT: '文档为只读，不允许另存为',
+  CROSS_DEVICE_NOT_ALLOWED: '不支持跨卷移动',
 };
 
 /** 构造稳定错误（仅纯数据，可 structured clone）。 */

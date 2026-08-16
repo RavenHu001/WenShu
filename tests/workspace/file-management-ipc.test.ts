@@ -15,7 +15,7 @@ import { removeDirWithRetry } from '../test-utils/temp-dir-cleanup';
 const ipcMainMock = vi.hoisted(() => ({ handle: vi.fn() }));
 const sessionMock = vi.hoisted(() => ({ getCurrentWorkspaceRoot: vi.fn() }));
 const browserWindowMock = vi.hoisted(() => ({ fromWebContents: vi.fn() }));
-const shellMock = vi.hoisted(() => ({ showItemInFolder: vi.fn() }));
+const shellMock = vi.hoisted(() => ({ showItemInFolder: vi.fn(), trashItem: vi.fn() }));
 
 vi.mock('electron', () => ({
   ipcMain: ipcMainMock,
@@ -60,9 +60,14 @@ describe('registerFileManagementIpc', () => {
     await cleanup();
   });
 
-  it('只注册 workspace:create-entry 与 workspace:reveal 两个固定通道', () => {
+  it('只注册 create/relocate/trash/reveal 四个固定通道', () => {
     const channels = ipcMainMock.handle.mock.calls.map((call) => call[0]).sort();
-    expect(channels).toEqual(['workspace:create-entry', 'workspace:reveal']);
+    expect(channels).toEqual([
+      'workspace:create-entry',
+      'workspace:relocate',
+      'workspace:reveal',
+      'workspace:trash',
+    ]);
     expect(channels.some((c) => c.startsWith('fs:') || c.startsWith('shell:'))).toBe(false);
   });
 
@@ -151,6 +156,52 @@ describe('registerFileManagementIpc', () => {
     expect(await readFile(join(root, 'ipc.txt'), 'utf8')).toBe('');
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain(root); // 不泄漏绝对路径
+  });
+
+  it('relocate：真实文件重命名成功，结果携带新相对路径', async () => {
+    await import('node:fs/promises').then((m) => m.writeFile(join(root, 'mv.txt'), 'mv'));
+    sessionMock.getCurrentWorkspaceRoot.mockReturnValue(root);
+    const result = (await handlers.get('workspace:relocate')!(event, {
+      mutationId: 20,
+      sourceRelativePath: 'mv.txt',
+      parentRelativePath: '',
+      name: 'mv2.txt',
+    })) as WorkspaceMutationResult;
+    expect(result).toEqual({
+      status: 'succeeded',
+      mutationId: 20,
+      relativePath: 'mv2.txt',
+      kind: 'text',
+    });
+    expect(
+      await import('node:fs/promises').then((m) => m.readFile(join(root, 'mv2.txt'), 'utf8')),
+    ).toBe('mv');
+    const badShape = (await handlers.get('workspace:relocate')!(event, {
+      mutationId: 21,
+      sourceRelativePath: 'mv2.txt',
+      parentRelativePath: '',
+      name: 'x.txt',
+      force: true,
+    })) as WorkspaceMutationResult;
+    expect(badShape.status === 'error' && badShape.error.code).toBe('INVALID_REQUEST');
+  });
+
+  it('trash：调用固定 shell.trashItem；非法形状 → INVALID_REQUEST', async () => {
+    await import('node:fs/promises').then((m) => m.writeFile(join(root, 'trash-me.txt'), 't'));
+    shellMock.trashItem.mockClear();
+    sessionMock.getCurrentWorkspaceRoot.mockReturnValue(root);
+    const result = (await handlers.get('workspace:trash')!(event, {
+      mutationId: 22,
+      relativePath: 'trash-me.txt',
+    })) as WorkspaceMutationResult;
+    expect(result.status === 'succeeded' && result.kind).toBe('text');
+    expect(shellMock.trashItem).toHaveBeenCalledWith(join(root, 'trash-me.txt'));
+    const badShape = (await handlers.get('workspace:trash')!(event, {
+      mutationId: 23,
+      relativePath: 'trash-me.txt',
+      recursive: true,
+    })) as WorkspaceMutationResult;
+    expect(badShape.status === 'error' && badShape.error.code).toBe('INVALID_REQUEST');
   });
 
   it('reveal：文件/根调用固定 showItemInFolder；缺失路径 → NOT_FOUND 不调用', async () => {

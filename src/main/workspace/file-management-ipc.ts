@@ -19,6 +19,8 @@ import { fileManagementError, type FileManagementError } from '../../shared/file
 import { getCurrentWorkspaceRoot } from './workspace-session';
 import { createWorkspaceEntry } from './create-workspace-entry';
 import { revealWorkspaceEntry } from './reveal-workspace-entry';
+import { relocateWorkspaceEntry } from './relocate-workspace-entry';
+import { trashWorkspaceEntry } from './trash-workspace-entry';
 import { sharedMutationQueue } from './mutation-coordinator';
 
 /** IPC 是否已注册，防止重复注册。 */
@@ -107,6 +109,60 @@ export function registerFileManagementIpc(): void {
     const windowId = BrowserWindow.fromWebContents(event.sender)?.webContents.id ?? event.sender.id;
     // 同一窗口串行：同一时刻最多一个文件管理写操作
     return mutationQueue.run(windowId, () => createWorkspaceEntry(root, req));
+  });
+
+  ipcMain.handle('workspace:relocate', async (event, request: unknown) => {
+    const record = request as Record<string, unknown> | null;
+    const allowed = ['mutationId', 'name', 'parentRelativePath', 'sourceRelativePath'];
+    const shapeOk =
+      record !== null &&
+      typeof record === 'object' &&
+      !Array.isArray(record) &&
+      Object.keys(record).every((key) => allowed.includes(key)) &&
+      isPositiveInteger(record.mutationId) &&
+      typeof record.sourceRelativePath === 'string' &&
+      typeof record.parentRelativePath === 'string' &&
+      typeof record.name === 'string';
+    if (!shapeOk) {
+      return { status: 'error', mutationId: 0, error: fileManagementError('INVALID_REQUEST') };
+    }
+    const req = request as { readonly mutationId: number };
+    const root = getCurrentWorkspaceRoot();
+    if (root === null) {
+      return {
+        status: 'error',
+        mutationId: req.mutationId,
+        error: fileManagementError('NO_WORKSPACE'),
+      };
+    }
+    const windowId = BrowserWindow.fromWebContents(event.sender)?.webContents.id ?? event.sender.id;
+    return mutationQueue.run(windowId, () => relocateWorkspaceEntry(root, request));
+  });
+
+  ipcMain.handle('workspace:trash', async (event, request: unknown) => {
+    const record = request as Record<string, unknown> | null;
+    const allowed = ['mutationId', 'relativePath'];
+    const shapeOk =
+      record !== null &&
+      typeof record === 'object' &&
+      !Array.isArray(record) &&
+      Object.keys(record).every((key) => allowed.includes(key)) &&
+      isPositiveInteger(record.mutationId) &&
+      typeof record.relativePath === 'string';
+    if (!shapeOk) {
+      return { status: 'error', mutationId: 0, error: fileManagementError('INVALID_REQUEST') };
+    }
+    const req = request as { readonly mutationId: number };
+    const root = getCurrentWorkspaceRoot();
+    if (root === null) {
+      return {
+        status: 'error',
+        mutationId: req.mutationId,
+        error: fileManagementError('NO_WORKSPACE'),
+      };
+    }
+    const windowId = BrowserWindow.fromWebContents(event.sender)?.webContents.id ?? event.sender.id;
+    return mutationQueue.run(windowId, () => trashWorkspaceEntry(root, request));
   });
 
   ipcMain.handle('workspace:reveal', async (_event, request: unknown) => {

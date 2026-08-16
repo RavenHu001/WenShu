@@ -3,9 +3,11 @@ import type { DesktopApi } from '../shared/desktop-api';
 import type { SaveTextDocumentRequest } from '../shared/document';
 import type {
   CreateWorkspaceEntryTarget,
+  RelocateWorkspaceEntryRequest,
   RevealWorkspaceEntryRequest,
   SaveDocxDocumentAsRequest,
   SaveTextDocumentAsRequest,
+  TrashWorkspaceEntryRequest,
 } from '../shared/file-management';
 import type { SaveDocxDocumentRequest } from '../shared/docx';
 import type {
@@ -34,6 +36,9 @@ const desktopApi: DesktopApi = Object.freeze({
     // reveal 只映射固定 workspace:reveal 通道；根目录用显式判别值，条目用规范相对路径。
     reveal: (request: RevealWorkspaceEntryRequest) =>
       ipcRenderer.invoke('workspace:reveal', request),
+    relocate: (request: RelocateWorkspaceEntryRequest) =>
+      ipcRenderer.invoke('workspace:relocate', request),
+    trash: (request: TrashWorkspaceEntryRequest) => ipcRenderer.invoke('workspace:trash', request),
   }),
   // document.readText 只映射固定的 document:read-text 通道，且只接受一个相对路径参数；
   // document.saveText 只映射固定的 document:save-text 通道，且只接受一个结构化保存请求；

@@ -37,6 +37,7 @@ import {
   applyDocxReadResult,
   asyncResultStillValid,
   closeTab as closeTabState,
+  closeTabsByRelativePaths as closeTabsByRelativePathsState,
   completeDocxSave,
   completeSaveAs as completeSaveAsState,
   confirmDocxCompatibility as confirmDocxCompatibilityState,
@@ -47,6 +48,8 @@ import {
   invalidateWorkspace as invalidateTabsModel,
   isDocxTab,
   isTextTab,
+  migrateDescendantTabPaths as migrateDescendantTabPathsState,
+  migrateTabPath as migrateTabPathState,
   openDocxTab,
   openTab,
   saveCompletionClearsDirty,
@@ -66,6 +69,7 @@ import {
   type SaveAsResult,
   type SaveDocxDocumentAsRequest,
   type SaveTextDocumentAsRequest,
+  type WorkspaceMutationResult,
   type WorkspaceTargetName,
 } from '../../shared/file-management';
 import type { TextDocumentTabState } from './text-document-tabs';
@@ -122,6 +126,16 @@ export interface DocumentsController {
       readonly confirmMixedLineEndingNormalization?: boolean;
     },
   ) => Promise<SaveAsResult>;
+  /**
+   * 重命名/移动（TASK-009 WP5）：主进程成功后按结果类型迁移受影响标签
+   * （单文件 → migrateTabPath；目录 → 前缀段边界迁移）；saving 受影响标签阻止请求。
+   */
+  readonly relocateByPath: (
+    sourceRelativePath: string,
+    target: WorkspaceTargetName,
+  ) => Promise<WorkspaceMutationResult>;
+  /** 删除到回收站（TASK-009 WP5）：主进程成功后关闭受影响标签（文件/目录后代）。 */
+  readonly trashByPath: (relativePath: string) => Promise<WorkspaceMutationResult>;
   /** 工作区成功切换：清空全部标签与运行时，使旧工作区结果失效。 */
   readonly invalidateWorkspace: () => void;
 }
@@ -892,6 +906,86 @@ export function useDocuments(): DocumentsController {
     [commit, completeSaveAsState, failSaveAsState, startSaveAsState],
   );
 
+  const relocateByPath = useCallback(
+    async (
+      sourceRelativePath: string,
+      target: WorkspaceTargetName,
+    ): Promise<WorkspaceMutationResult> => {
+      const current = modelRef.current;
+      // saving 阻止：单文件精确匹配 + 目录前缀段边界（§4.5）
+      const affected = current.state.tabs.filter(
+        (tab) =>
+          tab.relativePath === sourceRelativePath ||
+          tab.relativePath.startsWith(`${sourceRelativePath}/`),
+      );
+      if (affected.some((tab) => tab.saving)) {
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: {
+            code: 'WRITE_FAILED',
+            message: '存在正在保存的标签，请等待保存完成后再操作',
+          },
+        };
+      }
+      const mutationId = ++mutationIdCounterRef.current;
+      const epoch = epochRef.current;
+      const result = await window.desktop.workspace.relocate({
+        mutationId,
+        sourceRelativePath,
+        parentRelativePath: target.parentRelativePath,
+        name: target.name,
+      });
+      if (result.status === 'succeeded' && epochRef.current === epoch) {
+        const latest = modelRef.current;
+        if (result.kind === 'directory') {
+          commit(migrateDescendantTabPathsState(latest, sourceRelativePath, result.relativePath));
+        } else {
+          const tab = tabByRelativePath(latest, sourceRelativePath);
+          if (tab !== null) {
+            commit(migrateTabPathState(latest, tab.id, result.relativePath));
+          }
+        }
+      }
+      return result;
+    },
+    [commit],
+  );
+
+  const trashByPath = useCallback(
+    async (relativePath: string): Promise<WorkspaceMutationResult> => {
+      const current = modelRef.current;
+      const affected = current.state.tabs.filter(
+        (tab) =>
+          tab.relativePath === relativePath || tab.relativePath.startsWith(`${relativePath}/`),
+      );
+      if (affected.some((tab) => tab.saving)) {
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: {
+            code: 'WRITE_FAILED',
+            message: '存在正在保存的标签，请等待保存完成后再操作',
+          },
+        };
+      }
+      const mutationId = ++mutationIdCounterRef.current;
+      const epoch = epochRef.current;
+      const result = await window.desktop.workspace.trash({ mutationId, relativePath });
+      if (result.status === 'succeeded' && epochRef.current === epoch) {
+        const latest = modelRef.current;
+        commit(
+          closeTabsByRelativePathsState(
+            latest,
+            affected.map((tab) => tab.relativePath),
+          ),
+        );
+      }
+      return result;
+    },
+    [commit],
+  );
+
   const reloadTab = useCallback(
     (tabId: string) => {
       const current = modelRef.current;
@@ -951,6 +1045,8 @@ export function useDocuments(): DocumentsController {
     closeTab,
     retryRead,
     saveAsTab,
+    relocateByPath,
+    trashByPath,
     invalidateWorkspace,
   };
 }

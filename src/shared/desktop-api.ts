@@ -25,11 +25,13 @@ import type {
 } from './search';
 import type {
   CreateWorkspaceEntryTarget,
+  RelocateWorkspaceEntryRequest,
   RevealWorkspaceEntryRequest,
   RevealResult,
   SaveAsResult,
   SaveDocxDocumentAsRequest,
   SaveTextDocumentAsRequest,
+  TrashWorkspaceEntryRequest,
   WorkspaceMutationResult,
 } from './file-management';
 
@@ -64,6 +66,10 @@ export interface DesktopApi {
     ) => Promise<WorkspaceMutationResult>;
     /** 在资源管理器中显示工作区根或工作区内条目（固定 shell 能力）。 */
     readonly reveal: (request: RevealWorkspaceEntryRequest) => Promise<RevealResult>;
+    /** 工作区内重命名/移动（含 case-only 两步与 DOCX 伴随备份迁移）。 */
+    readonly relocate: (request: RelocateWorkspaceEntryRequest) => Promise<WorkspaceMutationResult>;
+    /** 删除到 Windows 回收站（含 DOCX 伴随备份；无永久删除降级）。 */
+    readonly trash: (request: TrashWorkspaceEntryRequest) => Promise<WorkspaceMutationResult>;
   };
   readonly document: {
     /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */

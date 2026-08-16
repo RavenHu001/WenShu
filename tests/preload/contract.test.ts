@@ -222,19 +222,47 @@ describe('preload 窄接口契约', () => {
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:refresh');
   });
 
-  it('workspace 命名空间固定暴露 open/refresh/createText/createDocx/createDirectory/reveal 六个方法', () => {
+  it('workspace 命名空间固定暴露 open/refresh/createText/createDocx/createDirectory/reveal/relocate/trash 八个方法', () => {
     expect(Object.keys(desktop.workspace).sort()).toEqual([
       'createDirectory',
       'createDocx',
       'createText',
       'open',
       'refresh',
+      'relocate',
       'reveal',
+      'trash',
     ]);
     expect(desktop.workspace.createText.length).toBe(1);
     expect(desktop.workspace.createDocx.length).toBe(1);
     expect(desktop.workspace.createDirectory.length).toBe(1);
     expect(desktop.workspace.reveal.length).toBe(1);
+    expect(desktop.workspace.relocate.length).toBe(1);
+    expect(desktop.workspace.trash.length).toBe(1);
+  });
+
+  it('relocate / trash 只映射固定通道并原样传递请求', async () => {
+    electronMock.invoke.mockResolvedValue({
+      status: 'succeeded',
+      mutationId: 1,
+      relativePath: 'b.txt',
+      kind: 'text',
+    });
+    const relocateRequest = {
+      mutationId: 1,
+      sourceRelativePath: 'a.txt',
+      parentRelativePath: 'sub',
+      name: 'b.txt',
+    };
+    await desktop.workspace.relocate(relocateRequest);
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:relocate', relocateRequest);
+
+    electronMock.invoke.mockClear();
+    await desktop.workspace.trash({ mutationId: 2, relativePath: 'a.txt' });
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:trash', {
+      mutationId: 2,
+      relativePath: 'a.txt',
+    });
   });
 
   it('createText/createDocx/createDirectory 共用固定 workspace:create-entry 通道，kind 由 preload 固定注入', async () => {
