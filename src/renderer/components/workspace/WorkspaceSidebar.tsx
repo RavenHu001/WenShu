@@ -16,8 +16,8 @@ interface WorkspaceSidebarProps {
   readonly state: WorkspaceUiState;
   /** 打开文件夹入口（App 已执行未保存守卫）。 */
   readonly onOpenWorkspace: () => void | Promise<void>;
-  /** 刷新当前工作区入口。 */
-  readonly onRefreshWorkspace: () => void | Promise<void>;
+  /** 刷新当前工作区入口；返回值被忽略（App 可能返回刷新是否成功）。 */
+  readonly onRefreshWorkspace: () => void | Promise<unknown>;
   /** 用户选择工作区内的 TXT / DOCX 文件时报告其相对路径；由 App/文档容器处理读取。 */
   readonly onFileOpen: (relativePath: string) => void;
   /** 当前选中的文件相对路径，用于文件树的选中高亮。 */

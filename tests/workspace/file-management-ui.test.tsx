@@ -150,7 +150,7 @@ function mockDesktop(overrides: DesktopOverrides = {}): {
   return { createText, createDocx, relocate, trash, refresh, readText };
 }
 
-function Harness(): React.JSX.Element {
+function Harness({ onMutationCommitted }: { onMutationCommitted?: () => void }): React.JSX.Element {
   const workspace = useWorkspace();
   const documents = useDocuments();
   const fm = useFileManagement({
@@ -162,6 +162,7 @@ function Harness(): React.JSX.Element {
     commitTrash: documents.commitTrashResult,
     saveAsTab: documents.saveAsTab,
     tabs: documents.model.state.tabs,
+    onMutationCommitted,
   });
   return (
     <>
@@ -483,5 +484,84 @@ describe('completeDocumentExtensionName（§4.3 扩展名补全纯函数）', ()
     expect(completeDocumentExtensionName('a.txt', 'docx')).toBeNull();
     expect(completeDocumentExtensionName('a.docx', 'text')).toBeNull();
     expect(completeDocumentExtensionName('.gitignore', 'text')).toBeNull();
+  });
+});
+
+describe('onMutationCommitted（TASK-009 §4.11 mutationEpoch 通知）', () => {
+  it('新建 TXT 成功：通知一次；失败与取消不通知', async () => {
+    const onMutationCommitted = vi.fn();
+    const { createText } = mockDesktop();
+    render(<Harness onMutationCommitted={onMutationCommitted} />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new.txt{Enter}');
+    expect(createText).toHaveBeenCalled();
+    expect(onMutationCommitted).toHaveBeenCalledTimes(1);
+
+    // 失败：不通知
+    onMutationCommitted.mockClear();
+    createText.mockResolvedValueOnce({
+      status: 'error',
+      mutationId: 2,
+      error: { code: 'WRITE_FAILED', message: '写入失败' },
+    });
+    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await userEvent.type(screen.getByTestId('fm-name-input'), 'fail.txt{Enter}');
+    expect(screen.getByTestId('fm-status').textContent).toBe('error');
+    expect(onMutationCommitted).not.toHaveBeenCalled();
+
+    // 取消：不通知
+    onMutationCommitted.mockClear();
+    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await userEvent.click(screen.getByTestId('fm-input-cancel'));
+    expect(onMutationCommitted).not.toHaveBeenCalled();
+  });
+
+  it('重命名与删除成功：通知；reveal 成功：不通知（不递增 mutationEpoch）', async () => {
+    const onMutationCommitted = vi.fn();
+    const { relocate, trash } = mockDesktop();
+    render(<Harness onMutationCommitted={onMutationCommitted} />);
+    await openWorkspace();
+
+    // reveal 成功：不通知（§4.11 reveal 不递增）
+    await userEvent.click(screen.getByTestId('ft-a.txt'));
+    await userEvent.click(screen.getByTestId('fm-reveal'));
+    expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
+    expect(onMutationCommitted).not.toHaveBeenCalled();
+
+    // 重命名成功：通知一次
+    await userEvent.click(screen.getByTestId('ft-a.txt'));
+    await userEvent.click(screen.getByTestId('fm-rename'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed.txt' } });
+      fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
+    });
+    expect(relocate).toHaveBeenCalled();
+    expect(onMutationCommitted).toHaveBeenCalledTimes(1);
+
+    // 删除成功：通知一次
+    onMutationCommitted.mockClear();
+    await userEvent.click(screen.getByTestId('ft-note.bin'));
+    await userEvent.click(screen.getByTestId('fm-delete'));
+    await userEvent.click(screen.getByTestId('fm-trash-confirm'));
+    expect(trash).toHaveBeenCalled();
+    expect(onMutationCommitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('删除 partial failure：通知（磁盘已部分改变，搜索结果必须作废）', async () => {
+    const onMutationCommitted = vi.fn();
+    const trash = vi.fn(async () => ({
+      status: 'error',
+      mutationId: 1,
+      error: { code: 'PARTIAL_FAILURE', message: '操作部分完成，请刷新后重试' },
+    }));
+    mockDesktop({ trash });
+    render(<Harness onMutationCommitted={onMutationCommitted} />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('ft-a.txt'));
+    await userEvent.click(screen.getByTestId('fm-delete'));
+    await userEvent.click(screen.getByTestId('fm-trash-confirm'));
+    expect(screen.getByTestId('fm-status').textContent).toBe('partial-failure');
+    expect(onMutationCommitted).toHaveBeenCalledTimes(1);
   });
 });

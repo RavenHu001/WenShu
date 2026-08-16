@@ -81,11 +81,13 @@ export const App = (): React.JSX.Element => {
     commitRelocateResult,
     commitTrashResult,
   } = useDocuments();
-  // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）
+  // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）；
+  // mutationEpoch 由文件管理操作确认成功后递增（TASK-009 §4.11）
   const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
   const search = useWorkspaceSearch({
     workspaceAvailable: workspace.state.workspace !== null,
     workspaceEpoch: workspace.epoch,
+    mutationEpoch: workspace.mutationEpoch,
   });
   // 文件管理 controller（TASK-009 WP6）：选择/展开、新建/重命名/移动/删除/reveal/另存为
   const fileManagement = useFileManagement({
@@ -97,6 +99,7 @@ export const App = (): React.JSX.Element => {
     commitTrash: commitTrashResult,
     saveAsTab,
     tabs: model.state.tabs,
+    onMutationCommitted: workspace.notifyMutationCommitted,
   });
   const completedSearchRequestId =
     search.state.result?.status === 'completed' ? search.state.result.requestId : null;
@@ -399,6 +402,15 @@ export const App = (): React.JSX.Element => {
     await workspace.openWorkspace();
   }, [handleOpenWorkspaceGuard, workspace.openWorkspace]);
 
+  // 手工刷新：成功替换工作区快照才递增 mutationEpoch 作废搜索结果（§4.11）；
+  // 刷新失败保留原快照，不错误使有效结果失效
+  const handleManualRefresh = useCallback(async (): Promise<void> => {
+    const refreshed = await workspace.refreshWorkspace();
+    if (refreshed) {
+      workspace.notifyMutationCommitted();
+    }
+  }, [workspace]);
+
   // Ctrl+Shift+F：打开搜索侧栏并聚焦搜索输入
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -423,11 +435,12 @@ export const App = (): React.JSX.Element => {
     editorSearchControlsRef.current?.open(mode);
   }, []);
 
-  // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）
+  // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）；
+  // 磁盘变更（mutationEpoch）后旧搜索结果的定位目标与过期提示同样清空（§4.11）
   useEffect(() => {
     setLocateTarget(null);
     setStaleNotice(null);
-  }, [workspace.epoch]);
+  }, [workspace.epoch, workspace.mutationEpoch]);
 
   // 新搜索、取消或搜索结果替换时，立即作废仍在等待文件读取/宿主回报的旧定位。
   useEffect(() => {
@@ -649,7 +662,7 @@ export const App = (): React.JSX.Element => {
             <WorkspaceSidebar
               state={workspace.state}
               onOpenWorkspace={handleOpenWorkspace}
-              onRefreshWorkspace={workspace.refreshWorkspace}
+              onRefreshWorkspace={handleManualRefresh}
               onFileOpen={openFile}
               selectedFilePath={selectedFilePath}
               managementSelectedPath={fileManagement.state.selectedPath}

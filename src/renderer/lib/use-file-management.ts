@@ -98,7 +98,8 @@ export interface UseFileManagementParams {
   /** 当前工作区快照（目录判断与目标选择列表来源）。 */
   readonly workspace: WorkspaceSnapshot | null;
   readonly workspaceEpoch: number;
-  readonly refreshWorkspace: () => void | Promise<void>;
+  /** 刷新当前工作区；返回值被忽略（是否成功由 workspace controller 自行处理）。 */
+  readonly refreshWorkspace: () => void | Promise<unknown>;
   /** 新建 TXT/DOCX 成功后打开唯一干净标签（§4.6）。 */
   readonly openFile: (relativePath: string) => Promise<unknown>;
   /** use-documents 纯提交（成功后迁移/关闭标签，不调 IPC）。 */
@@ -112,6 +113,11 @@ export interface UseFileManagementParams {
   ) => Promise<SaveAsResult>;
   /** 当前全部标签（dirty/saving 判定）。 */
   readonly tabs: readonly DocumentTabState[];
+  /**
+   * 磁盘文件管理操作（create/save-as/relocate/trash）确认成功后的通知（TASK-009 §4.11）：
+   * 由 App 递增 mutationEpoch 使搜索结果失效。reveal、失败与用户取消不调用。
+   */
+  readonly onMutationCommitted?: (() => void) | undefined;
 }
 
 function basenameOf(path: string): string {
@@ -183,6 +189,7 @@ export function useFileManagement({
   commitTrash,
   saveAsTab,
   tabs,
+  onMutationCommitted,
 }: UseFileManagementParams): FileManagementController {
   const [state, setState] = useState<FileManagementUiState>({
     status: 'idle',
@@ -203,6 +210,8 @@ export function useFileManagement({
   epochRef.current = workspaceEpoch;
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+  const onMutationCommittedRef = useRef(onMutationCommitted);
+  onMutationCommittedRef.current = onMutationCommitted;
 
   const update = useCallback((patch: Partial<FileManagementUiState>) => {
     setState((prev) => ({ ...prev, ...patch }));
@@ -459,6 +468,8 @@ export function useFileManagement({
         .then(async (result) => {
           if (result.status === 'succeeded') {
             await applySuccess(`已创建 ${finalName}`, () => {
+              // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11），reveal 不经过此分支
+              onMutationCommittedRef.current?.();
               if (kind === 'text' || kind === 'docx') {
                 void openFile(result.relativePath);
               }
@@ -522,6 +533,8 @@ export function useFileManagement({
         .then(async (result) => {
           if (result.status === 'succeeded') {
             await applySuccess(`已重命名为 ${finalName}`, () => {
+              // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
+              onMutationCommittedRef.current?.();
               commitRelocate(source, result);
               if (result.kind === 'directory') {
                 update({ expandedDirs: migrateExpanded(source, result.relativePath) });
@@ -576,6 +589,8 @@ export function useFileManagement({
         .then((result) => {
           if (result.status === 'saved') {
             void applySuccess(`已另存为 ${finalName}`, () => {
+              // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
+              onMutationCommittedRef.current?.();
               void refreshWorkspace();
             });
           } else if (result.status === 'target-exists') {
@@ -661,6 +676,8 @@ export function useFileManagement({
       .then(async (result) => {
         if (result.status === 'succeeded') {
           await applySuccess(`已移动到 ${result.relativePath}`, () => {
+            // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
+            onMutationCommittedRef.current?.();
             commitRelocate(source, result);
             if (result.kind === 'directory') {
               update({ expandedDirs: migrateExpanded(source, result.relativePath) });
@@ -701,6 +718,8 @@ export function useFileManagement({
       .then((result) => {
         if (result.status === 'saved') {
           void applySuccess(`已覆盖另存为 ${pending.target.name}`, () => {
+            // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
+            onMutationCommittedRef.current?.();
             void refreshWorkspace();
           });
         } else if (result.status === 'target-exists') {
@@ -733,12 +752,16 @@ export function useFileManagement({
       .then(async (result) => {
         if (result.status === 'succeeded') {
           await applySuccess(`已删除 ${pending.kindLabel} 到回收站`, () => {
+            // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
+            onMutationCommittedRef.current?.();
             commitTrash(pending.relativePath, result);
             update({ expandedDirs: removeExpandedUnder(pending.relativePath) });
             update({ selectedPath: null });
           });
         } else if (result.error.code === 'PARTIAL_FAILURE') {
-          // 部分完成：禁止假定路径状态，强制刷新并提示
+          // 部分完成：禁止假定路径状态，强制刷新并提示；磁盘已部分改变，
+          // 旧搜索结果路径不可信，同样作废（§4.9 / §4.11）
+          onMutationCommittedRef.current?.();
           await refreshWorkspace();
           update({
             status: 'partial-failure',

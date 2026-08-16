@@ -10,7 +10,10 @@
  * - 刷新只操作已保存的当前工作区；刷新失败保留原快照并展示可恢复错误；
  * - 工作区成功切换时递增 `epoch` 并调用 `onWorkspaceSelected`：
  *   同一 epoch 同时供文档失效（App 清空标签）与搜索结果校验（use-workspace-search）使用，
- *   不重复计数（WP0 冻结项 11）。
+ *   不重复计数（WP0 冻结项 11）；
+ * - `mutationEpoch`（TASK-009 §4.11 / WP0 冻结）：磁盘文件管理操作（create/save-as/relocate/
+ *   trash）确认成功后由调用方通过 `notifyMutationCommitted` 递增；变化时取消活动搜索、
+ *   清空结果与定位。失败、用户取消、reveal 与工作区切换不递增（切换由 `epoch` 覆盖）。
  *
  * ## 边界
  *
@@ -35,10 +38,17 @@ export interface WorkspaceController {
   readonly state: WorkspaceUiState;
   /** 工作区会话编号：成功切换时 +1；供文档与搜索共享校验（WP0 冻结项 11）。 */
   readonly epoch: number;
+  /**
+   * 文件管理变更版本（TASK-009 §4.11）：create/save-as/relocate/trash 确认成功后 +1；
+   * 失败、取消、reveal 与手工刷新（成功与否见返回值）不递增，由调用方显式通知。
+   */
+  readonly mutationEpoch: number;
+  /** 磁盘文件管理操作确认成功后调用：递增 mutationEpoch（§4.11）。 */
+  readonly notifyMutationCommitted: () => void;
   /** 打开文件夹：取消 / 失败保留原工作区；成功切换时递增 epoch。 */
   readonly openWorkspace: () => Promise<void>;
-  /** 刷新当前工作区：未打开或无变更时安全无操作。 */
-  readonly refreshWorkspace: () => Promise<void>;
+  /** 刷新当前工作区：未打开或无变更时安全无操作；返回是否成功替换了工作区快照。 */
+  readonly refreshWorkspace: () => Promise<boolean>;
 }
 
 export interface UseWorkspaceOptions {
@@ -59,6 +69,7 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     error: null,
   });
   const [epoch, setEpoch] = useState(0);
+  const [mutationEpoch, setMutationEpoch] = useState(0);
   const stateRef = useRef(state);
   const onWorkspaceSelectedRef = useRef(options.onWorkspaceSelected);
 
@@ -68,6 +79,11 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
   useEffect(() => {
     onWorkspaceSelectedRef.current = options.onWorkspaceSelected;
   });
+
+  /** 磁盘文件管理操作确认成功后调用：只递增 mutationEpoch（§4.11），不影响 epoch。 */
+  const notifyMutationCommitted = useCallback(() => {
+    setMutationEpoch((current) => current + 1);
+  }, []);
 
   const openWorkspace = useCallback(async () => {
     const prevWorkspace = stateRef.current.workspace;
@@ -103,9 +119,9 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     }
   }, []);
 
-  const refreshWorkspace = useCallback(async () => {
+  const refreshWorkspace = useCallback(async (): Promise<boolean> => {
     if (!stateRef.current.workspace) {
-      return;
+      return false;
     }
     setState((prev) => ({ ...prev, status: 'refreshing' }));
 
@@ -114,18 +130,21 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
 
       if (result.status === 'refreshed') {
         setState({ status: 'loaded', workspace: result.workspace, error: null });
+        return true;
       } else if (result.status === 'error') {
         setState((prev) => ({
           status: 'error',
           workspace: prev.workspace,
           error: result.error,
         }));
+        return false;
       } else {
         setState((prev) => ({
           status: 'loaded',
           workspace: prev.workspace,
           error: null,
         }));
+        return true;
       }
     } catch (error) {
       setState((prev) => ({
@@ -133,8 +152,9 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
         workspace: prev.workspace,
         error: toWorkspaceEntryError(error),
       }));
+      return false;
     }
   }, []);
 
-  return { state, epoch, openWorkspace, refreshWorkspace };
+  return { state, epoch, mutationEpoch, notifyMutationCommitted, openWorkspace, refreshWorkspace };
 }

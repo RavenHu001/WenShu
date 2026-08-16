@@ -138,6 +138,8 @@
 - 删除；
 - 在 Windows 文件资源管理器中显示。
 
+Task 9 已完成基础文件管理闭环（见 [TASK-009 完成报告](./TASK_009_COMPLETION_REPORT.md)）：在工作区根或选中文件夹内新建 TXT/基础 DOCX/文件夹（排他创建、不覆盖不自动改名；DOCX 从规范空模型导出并验证）；TXT/DOCX 另存为走两阶段覆盖确认（目标存在第一次只返回受控目标 revision，确认后二次提交携带 `expectedTargetRevision` 做发布前 CAS）；普通文件与目录重命名/移动（含 Windows 只改大小写两步中间名 + 回滚，目录禁止移入自身或后代），DOCX 伴随 `.wenshu.bak` 备份随主文件迁移，失败回滚或明确 partial failure；删除统一调用可注入 `shell.trashItem` 进入 Windows 回收站（严禁永久删除降级），主文件与伴随备份非事务的部分成功返回 `PARTIAL_FAILURE` 并强制刷新；"在资源管理器中显示"在重新校验后调用固定 `showItemInFolder`。所有写操作经固定窄 IPC 与按窗口串行队列，源/目标逐段校验不跟随 symlink/junction；成功操作后标签以稳定 tabId 原地迁移（单文件精确、目录段边界前缀，编辑器会话与 dirty/saving 保持），并递增 `mutationEpoch` 取消活动搜索、清空 completed 结果与定位（失败、取消、reveal 不递增）。
+
 ### 5.3 多标签页
 
 应支持：

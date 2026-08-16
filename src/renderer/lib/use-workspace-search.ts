@@ -7,16 +7,18 @@
  * - 结果文件分组携带 `kind`（`txt` / `docx`，主进程受控候选分类产生），controller
  *   只透传展示，不从文案猜测类型（TASK-008 第 4.6 节）；
  * - 同一时刻最多一个活动搜索：新搜索先取消旧搜索；主动取消立即作废在途请求；
- * - 结果提交前必须同时满足（第 5.3 节）：组件仍挂载、工作区 epoch 未变化、
- *   requestId 仍是当前活动请求、请求未被取消；
+ * - 结果提交前必须同时满足（第 5.3 节 + TASK-009 §4.11）：组件仍挂载、工作区 epoch 未变化、
+ *   mutationEpoch 未变化、requestId 仍是当前活动请求、请求未被取消；
  * - 工作区 epoch 由外部（App）在成功切换时提供；epoch 变化时作废旧请求并清空旧结果；
+ * - mutationEpoch（TASK-009 §4.11 / WP0 冻结）由外部在磁盘文件管理操作确认成功后递增；
+ *   变化时同样作废在途请求并清空 completed/cancelled/error 结果（失败、取消、reveal 不递增）；
  * - 不持有工作区根路径或绝对路径；无工作区时 submit 不发起 IPC。
  *
  * ## 状态不变量（第 5.2 节）
  *
  * 1. `searching` 状态必须存在唯一活动 `requestId`；非 searching 状态不得保留活动任务句柄；
- * 2. 只有 requestId 与工作区 epoch 同时匹配的结果可以提交；
- * 3. 取消、工作区成功切换或卸载后，旧结果不得恢复 searching 或覆盖新结果。
+ * 2. 只有 requestId、工作区 epoch 与 mutationEpoch 同时匹配的结果可以提交；
+ * 3. 取消、工作区成功切换、磁盘变更或卸载后，旧结果不得恢复 searching 或覆盖新结果。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -57,6 +59,8 @@ export interface UseWorkspaceSearchParams {
   readonly workspaceAvailable: boolean;
   /** 工作区 epoch：成功切换时递增；结果提交前必须与发起时一致。 */
   readonly workspaceEpoch: number;
+  /** 文件管理变更版本（TASK-009 §4.11）：磁盘操作确认成功后递增；变化即作废搜索。 */
+  readonly mutationEpoch: number;
 }
 
 function createIdleState(): WorkspaceSearchState {
@@ -73,6 +77,7 @@ function createIdleState(): WorkspaceSearchState {
 export function useWorkspaceSearch({
   workspaceAvailable,
   workspaceEpoch,
+  mutationEpoch,
 }: UseWorkspaceSearchParams): WorkspaceSearchController {
   const [state, setState] = useState<WorkspaceSearchState>(createIdleState);
   const mountedRef = useRef(true);
@@ -80,6 +85,9 @@ export function useWorkspaceSearch({
   /** 发起搜索时捕获的 epoch；提交结果前必须仍等于当前 epoch。 */
   const epochRef = useRef(workspaceEpoch);
   const previousEpochRef = useRef(workspaceEpoch);
+  /** 发起搜索时捕获的 mutationEpoch；磁盘变更后旧结果不得提交（§4.11）。 */
+  const mutationEpochRef = useRef(mutationEpoch);
+  const previousMutationEpochRef = useRef(mutationEpoch);
   /** 当前活动请求编号；null 表示没有可提交结果的在途搜索。 */
   const activeRequestIdRef = useRef<number | null>(null);
   /** 请求编号：单调递增，不使用查询字符串作为身份。 */
@@ -116,19 +124,40 @@ export function useWorkspaceSearch({
     setState(createIdleState());
   }, [workspaceEpoch]);
 
+  // mutationEpoch 变化（磁盘文件管理操作确认成功）：作废在途请求并清空全部旧结果（§4.11）
+  useEffect(() => {
+    mutationEpochRef.current = mutationEpoch;
+    if (previousMutationEpochRef.current === mutationEpoch) {
+      return;
+    }
+    previousMutationEpochRef.current = mutationEpoch;
+    const current = activeRequestIdRef.current;
+    if (current !== null) {
+      activeRequestIdRef.current = null;
+      void window.desktop.search.cancelTextWorkspace({ requestId: current });
+    }
+    setState(createIdleState());
+  }, [mutationEpoch]);
+
   const commit = useCallback(
     (
       result: WorkspaceTextSearchResult,
       requestId: number,
       epoch: number,
+      mutationEpoch: number,
       submittedQuery: string,
       caseSensitive: boolean,
     ) => {
-      // 第 5.3 节：组件挂载 + 工作区 epoch 未变化 + requestId 仍是当前活动请求
+      // 第 5.3 节 + §4.11：组件挂载 + 工作区 epoch 未变化 + mutationEpoch 未变化
+      // + requestId 仍是当前活动请求
       if (!mountedRef.current) {
         return;
       }
-      if (epochRef.current !== epoch || activeRequestIdRef.current !== requestId) {
+      if (
+        epochRef.current !== epoch ||
+        mutationEpochRef.current !== mutationEpoch ||
+        activeRequestIdRef.current !== requestId
+      ) {
         return;
       }
       activeRequestIdRef.current = null;
@@ -185,6 +214,7 @@ export function useWorkspaceSearch({
       const requestId = ++requestCounterRef.current;
       activeRequestIdRef.current = requestId;
       const epoch = epochRef.current;
+      const mutation = mutationEpochRef.current;
       setState({
         status: 'searching',
         submittedQuery: query,
@@ -195,7 +225,7 @@ export function useWorkspaceSearch({
       });
       window.desktop.search
         .textWorkspace({ requestId, query, caseSensitive })
-        .then((result) => commit(result, requestId, epoch, query, caseSensitive))
+        .then((result) => commit(result, requestId, epoch, mutation, query, caseSensitive))
         .catch(() =>
           commit(
             {
@@ -205,6 +235,7 @@ export function useWorkspaceSearch({
             },
             requestId,
             epoch,
+            mutation,
             query,
             caseSensitive,
           ),
