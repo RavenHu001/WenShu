@@ -136,6 +136,13 @@ export interface DocumentsController {
   ) => Promise<WorkspaceMutationResult>;
   /** 删除到回收站（TASK-009 WP5）：主进程成功后关闭受影响标签（文件/目录后代）。 */
   readonly trashByPath: (relativePath: string) => Promise<WorkspaceMutationResult>;
+  /** 纯提交：relocate 成功后按结果类型迁移受影响标签（供文件管理 controller 复用，不再调 IPC）。 */
+  readonly commitRelocateResult: (
+    sourceRelativePath: string,
+    result: WorkspaceMutationResult,
+  ) => void;
+  /** 纯提交：trash 成功后关闭受影响标签（供文件管理 controller 复用，不再调 IPC）。 */
+  readonly commitTrashResult: (relativePath: string, result: WorkspaceMutationResult) => void;
   /** 工作区成功切换：清空全部标签与运行时，使旧工作区结果失效。 */
   readonly invalidateWorkspace: () => void;
 }
@@ -906,6 +913,44 @@ export function useDocuments(): DocumentsController {
     [commit, completeSaveAsState, failSaveAsState, startSaveAsState],
   );
 
+  const commitRelocateResult = useCallback(
+    (sourceRelativePath: string, result: WorkspaceMutationResult): void => {
+      if (result.status !== 'succeeded') {
+        return;
+      }
+      const latest = modelRef.current;
+      if (result.kind === 'directory') {
+        commit(migrateDescendantTabPathsState(latest, sourceRelativePath, result.relativePath));
+        return;
+      }
+      const tab = tabByRelativePath(latest, sourceRelativePath);
+      if (tab !== null) {
+        commit(migrateTabPathState(latest, tab.id, result.relativePath));
+      }
+    },
+    [commit],
+  );
+
+  const commitTrashResult = useCallback(
+    (relativePath: string, result: WorkspaceMutationResult): void => {
+      if (result.status !== 'succeeded') {
+        return;
+      }
+      const latest = modelRef.current;
+      const affected = latest.state.tabs.filter(
+        (tab) =>
+          tab.relativePath === relativePath || tab.relativePath.startsWith(`${relativePath}/`),
+      );
+      commit(
+        closeTabsByRelativePathsState(
+          latest,
+          affected.map((tab) => tab.relativePath),
+        ),
+      );
+    },
+    [commit],
+  );
+
   const relocateByPath = useCallback(
     async (
       sourceRelativePath: string,
@@ -937,19 +982,11 @@ export function useDocuments(): DocumentsController {
         name: target.name,
       });
       if (result.status === 'succeeded' && epochRef.current === epoch) {
-        const latest = modelRef.current;
-        if (result.kind === 'directory') {
-          commit(migrateDescendantTabPathsState(latest, sourceRelativePath, result.relativePath));
-        } else {
-          const tab = tabByRelativePath(latest, sourceRelativePath);
-          if (tab !== null) {
-            commit(migrateTabPathState(latest, tab.id, result.relativePath));
-          }
-        }
+        commitRelocateResult(sourceRelativePath, result);
       }
       return result;
     },
-    [commit],
+    [commit, commitRelocateResult],
   );
 
   const trashByPath = useCallback(
@@ -973,17 +1010,11 @@ export function useDocuments(): DocumentsController {
       const epoch = epochRef.current;
       const result = await window.desktop.workspace.trash({ mutationId, relativePath });
       if (result.status === 'succeeded' && epochRef.current === epoch) {
-        const latest = modelRef.current;
-        commit(
-          closeTabsByRelativePathsState(
-            latest,
-            affected.map((tab) => tab.relativePath),
-          ),
-        );
+        commitTrashResult(relativePath, result);
       }
       return result;
     },
-    [commit],
+    [commit, commitTrashResult],
   );
 
   const reloadTab = useCallback(
@@ -1047,6 +1078,8 @@ export function useDocuments(): DocumentsController {
     saveAsTab,
     relocateByPath,
     trashByPath,
+    commitRelocateResult,
+    commitTrashResult,
     invalidateWorkspace,
   };
 }
