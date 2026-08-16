@@ -23,6 +23,12 @@ import type {
   WorkspaceTextSearchRequest,
   WorkspaceTextSearchResult,
 } from './search';
+import type {
+  CreateWorkspaceEntryTarget,
+  RevealWorkspaceEntryRequest,
+  RevealResult,
+  WorkspaceMutationResult,
+} from './file-management';
 
 /** 窗口关闭协调命名空间：固定窄协议，不暴露 ipcRenderer 或通用事件总线。 */
 export interface DesktopWindowApi {
@@ -42,6 +48,19 @@ export interface DesktopApi {
   readonly workspace: {
     readonly open: () => Promise<OpenWorkspaceResult>;
     readonly refresh: () => Promise<RefreshWorkspaceResult>;
+    /**
+     * 排他新建空 UTF-8 TXT（TASK-009 WP3）：请求只含 mutationId、父目录与叶名称；
+     * kind 由 preload 固定注入，renderer 不能选择其他类型。
+     */
+    readonly createText: (request: CreateWorkspaceEntryTarget) => Promise<WorkspaceMutationResult>;
+    /** 排他新建基础 DOCX（空模型导出 + 验证后发布）。 */
+    readonly createDocx: (request: CreateWorkspaceEntryTarget) => Promise<WorkspaceMutationResult>;
+    /** 排他新建单级文件夹。 */
+    readonly createDirectory: (
+      request: CreateWorkspaceEntryTarget,
+    ) => Promise<WorkspaceMutationResult>;
+    /** 在资源管理器中显示工作区根或工作区内条目（固定 shell 能力）。 */
+    readonly reveal: (request: RevealWorkspaceEntryRequest) => Promise<RevealResult>;
   };
   readonly document: {
     /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */

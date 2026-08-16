@@ -177,6 +177,65 @@ describe('preload 窄接口契约', () => {
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:refresh');
   });
 
+  it('workspace 命名空间固定暴露 open/refresh/createText/createDocx/createDirectory/reveal 六个方法', () => {
+    expect(Object.keys(desktop.workspace).sort()).toEqual([
+      'createDirectory',
+      'createDocx',
+      'createText',
+      'open',
+      'refresh',
+      'reveal',
+    ]);
+    expect(desktop.workspace.createText.length).toBe(1);
+    expect(desktop.workspace.createDocx.length).toBe(1);
+    expect(desktop.workspace.createDirectory.length).toBe(1);
+    expect(desktop.workspace.reveal.length).toBe(1);
+  });
+
+  it('createText/createDocx/createDirectory 共用固定 workspace:create-entry 通道，kind 由 preload 固定注入', async () => {
+    electronMock.invoke.mockResolvedValue({
+      status: 'succeeded',
+      mutationId: 1,
+      relativePath: 'a.txt',
+      kind: 'text',
+    });
+    const request = { mutationId: 1, parentRelativePath: '', name: 'a.txt' };
+
+    await desktop.workspace.createText(request);
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:create-entry', {
+      ...request,
+      kind: 'text',
+    });
+
+    electronMock.invoke.mockClear();
+    await desktop.workspace.createDocx(request);
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:create-entry', {
+      ...request,
+      kind: 'docx',
+    });
+
+    electronMock.invoke.mockClear();
+    await desktop.workspace.createDirectory(request);
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:create-entry', {
+      ...request,
+      kind: 'directory',
+    });
+  });
+
+  it('reveal 只映射固定 workspace:reveal 通道并原样传递请求（根判别值/条目路径）', async () => {
+    electronMock.invoke.mockResolvedValue({ status: 'revealed' });
+
+    await desktop.workspace.reveal({ revealRoot: false, relativePath: 'sub/a.txt' });
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:reveal', {
+      revealRoot: false,
+      relativePath: 'sub/a.txt',
+    });
+
+    electronMock.invoke.mockClear();
+    await desktop.workspace.reveal({ revealRoot: true });
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:reveal', { revealRoot: true });
+  });
+
   it('search 命名空间只暴露 textWorkspace 与 cancelTextWorkspace 两个固定方法', () => {
     expect(Object.keys(desktop.search)).toEqual(['textWorkspace', 'cancelTextWorkspace']);
     expect(typeof desktop.search.textWorkspace).toBe('function');

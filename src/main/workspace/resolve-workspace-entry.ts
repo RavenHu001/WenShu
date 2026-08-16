@@ -85,7 +85,7 @@ export type ResolvedWorkspaceParent =
  * 逐段 lstat 通用于三种解析：最终段必须为普通文件 / 普通目录 / 不限制（父目录用）。
  * 任一中间段不是普通目录、任一段是 symlink/junction 立即返回稳定错误。
  */
-async function walkSegments(
+export async function walkSegments(
   workspaceRoot: string,
   segments: readonly string[],
   finalKind: 'file' | 'directory' | 'any',
@@ -124,7 +124,10 @@ async function walkSegments(
 }
 
 /** 词法 + 边界检查的公共前置：工作区根、相对路径格式、internal name。 */
-function preflight(workspaceRoot: string, segments: readonly string[]): FileManagementError | null {
+export function preflight(
+  workspaceRoot: string,
+  segments: readonly string[],
+): FileManagementError | null {
   if (!workspaceRoot || !isAbsolute(workspaceRoot)) {
     return fileManagementError('NO_WORKSPACE');
   }
@@ -135,7 +138,7 @@ function preflight(workspaceRoot: string, segments: readonly string[]): FileMana
 }
 
 /** realpath 边界检查：候选必须仍位于真实工作区根内（不跟随任何链接越界）。 */
-async function realpathBoundaryCheck(
+export async function realpathBoundaryCheck(
   workspaceRoot: string,
   candidate: string,
   adapters: WorkspaceEntryAdapters,

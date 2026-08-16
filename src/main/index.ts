@@ -4,6 +4,7 @@ import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
 import { registerDocxIpc } from './docx/docx-ipc';
 import { registerSearchIpc } from './search/search-ipc';
+import { registerFileManagementIpc } from './workspace/file-management-ipc';
 import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/window-close';
 
 const createMainWindow = (): BrowserWindow => {
@@ -53,6 +54,7 @@ void app.whenReady().then(() => {
   registerDocumentIpc();
   registerDocxIpc();
   registerSearchIpc();
+  registerFileManagementIpc();
   registerWindowCloseIpc();
 
   createMainWindow();

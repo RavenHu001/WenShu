@@ -34,6 +34,12 @@ export interface CreateWorkspaceEntryRequest extends WorkspaceTargetName {
   readonly kind: 'text' | 'docx' | 'directory';
 }
 
+/**
+ * 不含 kind 的创建目标：preload 的 createText/createDocx/createDirectory 各自固定注入
+ * kind，renderer 不能通过方法名选择其他类型（§4.2 固定能力集合）。
+ */
+export type CreateWorkspaceEntryTarget = Omit<CreateWorkspaceEntryRequest, 'kind'>;
+
 /** 重命名/移动请求（统一 relocate 语义，§4.8）。 */
 export interface RelocateWorkspaceEntryRequest extends WorkspaceTargetName {
   readonly mutationId: number;
@@ -107,6 +113,7 @@ export const FILE_MANAGEMENT_ERROR_CODES = [
   'REVEAL_FAILED',
   'PARTIAL_FAILURE',
   'INTERNAL_NAME_NOT_ALLOWED',
+  'EXPORT_FAILED',
   'FS_FAILED',
 ] as const;
 
@@ -145,6 +152,7 @@ export const FILE_MANAGEMENT_ERROR_MESSAGES: Record<FileManagementErrorCode, str
   REVEAL_FAILED: '无法在资源管理器中显示',
   PARTIAL_FAILURE: '操作部分完成，请刷新后重试',
   INTERNAL_NAME_NOT_ALLOWED: '内部恢复/临时文件不允许作为管理目标',
+  EXPORT_FAILED: '文档生成失败',
   FS_FAILED: '文件系统操作失败',
 };
 
