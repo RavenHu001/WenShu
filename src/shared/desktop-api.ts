@@ -27,6 +27,9 @@ import type {
   CreateWorkspaceEntryTarget,
   RevealWorkspaceEntryRequest,
   RevealResult,
+  SaveAsResult,
+  SaveDocxDocumentAsRequest,
+  SaveTextDocumentAsRequest,
   WorkspaceMutationResult,
 } from './file-management';
 
@@ -78,6 +81,13 @@ export interface DesktopApi {
      * HTML/XML、跳过备份、强制覆盖等危险参数）。
      */
     readonly saveDocx: (request: SaveDocxDocumentRequest) => Promise<SaveDocxDocumentResult>;
+    /**
+     * TXT 另存为（TASK-009 WP4）：两阶段覆盖确认（target-exists → expectedTargetRevision），
+     * 源文件不变、目标安全发布；无 force/overwrite 布尔捷径。
+     */
+    readonly saveTextAs: (request: SaveTextDocumentAsRequest) => Promise<SaveAsResult>;
+    /** DOCX 另存为：read-only 拒绝、degraded 确认绑定源 revision、覆盖前目标备份。 */
+    readonly saveDocxAs: (request: SaveDocxDocumentAsRequest) => Promise<SaveAsResult>;
   };
   /**
    * 工作区搜索窄接口：固定开始与取消方法，不暴露 ipcRenderer、通用通道或事件总线。

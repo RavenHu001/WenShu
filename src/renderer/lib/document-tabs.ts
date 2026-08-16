@@ -44,6 +44,7 @@ import type {
   TextDocumentError,
   TextDocumentSnapshot,
 } from '../../shared/document';
+import type { FileManagementError } from '../../shared/file-management';
 import type { ReadDocxDocumentResult, SaveDocxDocumentResult } from '../../shared/docx';
 import type { TextDocumentTabState, TextTabStatus } from './text-document-tabs';
 import {
@@ -656,7 +657,7 @@ export function completeSaveAs(
 export function failSaveAs(
   model: DocumentTabsModel,
   tabId: string,
-  error: TextDocumentError | SaveTextDocumentError | DocxDocumentError,
+  error: FileManagementError,
 ): DocumentTabsModel {
   const tab = tabById(model, tabId);
   const runtime = model.runtime.get(tabId);

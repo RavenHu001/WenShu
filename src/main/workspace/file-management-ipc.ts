@@ -19,13 +19,13 @@ import { fileManagementError, type FileManagementError } from '../../shared/file
 import { getCurrentWorkspaceRoot } from './workspace-session';
 import { createWorkspaceEntry } from './create-workspace-entry';
 import { revealWorkspaceEntry } from './reveal-workspace-entry';
-import { createMutationCoordinator } from './mutation-coordinator';
+import { sharedMutationQueue } from './mutation-coordinator';
 
 /** IPC 是否已注册，防止重复注册。 */
 let registered = false;
 
-/** 按窗口串行文件管理写操作（同一窗口同一时刻最多一个写操作，§4.4）。 */
-const mutationQueue = createMutationCoordinator();
+/** 按窗口串行文件管理写操作（同一窗口同一时刻最多一个写操作，§4.4；与 save-as 共用同一队列）。 */
+const mutationQueue = sharedMutationQueue;
 
 const CREATE_ALLOWED_KEYS = ['kind', 'mutationId', 'name', 'parentRelativePath'];
 

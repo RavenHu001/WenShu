@@ -204,6 +204,7 @@ describe('请求运行时校验', () => {
     const base = {
       mutationId: 4,
       tabId: 'tab-1',
+      sourceRelativePath: 'a.txt',
       target: { parentRelativePath: 'sub', name: 'b.txt' },
       content: 'hello',
       expectedSourceRevision: 'r1',
@@ -238,6 +239,7 @@ describe('请求运行时校验', () => {
     const base = {
       mutationId: 5,
       tabId: 'tab-2',
+      sourceRelativePath: 'a.docx',
       target: { parentRelativePath: '', name: 'b.docx' },
       model,
       expectedSourceRevision: 'r1',

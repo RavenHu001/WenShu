@@ -4,6 +4,8 @@ import type { SaveTextDocumentRequest } from '../shared/document';
 import type {
   CreateWorkspaceEntryTarget,
   RevealWorkspaceEntryRequest,
+  SaveDocxDocumentAsRequest,
+  SaveTextDocumentAsRequest,
 } from '../shared/file-management';
 import type { SaveDocxDocumentRequest } from '../shared/docx';
 import type {
@@ -44,6 +46,12 @@ const desktopApi: DesktopApi = Object.freeze({
     readDocx: (relativePath: string) => ipcRenderer.invoke('document:read-docx', relativePath),
     saveDocx: (request: SaveDocxDocumentRequest) =>
       ipcRenderer.invoke('document:save-docx', request),
+    // 另存为：只映射固定 document:save-text-as / document:save-docx-as 通道，
+    // 不接受根路径、绝对路径、临时/备份路径或 force/overwrite 开关。
+    saveTextAs: (request: SaveTextDocumentAsRequest) =>
+      ipcRenderer.invoke('document:save-text-as', request),
+    saveDocxAs: (request: SaveDocxDocumentAsRequest) =>
+      ipcRenderer.invoke('document:save-docx-as', request),
   }),
   // search 命名空间只映射固定的两个搜索通道，不接受根路径、绝对路径或任意通道：
   // 请求与取消都经过主进程运行时校验，取消只能引用当前窗口已知的 requestId；

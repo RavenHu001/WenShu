@@ -195,8 +195,8 @@ export function dominantLineEnding(content: string): 'lf' | 'crlf' {
   return lfStyle > crStyle ? 'lf' : 'crlf';
 }
 
-/** 按 BOM 策略把正文编码为 UTF-8 字节。 */
-function encodeUtf8(content: string, bom: boolean): Uint8Array {
+/** 按 BOM 策略把正文编码为 UTF-8 字节（另存为复用，TASK-009 WP4）。 */
+export function encodeUtf8(content: string, bom: boolean): Uint8Array {
   const textBytes = utf8Encoder.encode(content);
   if (!bom) {
     return textBytes;

@@ -11,6 +11,12 @@ export interface MutationCoordinator {
   run<T>(windowId: number, task: () => Promise<T>): Promise<T>;
 }
 
+/**
+ * 进程级共享队列单例：create / save-as 等全部文件管理写操作共用同一按窗口串行队列，
+ * 保证同一窗口同一时刻最多一个文件管理写操作在途（§4.4）。
+ */
+export const sharedMutationQueue: MutationCoordinator = createMutationCoordinator();
+
 /** 创建按窗口串行的 mutation coordinator。 */
 export function createMutationCoordinator(): MutationCoordinator {
   const tails = new Map<number, Promise<unknown>>();

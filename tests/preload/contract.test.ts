@@ -49,16 +49,21 @@ describe('preload 窄接口契约', () => {
     ]);
   });
 
-  it('document 命名空间只暴露 readText、saveText、readDocx、saveDocx 四个固定函数，且各只接受一个参数', () => {
-    expect(Object.keys(desktop.document)).toEqual(['readText', 'saveText', 'readDocx', 'saveDocx']);
-    expect(typeof desktop.document.readText).toBe('function');
-    expect(typeof desktop.document.saveText).toBe('function');
-    expect(typeof desktop.document.readDocx).toBe('function');
-    expect(typeof desktop.document.saveDocx).toBe('function');
+  it('document 命名空间只暴露 readText、saveText、readDocx、saveDocx、saveTextAs、saveDocxAs 六个固定函数', () => {
+    expect(Object.keys(desktop.document).sort()).toEqual([
+      'readDocx',
+      'readText',
+      'saveDocx',
+      'saveDocxAs',
+      'saveText',
+      'saveTextAs',
+    ]);
     expect(desktop.document.readText.length).toBe(1);
     expect(desktop.document.saveText.length).toBe(1);
     expect(desktop.document.readDocx.length).toBe(1);
     expect(desktop.document.saveDocx.length).toBe(1);
+    expect(desktop.document.saveTextAs.length).toBe(1);
+    expect(desktop.document.saveDocxAs.length).toBe(1);
   });
 
   it('readText 只映射固定的 document:read-text 通道并原样传递相对路径', async () => {
@@ -166,6 +171,46 @@ describe('preload 窄接口契约', () => {
     expect(electronMock.invoke).toHaveBeenCalledTimes(1);
     expect(electronMock.invoke).toHaveBeenCalledWith('document:save-docx', request);
     expect(JSON.stringify(result)).toBe(JSON.stringify(saved));
+  });
+
+  it('saveTextAs / saveDocxAs 只映射固定通道并原样传递请求', async () => {
+    electronMock.invoke.mockResolvedValue({
+      status: 'saved',
+      mutationId: 1,
+      relativePath: 'b.txt',
+      kind: 'text',
+      document: {
+        name: 'b.txt',
+        relativePath: 'b.txt',
+        content: 'x',
+        byteLength: 1,
+        revision: 'a'.repeat(64),
+        hasUtf8Bom: false,
+        lineEnding: 'lf',
+      },
+    });
+    const textRequest = {
+      mutationId: 1,
+      tabId: 'tab-1',
+      sourceRelativePath: 'a.txt',
+      target: { parentRelativePath: '', name: 'b.txt' },
+      content: 'x',
+      expectedSourceRevision: 'r1',
+    };
+    await desktop.document.saveTextAs(textRequest);
+    expect(electronMock.invoke).toHaveBeenCalledWith('document:save-text-as', textRequest);
+
+    electronMock.invoke.mockClear();
+    const docxRequest = {
+      mutationId: 2,
+      tabId: 'tab-2',
+      sourceRelativePath: 'a.docx',
+      target: { parentRelativePath: '', name: 'b.docx' },
+      model: { schemaVersion: 1 as const, blocks: [] as const },
+      expectedSourceRevision: 'r1',
+    };
+    await desktop.document.saveDocxAs(docxRequest);
+    expect(electronMock.invoke).toHaveBeenCalledWith('document:save-docx-as', docxRequest);
   });
 
   it('workspace.open / refresh 仍映射固定通道', () => {

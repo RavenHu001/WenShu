@@ -61,8 +61,10 @@ export type RevealWorkspaceEntryRequest =
 /** TXT 另存为请求（WP4 使用；两阶段覆盖确认携带 expectedTargetRevision）。 */
 export interface SaveTextDocumentAsRequest {
   readonly mutationId: number;
-  /** 目标标签的稳定 tabId（WP1）。 */
+  /** 目标标签的稳定 tabId（WP1；仅作 renderer 身份，主进程不信任）。 */
   readonly tabId: string;
+  /** 源规范相对路径（源文件保持不变，只读校验 revision 与 BOM/换行策略）。 */
+  readonly sourceRelativePath: string;
   readonly target: WorkspaceTargetName;
   /** 编辑器当前最新正文（复用 TXT 保存的 BOM/换行语义）。 */
   readonly content: string;
@@ -77,6 +79,8 @@ export interface SaveTextDocumentAsRequest {
 export interface SaveDocxDocumentAsRequest {
   readonly mutationId: number;
   readonly tabId: string;
+  /** 源规范相对路径（源文件保持不变，只读校验 revision 与兼容性）。 */
+  readonly sourceRelativePath: string;
   readonly target: WorkspaceTargetName;
   readonly model: DocxDocumentModel;
   readonly expectedSourceRevision: string;
@@ -115,6 +119,9 @@ export const FILE_MANAGEMENT_ERROR_CODES = [
   'INTERNAL_NAME_NOT_ALLOWED',
   'EXPORT_FAILED',
   'FS_FAILED',
+  'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED',
+  'TOO_LARGE',
+  'READ_ONLY_DOCUMENT',
 ] as const;
 
 export type FileManagementErrorCode = (typeof FILE_MANAGEMENT_ERROR_CODES)[number];
@@ -154,6 +161,9 @@ export const FILE_MANAGEMENT_ERROR_MESSAGES: Record<FileManagementErrorCode, str
   INTERNAL_NAME_NOT_ALLOWED: '内部恢复/临时文件不允许作为管理目标',
   EXPORT_FAILED: '文档生成失败',
   FS_FAILED: '文件系统操作失败',
+  MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED: '文件包含混合换行，需要确认规范化规则',
+  TOO_LARGE: '文件超过大小上限',
+  READ_ONLY_DOCUMENT: '文档为只读，不允许另存为',
 };
 
 /** 构造稳定错误（仅纯数据，可 structured clone）。 */
@@ -351,6 +361,7 @@ export function validateSaveTextDocumentAsRequest(
     'expectedSourceRevision',
     'expectedTargetRevision',
     'mutationId',
+    'sourceRelativePath',
     'tabId',
     'target',
   ];
@@ -361,6 +372,9 @@ export function validateSaveTextDocumentAsRequest(
     return false;
   }
   if (typeof value.content !== 'string' || !isNonEmptyString(value.expectedSourceRevision)) {
+    return false;
+  }
+  if (!validateWorkspaceRelativePath(value.sourceRelativePath)) {
     return false;
   }
   if (!validateWorkspaceTargetName(value.target)) {
@@ -393,6 +407,7 @@ export function validateSaveDocxDocumentAsRequest(
     'expectedTargetRevision',
     'model',
     'mutationId',
+    'sourceRelativePath',
     'tabId',
     'target',
   ];
@@ -403,6 +418,9 @@ export function validateSaveDocxDocumentAsRequest(
     return false;
   }
   if (!isNonEmptyString(value.expectedSourceRevision)) {
+    return false;
+  }
+  if (!validateWorkspaceRelativePath(value.sourceRelativePath)) {
     return false;
   }
   if (!validateWorkspaceTargetName(value.target)) {
