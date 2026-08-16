@@ -69,6 +69,7 @@
 
 ### 尚未实现
 
+- 系统性 UI 优化（统一设计变量与图标、侧栏信息架构、可调整宽度、桌面缩放适配和视觉回归测试；见[未来 UI 优化计划](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)）；
 - 标签页拖拽排序、固定、批量关闭与状态恢复；
 - TXT/DOCX 自动保存与会话恢复；
 - 工作区替换、批量替换、正则/模糊/语义搜索与持久全文索引；
@@ -151,6 +152,7 @@
 - [x] [Task 7：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)（已完成，见 [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)）。
 - [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)）。
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
+- [ ] [未来 UI 优化：设计体系、信息架构与视觉质量门禁](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)（已纳入 Roadmap，尚未排期）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
@@ -177,6 +179,7 @@
 - [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)
 - [TASK-009：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)
 - [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)
+- [未来 UI 优化计划](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)
 
 ## 项目结构
 

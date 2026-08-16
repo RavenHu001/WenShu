@@ -105,7 +105,7 @@ export function FileTreeNode({
       {isDir ? (
         <button
           type="button"
-          className={`ft-row ft-row--dir ${entry.error ? 'ft-row--error' : ''}`}
+          className={`ft-row ft-row--dir ${entry.error ? 'ft-row--error' : ''} ${isManagedSelected ? 'ft-row--managed' : ''}`}
           style={{ paddingLeft: 14 + indent }}
           onClick={toggle}
           aria-expanded={expanded}

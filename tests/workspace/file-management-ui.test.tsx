@@ -230,6 +230,7 @@ describe('文件树选择与打开行为', () => {
     await userEvent.click(screen.getByTestId('ft-sub'));
     expect(screen.getByTestId('ft-sub/c.txt')).toBeDefined();
     expect(screen.getByTestId('fm-selected').textContent).toBe('sub');
+    expect(screen.getByTestId('ft-sub').classList.contains('ft-row--managed')).toBe(true);
   });
 });
 
