@@ -5,6 +5,8 @@
  *
  * - `openFile`：文件树选择 → 按扩展名打开 TXT 或 DOCX；同路径去重（含 loading/error 态），
  *   新路径创建 loading 占位标签并发起唯一一次读取；
+ * - 打开去重按规范相对路径，新标签分配稳定 tabId（不可由路径推导），
+ *   重命名/移动/另存为路径变化不改变 tabId（TASK-009 WP1 第 4.5 节）；
  * - `openTextFile`：TXT 专用入口（Task 6 搜索结果定位复用），只返回 TXT 标签；
  * - 每标签独立读取请求：请求编号全局单调递增，结果提交前必须通过三重校验
  *   （工作区会话 / 目标标签 / 请求编号）；
@@ -35,25 +37,41 @@ import {
   applyDocxReadResult,
   asyncResultStillValid,
   closeTab as closeTabState,
+  closeTabsByRelativePaths as closeTabsByRelativePathsState,
   completeDocxSave,
+  completeSaveAs as completeSaveAsState,
   confirmDocxCompatibility as confirmDocxCompatibilityState,
   createEmptyModel,
   editDocxTab as editDocxTabState,
   editTab as editTabState,
+  failSaveAs as failSaveAsState,
   invalidateWorkspace as invalidateTabsModel,
   isDocxTab,
   isTextTab,
+  migrateDescendantTabPaths as migrateDescendantTabPathsState,
+  migrateTabPath as migrateTabPathState,
   openDocxTab,
   openTab,
   saveCompletionClearsDirty,
   startDocxSave,
+  startSaveAs as startSaveAsState,
   tabById,
+  tabByRelativePath,
   updateTab,
   updateTabRuntime,
   type DocumentTabRuntime,
   type DocumentTabsModel,
   type DocumentTabState,
 } from './document-tabs';
+import {
+  FILE_MANAGEMENT_ERROR_MESSAGES,
+  type FileManagementError,
+  type SaveAsResult,
+  type SaveDocxDocumentAsRequest,
+  type SaveTextDocumentAsRequest,
+  type WorkspaceMutationResult,
+  type WorkspaceTargetName,
+} from '../../shared/file-management';
 import type { TextDocumentTabState } from './text-document-tabs';
 
 const MIXED_LINE_ENDINGS_ERROR = {
@@ -95,6 +113,36 @@ export interface DocumentsController {
   readonly closeTab: (tabId: string) => void;
   /** 错误标签重试：发起新一轮读取并作废旧请求。 */
   readonly retryRead: (tabId: string) => void;
+  /**
+   * 另存为（TASK-009 WP4）：stable tabId 原地迁移 + 两阶段覆盖确认编排。
+   * 返回 IPC 结果供调用方（WP6 UI）处理 target-exists → 确认 → 第二次调用；
+   * 成功后当前标签迁移到目标路径（id/顺序/会话不变）。
+   */
+  readonly saveAsTab: (
+    tabId: string,
+    target: WorkspaceTargetName,
+    options?: {
+      readonly expectedTargetRevision?: string;
+      readonly confirmMixedLineEndingNormalization?: boolean;
+    },
+  ) => Promise<SaveAsResult>;
+  /**
+   * 重命名/移动（TASK-009 WP5）：主进程成功后按结果类型迁移受影响标签
+   * （单文件 → migrateTabPath；目录 → 前缀段边界迁移）；saving 受影响标签阻止请求。
+   */
+  readonly relocateByPath: (
+    sourceRelativePath: string,
+    target: WorkspaceTargetName,
+  ) => Promise<WorkspaceMutationResult>;
+  /** 删除到回收站（TASK-009 WP5）：主进程成功后关闭受影响标签（文件/目录后代）。 */
+  readonly trashByPath: (relativePath: string) => Promise<WorkspaceMutationResult>;
+  /** 纯提交：relocate 成功后按结果类型迁移受影响标签（供文件管理 controller 复用，不再调 IPC）。 */
+  readonly commitRelocateResult: (
+    sourceRelativePath: string,
+    result: WorkspaceMutationResult,
+  ) => void;
+  /** 纯提交：trash 成功后关闭受影响标签（供文件管理 controller 复用，不再调 IPC）。 */
+  readonly commitTrashResult: (relativePath: string, result: WorkspaceMutationResult) => void;
   /** 工作区成功切换：清空全部标签与运行时，使旧工作区结果失效。 */
   readonly invalidateWorkspace: () => void;
 }
@@ -142,6 +190,14 @@ export function useDocuments(): DocumentsController {
   const epochRef = useRef(0);
   /** 读取请求编号：全局单调递增，避免关闭后重开标签的请求编号碰撞。 */
   const readRequestCounterRef = useRef(0);
+  /**
+   * 稳定 tabId 分配：单调递增、不可由路径推导（TASK-009 WP1 第 4.5 节）。
+   * 工作区切换/标签关闭不重置计数，保证会话内 id 永不碰撞。
+   */
+  const tabIdCounterRef = useRef(0);
+  const allocateTabId = useCallback(() => `tab-${++tabIdCounterRef.current}`, []);
+  /** 文件操作 mutationId：renderer 单调递增，只用于界面迟到结果校验（§4.4）。 */
+  const mutationIdCounterRef = useRef(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -310,8 +366,16 @@ export function useDocuments(): DocumentsController {
     (relativePath: string): Promise<DocumentTabState | null> => {
       const current = modelRef.current;
       const docx = isDocxPath(relativePath);
-      const opened = docx ? openDocxTab(current, relativePath) : openTab(current, relativePath);
-      const tab = opened.state.tabs.find((item) => item.id === relativePath) ?? null;
+      // 打开去重按规范相对路径（与稳定 tabId 解耦）：已存在标签只激活原 id；
+      // 新路径才分配新的稳定 tabId（不可由路径推导）
+      const existing = tabByRelativePath(current, relativePath);
+      const opened =
+        existing !== null
+          ? activateTabState(current, existing.id)
+          : docx
+            ? openDocxTab(current, relativePath, allocateTabId())
+            : openTab(current, relativePath, allocateTabId());
+      const tab = tabByRelativePath(opened, relativePath) ?? null;
       if (tab === null) {
         return Promise.resolve(null);
       }
@@ -645,6 +709,314 @@ export function useDocuments(): DocumentsController {
     [commit],
   );
 
+  const saveAsTab = useCallback(
+    async (
+      tabId: string,
+      target: WorkspaceTargetName,
+      options: {
+        readonly expectedTargetRevision?: string;
+        readonly confirmMixedLineEndingNormalization?: boolean;
+      } = {},
+    ): Promise<SaveAsResult> => {
+      const current = modelRef.current;
+      const tab = tabById(current, tabId);
+      const entry = current.runtime.get(tabId);
+      if (tab === null || entry === undefined || entry.saveInFlight || tab.document === null) {
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: { code: 'INVALID_REQUEST', message: '无效的保存请求' },
+        };
+      }
+      if (isDocxTab(tab) && tab.status === 'read-only') {
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: {
+            code: 'READ_ONLY_DOCUMENT',
+            message: FILE_MANAGEMENT_ERROR_MESSAGES.READ_ONLY_DOCUMENT,
+          },
+        };
+      }
+      // 目标由另一标签打开：renderer 不发请求（TARGET_OPEN 为产品状态，主进程不信任）
+      const targetPath =
+        target.parentRelativePath === ''
+          ? target.name
+          : `${target.parentRelativePath}/${target.name}`;
+      const opener = tabByRelativePath(current, targetPath);
+      if (opener !== null && opener.id !== tabId) {
+        const targetOpenError = {
+          code: 'TARGET_OPEN' as const,
+          message: FILE_MANAGEMENT_ERROR_MESSAGES.TARGET_OPEN,
+        };
+        commit(
+          updateTab(current, tabId, (targetTab) => {
+            if (isDocxTab(targetTab)) {
+              return {
+                ...targetTab,
+                status: 'save-error',
+                dirty: true,
+                error: targetOpenError as never,
+              };
+            }
+            return {
+              ...targetTab,
+              status: 'save-error',
+              dirty: true,
+              error: targetOpenError as never,
+            };
+          }),
+        );
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: targetOpenError,
+        };
+      }
+
+      // startSaveAs 门禁：loading/read-error/save-error/read-only/saving/无快照/degraded 未确认
+      const started = startSaveAsState(current, tabId);
+      const savingTab = tabById(started, tabId);
+      if (savingTab === null || !savingTab.saving) {
+        commit(started);
+        const error = (savingTab?.error ?? {
+          code: 'INVALID_REQUEST',
+          message: '无效的保存请求',
+        }) as FileManagementError;
+        return { status: 'error', mutationId: 0, error };
+      }
+      const captured = {
+        editRevision: entry.editRevision,
+        sourceRevision: tab.document.revision,
+        content: entry.latestContent ?? ('content' in tab ? tab.content : ''),
+        model: entry.latestModel ?? ('model' in tab && tab.model !== null ? tab.model : null),
+      };
+      const epoch = epochRef.current;
+      const mutationId = ++mutationIdCounterRef.current;
+      commit(started);
+
+      const complete = (result: SaveAsResult): SaveAsResult => {
+        const latest = modelRef.current;
+        const latestEntry = latest.runtime.get(tabId);
+        const valid = asyncResultStillValid({
+          workspaceSessionValid: epochRef.current === epoch,
+          tabExists: tabById(latest, tabId) !== null,
+          requestIdCurrent: latestEntry !== undefined && latestEntry.saveInFlight,
+        });
+        if (!valid) {
+          return {
+            status: 'error',
+            mutationId,
+            error: { code: 'WRITE_FAILED', message: '写入失败' },
+          };
+        }
+        if (result.status === 'saved') {
+          commit(
+            completeSaveAsState(
+              latest,
+              tabId,
+              captured.editRevision,
+              result.relativePath,
+              result.document,
+              result.backupRelativePath,
+            ),
+          );
+        } else if (result.status === 'target-exists') {
+          // 第一阶段冲突：恢复原标签状态（非错误，保留保存期间的新编辑），
+          // 返回受控目标 revision 供调用方确认覆盖后二次提交
+          commit(
+            updateTabRuntime(
+              updateTab(latest, tabId, (targetTab) => {
+                if (isDocxTab(targetTab)) {
+                  return {
+                    ...targetTab,
+                    status: isDocxTab(tab) ? tab.status : 'loaded-dirty',
+                    saving: false,
+                    error: null,
+                  };
+                }
+                return {
+                  ...targetTab,
+                  status: isDocxTab(tab) ? 'loaded-dirty' : tab.status,
+                  saving: false,
+                  error: null,
+                };
+              }),
+              tabId,
+              (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: false }),
+            ),
+          );
+        } else {
+          commit(failSaveAsState(latest, tabId, result.error));
+        }
+        return result;
+      };
+
+      if (isDocxTab(tab)) {
+        if (captured.model === null) {
+          return {
+            status: 'error',
+            mutationId,
+            error: { code: 'INVALID_REQUEST', message: '无效的保存请求' },
+          };
+        }
+        const request: SaveDocxDocumentAsRequest = {
+          mutationId,
+          tabId,
+          sourceRelativePath: tab.relativePath,
+          target,
+          model: captured.model,
+          expectedSourceRevision: captured.sourceRevision,
+          ...(options.expectedTargetRevision !== undefined
+            ? { expectedTargetRevision: options.expectedTargetRevision as string }
+            : {}),
+          ...(tab.compatibilityConfirmationRevision !== null
+            ? { compatibilityConfirmationRevision: tab.compatibilityConfirmationRevision }
+            : {}),
+        };
+        return window.desktop.document
+          .saveDocxAs(request)
+          .then(complete)
+          .catch(() =>
+            complete({
+              status: 'error',
+              mutationId,
+              error: { code: 'WRITE_FAILED', message: '写入失败' },
+            }),
+          );
+      }
+      const request: SaveTextDocumentAsRequest = {
+        mutationId,
+        tabId,
+        sourceRelativePath: tab.relativePath,
+        target,
+        content: captured.content,
+        expectedSourceRevision: captured.sourceRevision,
+        ...(options.expectedTargetRevision !== undefined
+          ? { expectedTargetRevision: options.expectedTargetRevision as string }
+          : {}),
+        ...(options.confirmMixedLineEndingNormalization === true
+          ? { confirmMixedLineEndingNormalization: true as const }
+          : {}),
+      };
+      return window.desktop.document
+        .saveTextAs(request)
+        .then(complete)
+        .catch(() =>
+          complete({
+            status: 'error',
+            mutationId,
+            error: { code: 'WRITE_FAILED', message: '写入失败' },
+          }),
+        );
+    },
+    [commit, completeSaveAsState, failSaveAsState, startSaveAsState],
+  );
+
+  const commitRelocateResult = useCallback(
+    (sourceRelativePath: string, result: WorkspaceMutationResult): void => {
+      if (result.status !== 'succeeded') {
+        return;
+      }
+      const latest = modelRef.current;
+      if (result.kind === 'directory') {
+        commit(migrateDescendantTabPathsState(latest, sourceRelativePath, result.relativePath));
+        return;
+      }
+      const tab = tabByRelativePath(latest, sourceRelativePath);
+      if (tab !== null) {
+        commit(migrateTabPathState(latest, tab.id, result.relativePath));
+      }
+    },
+    [commit],
+  );
+
+  const commitTrashResult = useCallback(
+    (relativePath: string, result: WorkspaceMutationResult): void => {
+      if (result.status !== 'succeeded') {
+        return;
+      }
+      const latest = modelRef.current;
+      const affected = latest.state.tabs.filter(
+        (tab) =>
+          tab.relativePath === relativePath || tab.relativePath.startsWith(`${relativePath}/`),
+      );
+      commit(
+        closeTabsByRelativePathsState(
+          latest,
+          affected.map((tab) => tab.relativePath),
+        ),
+      );
+    },
+    [commit],
+  );
+
+  const relocateByPath = useCallback(
+    async (
+      sourceRelativePath: string,
+      target: WorkspaceTargetName,
+    ): Promise<WorkspaceMutationResult> => {
+      const current = modelRef.current;
+      // saving 阻止：单文件精确匹配 + 目录前缀段边界（§4.5）
+      const affected = current.state.tabs.filter(
+        (tab) =>
+          tab.relativePath === sourceRelativePath ||
+          tab.relativePath.startsWith(`${sourceRelativePath}/`),
+      );
+      if (affected.some((tab) => tab.saving)) {
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: {
+            code: 'WRITE_FAILED',
+            message: '存在正在保存的标签，请等待保存完成后再操作',
+          },
+        };
+      }
+      const mutationId = ++mutationIdCounterRef.current;
+      const epoch = epochRef.current;
+      const result = await window.desktop.workspace.relocate({
+        mutationId,
+        sourceRelativePath,
+        parentRelativePath: target.parentRelativePath,
+        name: target.name,
+      });
+      if (result.status === 'succeeded' && epochRef.current === epoch) {
+        commitRelocateResult(sourceRelativePath, result);
+      }
+      return result;
+    },
+    [commit, commitRelocateResult],
+  );
+
+  const trashByPath = useCallback(
+    async (relativePath: string): Promise<WorkspaceMutationResult> => {
+      const current = modelRef.current;
+      const affected = current.state.tabs.filter(
+        (tab) =>
+          tab.relativePath === relativePath || tab.relativePath.startsWith(`${relativePath}/`),
+      );
+      if (affected.some((tab) => tab.saving)) {
+        return {
+          status: 'error',
+          mutationId: 0,
+          error: {
+            code: 'WRITE_FAILED',
+            message: '存在正在保存的标签，请等待保存完成后再操作',
+          },
+        };
+      }
+      const mutationId = ++mutationIdCounterRef.current;
+      const epoch = epochRef.current;
+      const result = await window.desktop.workspace.trash({ mutationId, relativePath });
+      if (result.status === 'succeeded' && epochRef.current === epoch) {
+        commitTrashResult(relativePath, result);
+      }
+      return result;
+    },
+    [commit, commitTrashResult],
+  );
+
   const reloadTab = useCallback(
     (tabId: string) => {
       const current = modelRef.current;
@@ -703,6 +1075,11 @@ export function useDocuments(): DocumentsController {
     reloadTab,
     closeTab,
     retryRead,
+    saveAsTab,
+    relocateByPath,
+    trashByPath,
+    commitRelocateResult,
+    commitTrashResult,
     invalidateWorkspace,
   };
 }

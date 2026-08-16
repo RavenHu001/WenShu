@@ -2,7 +2,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Pre-alpha / Task 8 已完成。** Task 1 至 Task 8 均已完成；工作区搜索已扩展为一次查询同时搜索磁盘上已保存的 TXT 与 DOCX 规范正文。当前应用具备工作区选择、只读文件树浏览，从文件树选择 UTF-8 TXT 或普通 `.docx` 后在中央区域以多标签页编辑：TXT 使用 CodeMirror，DOCX 经项目结构化中间模型导入并在 Tiptap/ProseMirror 富文本会话中编辑（段落、标题 1-3、粗体、斜体、下划线、基础字号、文字颜色、项目符号/编号列表、基础对齐），每个标签独立维护读取、正文/模型、未保存状态与保存状态，通过保存按钮或 `Ctrl+S` 显式保存；保存执行工作区边界、符号链接、真实路径与内容版本校验，采用同目录临时文件、刷盘、关闭和安全替换流程。DOCX 保存前生成同目录滚动备份 `<文件名>.wenshu.bak`，产物经过大小/结构/重新导入验证后才替换目标；`degraded` 文档需绑定 revision 的兼容性确认才能编辑与保存，`read-only` 文档不可编辑保存。外部修改会触发冲突提示；关闭 dirty 标签、切换工作区和关闭窗口均有未保存保护，正在保存的标签不会被丢弃。Task 6 已加入当前文件查找替换（`Ctrl+F`/`Ctrl+H`）与工作区搜索（活动栏搜索 / `Ctrl+Shift+F`）；Task 8 把工作区搜索扩展为一次查询同时搜索 TXT 与 DOCX 正文——TXT 语义保持 Task 6 不变，DOCX 只搜索 Task 7 结构化模型投影的规范正文，点击结果经 kind、revision、范围与匹配文本双重校验后打开或激活唯一标签并定位；任何过期、结构变化或映射失败只显示非破坏性提示，不错误定位、不修改正文。自动保存、文件管理与会话恢复仍不可用；当前文件查找替换仍只支持 TXT。
+> **当前阶段：Pre-alpha / Task 9 已完成。** Task 1 至 Task 9 均已完成；基础文件管理闭环已交付（新建 TXT/基础 DOCX/文件夹、TXT/DOCX 另存为、重命名、移动、删除到回收站、在资源管理器中显示），成功文件操作后标签安全迁移且旧搜索结果自动失效。当前应用具备工作区选择、只读文件树浏览与工作区内基础文件管理，从文件树选择 UTF-8 TXT 或普通 `.docx` 后在中央区域以多标签页编辑：TXT 使用 CodeMirror，DOCX 经项目结构化中间模型导入并在 Tiptap/ProseMirror 富文本会话中编辑（段落、标题 1-3、粗体、斜体、下划线、基础字号、文字颜色、项目符号/编号列表、基础对齐），每个标签独立维护读取、正文/模型、未保存状态与保存状态，通过保存按钮或 `Ctrl+S` 显式保存；保存执行工作区边界、符号链接、真实路径与内容版本校验，采用同目录临时文件、刷盘、关闭和安全替换流程。DOCX 保存前生成同目录滚动备份 `<文件名>.wenshu.bak`，产物经过大小/结构/重新导入验证后才替换目标；`degraded` 文档需绑定 revision 的兼容性确认才能编辑与保存，`read-only` 文档不可编辑保存。外部修改会触发冲突提示；关闭 dirty 标签、切换工作区和关闭窗口均有未保存保护，正在保存的标签不会被丢弃。Task 6 已加入当前文件查找替换（`Ctrl+F`/`Ctrl+H`）与工作区搜索（活动栏搜索 / `Ctrl+Shift+F`）；Task 8 把工作区搜索扩展为一次查询同时搜索 TXT 与 DOCX 正文——TXT 语义保持 Task 6 不变，DOCX 只搜索 Task 7 结构化模型投影的规范正文，点击结果经 kind、revision、范围与匹配文本双重校验后打开或激活唯一标签并定位；任何过期、结构变化或映射失败只显示非破坏性提示，不错误定位、不修改正文。自动保存、文件系统监听与会话恢复仍不可用；当前文件查找替换仍只支持 TXT。
 
 ## 当前能力
 
@@ -36,14 +36,23 @@
 - 在活动 TXT 标签中按 `Ctrl+F` 打开查找面板、`Ctrl+H` 打开替换面板：普通文字查询、大小写选项、上一个/下一个、替换当前项与全部替换；替换进入撤销历史并正常产生 dirty 与显式保存；查找不修改正文、不制造 dirty；查找面板、查询、选区与历史按标签隔离；
 - 点击活动栏"搜索"或按 `Ctrl+Shift+F` 打开工作区搜索侧栏：一次查询同时搜索当前工作区磁盘上已保存的普通 UTF-8 TXT 与基础 DOCX 规范正文（大小写可切换、可取消、可连续提交新查询）；TXT 语义与 Task 6 完全一致，DOCX 只搜索 Task 7 结构化模型投影的正文（段落、标题、跨 run 文字、列表；图片/表格/页眉页脚/批注等未进入模型的内容不在搜索承诺内）；展示按文件分组的结果（相对路径、TXT/DOCX 类型标识、1-based 行列、安全片段）与扫描/命中/匹配/跳过统计和截断提示（含 DOCX 候选上限截断），DOCX 行列基于提取正文而非 Word 页面坐标；无工作区时显示空状态且不发起搜索；
 - 点击 TXT 或 DOCX 搜索结果打开或激活唯一标签：TXT 复用 CodeMirror 安全定位；DOCX 经 kind、revision、规范投影范围与匹配文本双重校验后，用 ProseMirror 公开 API 设置选区、滚动并聚焦（read-only 可定位不可编辑、degraded 定位不自动确认、dirty 但原范围未变时可定位）；revision、范围、正文结构或宿主二次校验任一失效时只显示"搜索结果已过期"提示，不错误定位、不修改正文；
-- 切换文件/搜索活动栏不丢失工作区、已打开标签或文件树展开状态；工作区成功切换清空旧搜索结果。
+- 切换文件/搜索活动栏不丢失工作区、已打开标签或文件树展开状态；工作区成功切换清空旧搜索结果；
+- 在工作区根或选中文件夹内新建 TXT、基础 DOCX 与文件夹（名称自动补全应有扩展名，如输入 `会议纪要` 新建 TXT 得到 `会议纪要.txt`）；新建 TXT/DOCX 成功后自动打开为唯一干净标签，新建文件夹保持选中；
+- 对当前可写 TXT/DOCX 执行"另存为"：选择工作区内目标文件夹并输入文件名；目标不存在时安全创建，目标存在时先显示明确覆盖确认，确认仍绑定同一目标版本时才覆盖；成功后当前标签迁移到新路径并保持编辑器会话，源文件留在原位置；
+- 重命名或移动工作区内普通文件与文件夹（含 Windows 只改大小写重命名），不能移动到自身或后代；重命名 TXT/DOCX 自动保留原扩展名（`报告.txt` 改名 `总结` 得到 `总结.txt`），不允许改扩展名当格式转换；已打开文档的标签顺序、活动状态、dirty、正文/模型、光标、选区、滚动、撤销历史和查找状态全部保留，目录重命名/移动一次迁移其下全部已打开标签；
+- 删除文件或文件夹到 Windows 回收站（可恢复），删除前确认包含路径、类型与受影响未保存标签数量；存在正在保存的标签时先等待；删除成功关闭受影响标签；
+- 对文件、目录或工作区根执行"在资源管理器中显示"；
+- 任一成功新建/另存为/重命名/移动/删除后工作区自动刷新，旧搜索结果立即失效（取消活动搜索、清空结果与定位），不会继续点击到已不存在的路径；失败、取消与"在资源管理器中显示"不误使有效结果失效。
 
 ### 工程能力
 
 - Electron、React、TypeScript 与 Vite 开发和生产构建链路；
 - 相互隔离的主进程、preload 和渲染进程类型环境；
 - `nodeIntegration: false`、`contextIsolation: true` 和 sandbox 安全基线；
-- 受控 IPC 通道：`workspace.open()` / `workspace.refresh()`、`document.readText()` / `document.saveText()`、`document.readDocx()` / `document.saveDocx()`、`search.textWorkspace()` / `search.cancelTextWorkspace()` 与窗口关闭协调窄协议；
+- 受控 IPC 通道：`workspace.open()` / `workspace.refresh()`、`workspace.createText()` / `createDocx()` / `createDirectory()` / `relocate()` / `trash()` / `reveal()`、`document.readText()` / `saveText()`、`document.readDocx()` / `saveDocx()`、`document.saveTextAs()` / `saveDocxAs()`、`search.textWorkspace()` / `cancelTextWorkspace()` 与窗口关闭协调窄协议；所有请求精确形状校验（拒绝多余字段、根/绝对路径与 force/overwrite 等危险开关）；
+- 文件管理安全服务（TASK-009）：源/目标逐段校验（不跟随 symlink/junction、realpath 边界）、按窗口串行写操作队列、排他临时文件 + 发布前复验不覆盖发布、Windows case-only 两步重命名与回滚、DOCX 伴随 `.wenshu.bak` 迁移、删除统一走可注入 `shell.trashItem`（严禁永久删除降级）、另存为两阶段覆盖确认（`expectedTargetRevision` CAS）；
+- 稳定 tabId 与可变 relativePath 解耦的多标签模型：单文件/目录段边界路径迁移、save-as 完成与批量关闭纯状态转移，编辑器会话（CodeMirror/Tiptap 实例、选区、滚动、撤销历史）在路径变化时保持；
+- mutationEpoch 搜索失效（TASK-009 §4.11）：成功 create/save-as/relocate/trash 递增并取消活动搜索、清空 completed/cancelled/error 结果与定位；失败、取消、reveal 与刷新失败不递增；迟到搜索结果同时校验 requestId + workspaceEpoch + mutationEpoch；
 - DOCX 通过项目自有、有版本、有预算上限的结构化中间模型（`src/shared/docx.ts`）导入、编辑与导出；Tiptap/ProseMirror 实例只存在于 renderer 编辑会话层，不跨 IPC；
 - CodeMirror 6 纯文本编辑器（TXT）与 Tiptap/ProseMirror 富文本编辑器（DOCX），按标签隔离会话缓存；
 - 主进程对 TXT 读取与保存执行完整校验：相对路径格式、工作区边界、逐段符号链接 / junction、真实路径、普通文件类型、5 MiB 大小上限与严格 UTF-8；
@@ -60,12 +69,13 @@
 
 ### 尚未实现
 
+- 系统性 UI 优化（统一设计变量与图标、侧栏信息架构、可调整宽度、桌面缩放适配和视觉回归测试；见[未来 UI 优化计划](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)）；
 - 标签页拖拽排序、固定、批量关闭与状态恢复；
-- TXT 自动保存、另存为、新建和文件管理（重命名、移动、删除）；
-- DOCX 新建、另存为、重命名、移动、删除；
+- TXT/DOCX 自动保存与会话恢复；
 - 工作区替换、批量替换、正则/模糊/语义搜索与持久全文索引；
 - 复杂 Word 格式（图片/表格/页眉页脚/批注/修订编辑、精确分页、宏）与完整无损往返；
-- 文件系统监听和自动刷新；
+- 文件系统监听和自动刷新（外部变化需手动刷新）；
+- 文件复制粘贴、批量文件操作与跨工作区/跨盘操作；
 - Windows 安装包与正式发布流程。
 
 ## 快速开始
@@ -100,6 +110,8 @@
 在活动 TXT 标签中按 `Ctrl+F` 可打开查找面板，输入查询后可用 `F3`/`Shift+F3`（或面板按钮）在匹配之间前后跳转，勾选"区分大小写"可精确匹配；按 `Ctrl+H` 打开面板并聚焦替换输入，可替换当前项或全部替换，替换通过撤销历史恢复并正常进入未保存状态。点击活动栏"搜索"或按 `Ctrl+Shift+F` 打开工作区搜索侧栏：在输入框输入查询并按 Enter（或点击"搜索"）即可一次查询同时搜索当前工作区磁盘上已保存的普通 UTF-8 TXT 与基础 DOCX 规范正文，结果按文件分组显示相对路径、TXT/DOCX 类型标识、行列与片段，并提供扫描/命中/匹配/跳过统计与截断提示；搜索中可点击"取消"中止，输入新查询并提交会取消旧搜索。点击任意 TXT 或 DOCX 匹配结果会打开或激活对应唯一标签：TXT 在结果仍有效时选中匹配、滚动到可视区域并聚焦；DOCX 经 kind、revision、规范投影范围与匹配文本双重校验后用 ProseMirror 公开 API 定位（read-only 可定位不可编辑，degraded 定位不自动确认兼容性）；若文件已被外部修改或正文/结构已变化，则只显示"搜索结果已过期"提示，不会错误定位或修改正文。切换文件/搜索活动栏不会丢失工作区、标签或文件树展开状态。
 
 点击文件树中的普通 `.docx`，中央区域先显示加载状态，随后以唯一标签打开 Tiptap/ProseMirror 富文本编辑器；Windows/WPS 创建但尚未物化的 0 字节 `.docx` 会作为空白文档打开，首次保存后成为有效 OOXML。使用标签上方的格式工具栏或 `Ctrl+S` 完成基础格式编辑与保存。含图片、表格、页眉页脚、批注或修订等不受支持内容的文档会显示兼容性警告：`degraded` 文档需先点击"确认继续编辑并保存"（确认绑定打开时的 revision）才能编辑与保存；只有 `w:documentProtection` 明确启用的文档才按编辑保护进入 `read-only`，WPS 的 `w:enforcement="0"` 不触发只读。保存前会自动生成同目录滚动备份 `<文件名>.wenshu.bak`，保存成功后状态栏显示备份文件名；保存失败、产物验证失败或备份失败时原文件不被修改。用其他程序（如 Microsoft Word 或 WPS Office）修改已打开的 DOCX 后保存会显示外部冲突，本地编辑保留，确认后才重新读取磁盘版本。损坏、加密、伪装、超过 20 MiB 或超出资源预算的 DOCX 会显示稳定错误。
+
+文件管理（Task 9）：在工作区侧栏顶部点击"新建 TXT / 新建 DOCX / 新建文件夹"，输入名称（TXT/DOCX 名称无扩展名时自动补全 `.txt`/`.docx`）后确认即可创建；新建 TXT/DOCX 自动打开为干净标签。选中文件或文件夹后，操作栏提供"重命名 / 移动 / 删除 / 在资源管理器中显示"：重命名 TXT/DOCX 会自动保留原扩展名（不允许改为其他类型）；移动时在对话框中选择工作区内目标文件夹（目录不能移入自身或后代）；删除前会确认路径、类型与受影响未保存标签数，确认后进入 Windows 回收站（可在资源管理器中恢复），正在保存的标签会阻止操作。对已打开的可保存文档，操作栏"另存为当前文档…"选择目标文件夹并输入名称；目标已存在时先确认覆盖，确认只对当前版本有效。所有成功文件操作后工作区自动刷新，旧搜索结果立即失效，不会继续定位到已变化或已删除的路径。
 
 运行全部自动检查：
 
@@ -139,6 +151,8 @@
 - [x] [Task 6：工作区 TXT 搜索与当前文件查找替换](./docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md)；
 - [x] [Task 7：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)（已完成，见 [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)）。
 - [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)）。
+- [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
+- [ ] [未来 UI 优化：设计体系、信息架构与视觉质量门禁](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)（已纳入 Roadmap，尚未排期）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
@@ -163,6 +177,9 @@
 - [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)
 - [TASK-008：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)
 - [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)
+- [TASK-009：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)
+- [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)
+- [未来 UI 优化计划](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)
 
 ## 项目结构
 
@@ -173,17 +190,17 @@
 ├─ src/
 │  ├─ main/
 │  │  ├─ index.ts         Electron 生命周期、窗口创建与安全策略
-│  │  ├─ workspace/       工作区扫描器、会话状态与 IPC 处理器
-│  │  ├─ document/        TXT 读取器、安全保存器、路径/写入安全 helper 与受控文档 IPC
-│  │  ├─ docx/            DOCX 读取/导入/导出/安全保存器、ZIP 检查与固定 DOCX IPC
+│  │  ├─ workspace/       工作区扫描器、会话状态、文件管理服务（新建/重命名/移动/删除/显示）与固定 IPC
+│  │  ├─ document/        TXT 读取器、安全保存器、另存为、路径/写入安全 helper 与受控文档 IPC
+│  │  ├─ docx/            DOCX 读取/导入/导出/安全保存器、另存为、ZIP 检查与固定 DOCX IPC
 │  │  ├─ search/          工作区 TXT/DOCX 混合搜索器、固定搜索 IPC 与纯匹配器
 │  │  └─ window/          窗口关闭协调（未保存保护）
 │  ├─ preload/            受控桌面 API 桥接
 │  ├─ renderer/
-│  │  ├─ components/      React UI 组件（侧栏、文件树、标签栏、搜索侧栏、文档区、DOCX 工具栏/兼容性提示、确认对话框）
-│  │  ├─ lib/             纯状态模型与多文档/工作区/搜索 controller（含标签不变量与竞态处理）
+│  │  ├─ components/      React UI 组件（侧栏、文件树、文件管理操作栏/对话框、标签栏、搜索侧栏、文档区、DOCX 工具栏/兼容性提示、确认对话框）
+│  │  ├─ lib/             纯状态模型与多文档/工作区/文件管理/搜索 controller（含标签不变量、竞态处理与 mutationEpoch）
 │  │  └─ styles/          界面样式
-│  └─ shared/             跨进程共享的纯类型契约（含 DOCX 结构化中间模型、规范正文投影与纯转换）
+│  └─ shared/             跨进程共享的纯类型契约（含 DOCX 结构化中间模型、规范正文投影、文件管理契约与纯转换）
 ├─ tests/                  单元测试与组件行为测试
 └─ README.md               项目入口与快速使用说明
 ```

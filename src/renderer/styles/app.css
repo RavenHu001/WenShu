@@ -121,7 +121,13 @@ body {
 }
 
 .sidebar-panel-files {
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-panel[hidden] {
+  display: none;
 }
 
 .sidebar-panel-search {
@@ -468,7 +474,9 @@ body {
 /* ---- 文件树 ---------------------------------------------------------------- */
 
 .ft-tree {
-  padding-bottom: 18px;
+  flex: 1 1 auto;
+  min-height: 96px;
+  padding-bottom: 10px;
   overflow-y: auto;
   user-select: none;
 }
@@ -508,6 +516,17 @@ body {
 .ft-row--selected:hover {
   color: #2f3a55;
   background: #dbe2f2;
+}
+
+.ft-row--managed:not(.ft-row--selected),
+.ft-row--managed:not(.ft-row--selected):hover {
+  color: #343b4b;
+  background: #e4e7ed;
+  box-shadow: inset 3px 0 #8a94aa;
+}
+
+.ft-row--managed.ft-row--selected {
+  box-shadow: inset 3px 0 #5268ad;
 }
 
 .ft-row:focus-visible {
@@ -587,6 +606,180 @@ body {
   font-size: 11px;
   font-style: italic;
   line-height: 22px;
+}
+
+/* ---- TASK-009：文件管理操作栏与对话框 ----------------------------------- */
+
+.fm-toolbar {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 10px;
+  background: #eef0f5;
+  border-top: 1px solid #d9dde6;
+  box-shadow: 0 -5px 14px rgb(40 48 69 / 5%);
+}
+
+.fm-toolbar-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.fm-toolbar-row + .fm-toolbar-row {
+  margin-top: 6px;
+}
+
+.fm-toolbar-row:nth-child(1) > :last-child,
+.fm-toolbar-row:nth-child(2) > :last-child {
+  grid-column: 1 / -1;
+}
+
+.fm-toolbar-row:nth-child(3) {
+  padding-top: 7px;
+  border-top: 1px solid #d9dde6;
+  grid-template-columns: 1fr;
+}
+
+.fm-toolbar .ws-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 29px;
+  padding: 5px 6px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #d7dce6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fm-toolbar .ws-btn:hover:not(:disabled) {
+  color: #40589e;
+  background: #e7ebf5;
+  border-color: #c7cfdf;
+}
+
+.fm-toolbar .ws-btn:focus-visible,
+.fm-name-input:focus-visible,
+.fm-target-row:focus-visible,
+.fm-message-banner button:focus-visible {
+  outline: 2px solid #6577b4;
+  outline-offset: 1px;
+}
+
+.fm-error-banner,
+.fm-message-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.fm-error-banner {
+  color: #a43f3f;
+  background: #fdf0f0;
+  border-color: #f0caca;
+}
+
+.fm-message-banner {
+  color: #35664a;
+  background: #edf7f1;
+  border-color: #c8e3d2;
+}
+
+.fm-error-banner span,
+.fm-message-banner span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fm-message-banner button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: -2px -3px -2px auto;
+  padding: 0;
+  color: #5d7d69;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  place-items: center;
+}
+
+.fm-message-banner button:hover {
+  color: #2f5840;
+  background: #dceee3;
+}
+
+.fm-name-input {
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px 10px;
+  color: #343a48;
+  background: #ffffff;
+  border: 1px solid #cfd5e0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.fm-name-input:focus-visible {
+  border-color: #6577b4;
+  box-shadow: 0 0 0 2px rgb(82 104 173 / 14%);
+}
+
+.confirm-dialog > .fm-error-banner {
+  margin-top: 12px;
+}
+
+.fm-target-list {
+  max-height: min(360px, 50vh);
+  margin-top: 14px;
+  padding: 5px;
+  overflow-y: auto;
+  background: #f7f8fa;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+}
+
+.fm-target-row {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 8px;
+  overflow: hidden;
+  color: #4d5361;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.fm-target-row:hover {
+  background: #e9ecf2;
+}
+
+.fm-target-selected,
+.fm-target-selected:hover {
+  color: #334779;
+  background: #dfe6f5;
+  font-weight: 600;
 }
 
 /* ---- 中央文档区 -------------------------------------------------------- */

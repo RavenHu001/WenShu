@@ -21,9 +21,11 @@ import type {
 } from './components/document/EditorSessionHost';
 import type { WorkspaceTextSearchFileResult, WorkspaceTextSearchMatch } from '../shared/search';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
+import { FileManagementDialogs } from './components/workspace/FileManagementDialogs';
 import { SearchSidebar } from './components/search/SearchSidebar';
 import { DocumentPane } from './components/document/DocumentPane';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
+import { useFileManagement } from './lib/use-file-management';
 
 /** 活动栏面板：文件 / 搜索为真实可访问入口；设置保持不可用占位（第 4.10 节）。 */
 type ActivityPanel = 'files' | 'search';
@@ -75,12 +77,29 @@ export const App = (): React.JSX.Element => {
     closeTab,
     retryRead,
     invalidateWorkspace,
+    saveAsTab,
+    commitRelocateResult,
+    commitTrashResult,
   } = useDocuments();
-  // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）
+  // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）；
+  // mutationEpoch 由文件管理操作确认成功后递增（TASK-009 §4.11）
   const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
   const search = useWorkspaceSearch({
     workspaceAvailable: workspace.state.workspace !== null,
     workspaceEpoch: workspace.epoch,
+    mutationEpoch: workspace.mutationEpoch,
+  });
+  // 文件管理 controller（TASK-009 WP6）：选择/展开、新建/重命名/移动/删除/reveal/另存为
+  const fileManagement = useFileManagement({
+    workspace: workspace.state.workspace,
+    workspaceEpoch: workspace.epoch,
+    refreshWorkspace: workspace.refreshWorkspace,
+    openFile,
+    commitRelocate: commitRelocateResult,
+    commitTrash: commitTrashResult,
+    saveAsTab,
+    tabs: model.state.tabs,
+    onMutationCommitted: workspace.notifyMutationCommitted,
   });
   const completedSearchRequestId =
     search.state.result?.status === 'completed' ? search.state.result.requestId : null;
@@ -383,6 +402,15 @@ export const App = (): React.JSX.Element => {
     await workspace.openWorkspace();
   }, [handleOpenWorkspaceGuard, workspace.openWorkspace]);
 
+  // 手工刷新：成功替换工作区快照才递增 mutationEpoch 作废搜索结果（§4.11）；
+  // 刷新失败保留原快照，不错误使有效结果失效
+  const handleManualRefresh = useCallback(async (): Promise<void> => {
+    const refreshed = await workspace.refreshWorkspace();
+    if (refreshed) {
+      workspace.notifyMutationCommitted();
+    }
+  }, [workspace]);
+
   // Ctrl+Shift+F：打开搜索侧栏并聚焦搜索输入
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -407,11 +435,12 @@ export const App = (): React.JSX.Element => {
     editorSearchControlsRef.current?.open(mode);
   }, []);
 
-  // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）
+  // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）；
+  // 磁盘变更（mutationEpoch）后旧搜索结果的定位目标与过期提示同样清空（§4.11）
   useEffect(() => {
     setLocateTarget(null);
     setStaleNotice(null);
-  }, [workspace.epoch]);
+  }, [workspace.epoch, workspace.mutationEpoch]);
 
   // 新搜索、取消或搜索结果替换时，立即作废仍在等待文件读取/宿主回报的旧定位。
   useEffect(() => {
@@ -531,9 +560,10 @@ export const App = (): React.JSX.Element => {
         if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
-        // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用
+        // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用。
+        //    目标绑定稳定 tabId（路径迁移后仍指向同一标签，TASK-009 WP1 第 4.5 节）
         setLocateTarget({
-          tabId: relativePath,
+          tabId: tab.id,
           locateId,
           requestId,
           from: match.from,
@@ -566,6 +596,19 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   const selectedFilePath = activeTab(model)?.relativePath ?? null;
+  // 另存为入口：活动标签必须稳定加载且可保存（TXT 或非 read-only DOCX）
+  const activeDocumentTabForSaveAs = activeTab(model);
+  const saveAsDisabled =
+    activeDocumentTabForSaveAs === null ||
+    activeDocumentTabForSaveAs.document === null ||
+    activeDocumentTabForSaveAs.status === 'loading' ||
+    (isDocxTab(activeDocumentTabForSaveAs) && activeDocumentTabForSaveAs.status === 'read-only');
+  const handleSaveAsActive = (): void => {
+    const tab = activeTab(model);
+    if (tab !== null && !saveAsDisabled) {
+      fileManagement.beginSaveAs(tab.id);
+    }
+  };
   // 活动文档类型（TASK-008 第 4.10 节）：查找替换仅支持 TXT，活动 DOCX 时侧栏显示不可用说明。
   const activeDocumentTab = activeTab(model);
   const currentDocumentKind: 'txt' | 'docx' | null =
@@ -619,9 +662,16 @@ export const App = (): React.JSX.Element => {
             <WorkspaceSidebar
               state={workspace.state}
               onOpenWorkspace={handleOpenWorkspace}
-              onRefreshWorkspace={workspace.refreshWorkspace}
+              onRefreshWorkspace={handleManualRefresh}
               onFileOpen={openFile}
               selectedFilePath={selectedFilePath}
+              managementSelectedPath={fileManagement.state.selectedPath}
+              expandedDirs={fileManagement.state.expandedDirs}
+              onSelectEntry={fileManagement.selectEntry}
+              onToggleDir={fileManagement.toggleDir}
+              fileManagement={fileManagement}
+              onSaveAsActive={handleSaveAsActive}
+              saveAsDisabled={saveAsDisabled}
             />
           </div>
           <div className="sidebar-panel sidebar-panel-search" hidden={activity !== 'search'}>
@@ -669,6 +719,21 @@ export const App = (): React.JSX.Element => {
         <span>就绪</span>
         <span className="runtime-status">{runtimeLabel}</span>
       </footer>
+
+      {pending === null && (
+        <FileManagementDialogs
+          state={fileManagement.state}
+          workspace={workspace.state.workspace}
+          onSetInputName={fileManagement.setInputName}
+          onSubmitInput={fileManagement.submitInput}
+          onPickTarget={fileManagement.pickTarget}
+          onConfirmTarget={fileManagement.confirmTarget}
+          onConfirmOverwrite={fileManagement.confirmOverwrite}
+          onConfirmTrash={fileManagement.confirmTrash}
+          onCancel={fileManagement.cancel}
+          onDismissMessage={fileManagement.dismissMessage}
+        />
+      )}
 
       {pending !== null && (
         <ConfirmDialog

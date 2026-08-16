@@ -23,6 +23,17 @@ import type {
   WorkspaceTextSearchRequest,
   WorkspaceTextSearchResult,
 } from './search';
+import type {
+  CreateWorkspaceEntryTarget,
+  RelocateWorkspaceEntryRequest,
+  RevealWorkspaceEntryRequest,
+  RevealResult,
+  SaveAsResult,
+  SaveDocxDocumentAsRequest,
+  SaveTextDocumentAsRequest,
+  TrashWorkspaceEntryRequest,
+  WorkspaceMutationResult,
+} from './file-management';
 
 /** 窗口关闭协调命名空间：固定窄协议，不暴露 ipcRenderer 或通用事件总线。 */
 export interface DesktopWindowApi {
@@ -42,6 +53,23 @@ export interface DesktopApi {
   readonly workspace: {
     readonly open: () => Promise<OpenWorkspaceResult>;
     readonly refresh: () => Promise<RefreshWorkspaceResult>;
+    /**
+     * 排他新建空 UTF-8 TXT（TASK-009 WP3）：请求只含 mutationId、父目录与叶名称；
+     * kind 由 preload 固定注入，renderer 不能选择其他类型。
+     */
+    readonly createText: (request: CreateWorkspaceEntryTarget) => Promise<WorkspaceMutationResult>;
+    /** 排他新建基础 DOCX（空模型导出 + 验证后发布）。 */
+    readonly createDocx: (request: CreateWorkspaceEntryTarget) => Promise<WorkspaceMutationResult>;
+    /** 排他新建单级文件夹。 */
+    readonly createDirectory: (
+      request: CreateWorkspaceEntryTarget,
+    ) => Promise<WorkspaceMutationResult>;
+    /** 在资源管理器中显示工作区根或工作区内条目（固定 shell 能力）。 */
+    readonly reveal: (request: RevealWorkspaceEntryRequest) => Promise<RevealResult>;
+    /** 工作区内重命名/移动（含 case-only 两步与 DOCX 伴随备份迁移）。 */
+    readonly relocate: (request: RelocateWorkspaceEntryRequest) => Promise<WorkspaceMutationResult>;
+    /** 删除到 Windows 回收站（含 DOCX 伴随备份；无永久删除降级）。 */
+    readonly trash: (request: TrashWorkspaceEntryRequest) => Promise<WorkspaceMutationResult>;
   };
   readonly document: {
     /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */
@@ -59,6 +87,13 @@ export interface DesktopApi {
      * HTML/XML、跳过备份、强制覆盖等危险参数）。
      */
     readonly saveDocx: (request: SaveDocxDocumentRequest) => Promise<SaveDocxDocumentResult>;
+    /**
+     * TXT 另存为（TASK-009 WP4）：两阶段覆盖确认（target-exists → expectedTargetRevision），
+     * 源文件不变、目标安全发布；无 force/overwrite 布尔捷径。
+     */
+    readonly saveTextAs: (request: SaveTextDocumentAsRequest) => Promise<SaveAsResult>;
+    /** DOCX 另存为：read-only 拒绝、degraded 确认绑定源 revision、覆盖前目标备份。 */
+    readonly saveDocxAs: (request: SaveDocxDocumentAsRequest) => Promise<SaveAsResult>;
   };
   /**
    * 工作区搜索窄接口：固定开始与取消方法，不暴露 ipcRenderer、通用通道或事件总线。

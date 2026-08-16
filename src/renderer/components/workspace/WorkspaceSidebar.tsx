@@ -7,19 +7,32 @@
  */
 
 import { FileTree } from './FileTree';
+import { FileManagementToolbar } from './FileManagementToolbar';
 import type { WorkspaceUiState } from '../../lib/use-workspace';
+import type { FileManagementController } from '../../lib/use-file-management';
 
 interface WorkspaceSidebarProps {
   /** 工作区可渲染状态（来自 useWorkspace）。 */
   readonly state: WorkspaceUiState;
   /** 打开文件夹入口（App 已执行未保存守卫）。 */
   readonly onOpenWorkspace: () => void | Promise<void>;
-  /** 刷新当前工作区入口。 */
-  readonly onRefreshWorkspace: () => void | Promise<void>;
+  /** 刷新当前工作区入口；返回值被忽略（App 可能返回刷新是否成功）。 */
+  readonly onRefreshWorkspace: () => void | Promise<unknown>;
   /** 用户选择工作区内的 TXT / DOCX 文件时报告其相对路径；由 App/文档容器处理读取。 */
   readonly onFileOpen: (relativePath: string) => void;
   /** 当前选中的文件相对路径，用于文件树的选中高亮。 */
   readonly selectedFilePath: string | null;
+  /** 文件管理选择（与活动文档分离）。 */
+  readonly managementSelectedPath?: string | null;
+  /** 集中展开目录集合（受控模式）。 */
+  readonly expandedDirs?: ReadonlySet<string>;
+  readonly onSelectEntry?: (relativePath: string) => void;
+  readonly onToggleDir?: (relativePath: string) => void;
+  /** 文件管理操作（提供时才渲染操作栏）。 */
+  readonly fileManagement?: FileManagementController;
+  /** 另存为当前活动文档入口（无活动可保存标签时禁用）。 */
+  readonly onSaveAsActive?: () => void;
+  readonly saveAsDisabled?: boolean;
 }
 
 export function WorkspaceSidebar({
@@ -28,6 +41,13 @@ export function WorkspaceSidebar({
   onRefreshWorkspace,
   onFileOpen,
   selectedFilePath,
+  managementSelectedPath,
+  expandedDirs,
+  onSelectEntry,
+  onToggleDir,
+  fileManagement,
+  onSaveAsActive,
+  saveAsDisabled,
 }: WorkspaceSidebarProps): React.JSX.Element {
   const busy = state.status === 'loading' || state.status === 'refreshing';
   const showIdle = state.status === 'idle';
@@ -93,6 +113,24 @@ export function WorkspaceSidebar({
                 entries={state.workspace.entries}
                 onFileSelect={onFileOpen}
                 selectedRelativePath={selectedFilePath}
+                {...(managementSelectedPath !== undefined ? { managementSelectedPath } : {})}
+                {...(expandedDirs !== undefined ? { expandedDirs } : {})}
+                {...(onToggleDir !== undefined ? { onToggleDir } : {})}
+                {...(onSelectEntry !== undefined ? { onSelectEntry } : {})}
+              />
+            )}
+
+            {fileManagement !== undefined && (
+              <FileManagementToolbar
+                state={fileManagement.state}
+                onBeginCreate={fileManagement.beginCreate}
+                onBeginRename={fileManagement.beginRename}
+                onBeginMove={fileManagement.beginMove}
+                onBeginDelete={fileManagement.beginDelete}
+                onReveal={fileManagement.revealSelected}
+                onSaveAs={onSaveAsActive}
+                saveAsDisabled={saveAsDisabled === true}
+                onDismissMessage={fileManagement.dismissMessage}
               />
             )}
           </>

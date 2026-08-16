@@ -211,7 +211,7 @@ afterEach(() => {
 });
 
 describe('文件树 .docx 选择与加载（第 8.6 节）', () => {
-  it('文件树只允许 .txt 与 .docx 选择；点击 .docx 显示加载并渲染编辑器正文', async () => {
+  it('文件树：普通文件/目录可选择，TXT/DOCX 可打开；符号链接不可选；点击 .docx 渲染编辑器正文', async () => {
     const api = await openWorkspace([
       entry('a.txt'),
       entry('b.docx'),
@@ -222,10 +222,18 @@ describe('文件树 .docx 选择与加载（第 8.6 节）', () => {
     const tree = screen.getByRole('tree');
     expect(within(tree).getByRole('button', { name: 'a.txt' })).toBeDefined();
     expect(within(tree).getByRole('button', { name: 'b.docx' })).toBeDefined();
-    // 其他类型不可选择（不是按钮）
-    expect(within(tree).queryByRole('button', { name: 'notes.md' })).toBeNull();
-    expect(within(tree).queryByRole('button', { name: 'macro.docm' })).toBeNull();
+    // TASK-009 WP6：其他普通文件可选择（文件管理目标）但不可打开；符号链接不可选择
+    expect(within(tree).getByRole('button', { name: 'notes.md' })).toBeDefined();
+    expect(within(tree).getByRole('button', { name: 'macro.docm' })).toBeDefined();
     expect(within(tree).queryByRole('button', { name: 'link.txt' })).toBeNull();
+
+    // 点击普通文件只选择、不打开
+    await within(tree)
+      .findByTestId('ft-notes.md')
+      .then(async (row) => {
+        await userEvent.click(row);
+      });
+    expect(api.readText).not.toHaveBeenCalledWith('notes.md');
 
     await openDocxFromTree(api, 'b.docx');
     expect(api.readDocx).toHaveBeenCalledWith('b.docx');

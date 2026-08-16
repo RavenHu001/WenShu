@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
 import type { SaveTextDocumentRequest } from '../shared/document';
+import type {
+  CreateWorkspaceEntryTarget,
+  RelocateWorkspaceEntryRequest,
+  RevealWorkspaceEntryRequest,
+  SaveDocxDocumentAsRequest,
+  SaveTextDocumentAsRequest,
+  TrashWorkspaceEntryRequest,
+} from '../shared/file-management';
 import type { SaveDocxDocumentRequest } from '../shared/docx';
 import type {
   WorkspaceTextSearchCancelRequest,
@@ -17,6 +25,20 @@ const desktopApi: DesktopApi = Object.freeze({
   workspace: Object.freeze({
     open: () => ipcRenderer.invoke('workspace:open'),
     refresh: () => ipcRenderer.invoke('workspace:refresh'),
+    // 三个新建入口共用固定 workspace:create-entry 通道，kind 由 preload 固定注入：
+    // renderer 只能通过方法名选择 TXT / DOCX / 文件夹，不能提交 kind 或危险开关。
+    createText: (request: CreateWorkspaceEntryTarget) =>
+      ipcRenderer.invoke('workspace:create-entry', { ...request, kind: 'text' }),
+    createDocx: (request: CreateWorkspaceEntryTarget) =>
+      ipcRenderer.invoke('workspace:create-entry', { ...request, kind: 'docx' }),
+    createDirectory: (request: CreateWorkspaceEntryTarget) =>
+      ipcRenderer.invoke('workspace:create-entry', { ...request, kind: 'directory' }),
+    // reveal 只映射固定 workspace:reveal 通道；根目录用显式判别值，条目用规范相对路径。
+    reveal: (request: RevealWorkspaceEntryRequest) =>
+      ipcRenderer.invoke('workspace:reveal', request),
+    relocate: (request: RelocateWorkspaceEntryRequest) =>
+      ipcRenderer.invoke('workspace:relocate', request),
+    trash: (request: TrashWorkspaceEntryRequest) => ipcRenderer.invoke('workspace:trash', request),
   }),
   // document.readText 只映射固定的 document:read-text 通道，且只接受一个相对路径参数；
   // document.saveText 只映射固定的 document:save-text 通道，且只接受一个结构化保存请求；
@@ -29,6 +51,12 @@ const desktopApi: DesktopApi = Object.freeze({
     readDocx: (relativePath: string) => ipcRenderer.invoke('document:read-docx', relativePath),
     saveDocx: (request: SaveDocxDocumentRequest) =>
       ipcRenderer.invoke('document:save-docx', request),
+    // 另存为：只映射固定 document:save-text-as / document:save-docx-as 通道，
+    // 不接受根路径、绝对路径、临时/备份路径或 force/overwrite 开关。
+    saveTextAs: (request: SaveTextDocumentAsRequest) =>
+      ipcRenderer.invoke('document:save-text-as', request),
+    saveDocxAs: (request: SaveDocxDocumentAsRequest) =>
+      ipcRenderer.invoke('document:save-docx-as', request),
   }),
   // search 命名空间只映射固定的两个搜索通道，不接受根路径、绝对路径或任意通道：
   // 请求与取消都经过主进程运行时校验，取消只能引用当前窗口已知的 requestId；
