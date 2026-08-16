@@ -139,6 +139,7 @@
 - [x] [Task 6：工作区 TXT 搜索与当前文件查找替换](./docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md)；
 - [x] [Task 7：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)（已完成，见 [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)）。
 - [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)）。
+- [ ] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成规划，待从 WP0 开始实施）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
@@ -163,6 +164,7 @@
 - [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)
 - [TASK-008：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)
 - [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)
+- [TASK-009：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)
 
 ## 项目结构
 
