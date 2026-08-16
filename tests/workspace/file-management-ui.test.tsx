@@ -12,7 +12,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { useWorkspace } from '../../src/renderer/lib/use-workspace';
 import { useDocuments } from '../../src/renderer/lib/use-documents';
-import { useFileManagement } from '../../src/renderer/lib/use-file-management';
+import {
+  completeDocumentExtensionName,
+  useFileManagement,
+} from '../../src/renderer/lib/use-file-management';
 import { WorkspaceSidebar } from '../../src/renderer/components/workspace/WorkspaceSidebar';
 import { FileManagementDialogs } from '../../src/renderer/components/workspace/FileManagementDialogs';
 import type { DesktopApi } from '../../src/shared/desktop-api';
@@ -52,6 +55,7 @@ function loadedText(relativePath: string) {
 
 interface DesktopOverrides {
   createText?: ReturnType<typeof vi.fn>;
+  createDocx?: ReturnType<typeof vi.fn>;
   relocate?: ReturnType<typeof vi.fn>;
   trash?: ReturnType<typeof vi.fn>;
   refresh?: ReturnType<typeof vi.fn>;
@@ -59,6 +63,7 @@ interface DesktopOverrides {
 
 function mockDesktop(overrides: DesktopOverrides = {}): {
   createText: ReturnType<typeof vi.fn>;
+  createDocx: ReturnType<typeof vi.fn>;
   relocate: ReturnType<typeof vi.fn>;
   trash: ReturnType<typeof vi.fn>;
   refresh: ReturnType<typeof vi.fn>;
@@ -73,6 +78,14 @@ function mockDesktop(overrides: DesktopOverrides = {}): {
       mutationId: 1,
       relativePath: 'new.txt',
       kind: 'text',
+    }));
+  const createDocx =
+    overrides.createDocx ??
+    vi.fn(async () => ({
+      status: 'succeeded',
+      mutationId: 1,
+      relativePath: 'new.docx',
+      kind: 'docx',
     }));
   const relocate =
     overrides.relocate ??
@@ -91,13 +104,28 @@ function mockDesktop(overrides: DesktopOverrides = {}): {
       kind: 'text',
     }));
   const readText = vi.fn(async (path: string) => loadedText(path));
+  const readDocx = vi.fn(async (path: string) => ({
+    status: 'loaded' as const,
+    document: {
+      kind: 'docx' as const,
+      name: path.split('/').at(-1)!,
+      relativePath: path,
+      revision: 'r1',
+      size: 1,
+      model: {
+        schemaVersion: 1,
+        blocks: [{ kind: 'paragraph' as const, alignment: null, runs: [] }],
+      },
+      compatibility: { level: 'supported' as const, warnings: [] },
+    },
+  }));
   (window as unknown as { desktop: DesktopApi }).desktop = {
     runtime: { platform: 'win32', electronVersion: '37.0.0' },
     workspace: {
       open: vi.fn(async () => ({ status: 'selected', workspace: snapshotOf() })),
       refresh,
       createText,
-      createDocx: vi.fn(),
+      createDocx,
       createDirectory: vi.fn(),
       reveal: vi.fn(async () => ({ status: 'revealed' })),
       relocate,
@@ -106,7 +134,7 @@ function mockDesktop(overrides: DesktopOverrides = {}): {
     document: {
       readText,
       saveText: vi.fn(),
-      readDocx: vi.fn(),
+      readDocx,
       saveDocx: vi.fn(),
       saveTextAs: vi.fn(),
       saveDocxAs: vi.fn(),
@@ -119,7 +147,7 @@ function mockDesktop(overrides: DesktopOverrides = {}): {
       onCloseRequested: vi.fn(() => () => undefined),
     },
   } as unknown as DesktopApi;
-  return { createText, relocate, trash, refresh, readText };
+  return { createText, createDocx, relocate, trash, refresh, readText };
 }
 
 function Harness(): React.JSX.Element {
@@ -255,6 +283,49 @@ describe('新建与名称输入', () => {
       resolveCreate({ status: 'succeeded', mutationId: 1, relativePath: 'x.txt', kind: 'text' });
     });
   });
+
+  it('新建 TXT：名称无扩展名时自动补全 .txt 提交', async () => {
+    const { createText } = mockDesktop();
+    render(<Harness />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new{Enter}');
+    expect(createText).toHaveBeenCalledWith({
+      mutationId: 1,
+      parentRelativePath: '',
+      name: 'brand-new.txt',
+    });
+    expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
+    expect(screen.getByText('已创建 brand-new.txt')).toBeDefined();
+  });
+
+  it('新建 DOCX：名称无扩展名时自动补全 .docx 提交', async () => {
+    const { createDocx } = mockDesktop();
+    render(<Harness />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('fm-create-docx'));
+    await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new{Enter}');
+    expect(createDocx).toHaveBeenCalledWith({
+      mutationId: 1,
+      parentRelativePath: '',
+      name: 'brand-new.docx',
+    });
+    expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
+    expect(screen.getByText('已创建 brand-new.docx')).toBeDefined();
+  });
+
+  it('新建 TXT：名称带其他扩展名时拒绝且不发 IPC', async () => {
+    const { createText } = mockDesktop();
+    render(<Harness />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new.md{Enter}');
+    expect(screen.getByTestId('fm-status').textContent).toBe('error');
+    expect(createText).not.toHaveBeenCalled();
+    // 错误横幅在操作栏与对话框各展示一份（现有 UI 设计）
+    expect(screen.getAllByText('TXT 文件名必须以 .txt 结尾').length).toBeGreaterThan(0);
+    expect((screen.getByTestId('fm-name-input') as HTMLInputElement).value).toBe('brand-new.md');
+  });
 });
 
 describe('重命名与删除', () => {
@@ -278,6 +349,62 @@ describe('重命名与删除', () => {
     });
     expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
     expect(screen.getAllByText('renamed.txt').length).toBeGreaterThan(0);
+  });
+
+  it('重命名：输入名称无扩展名时自动保留原 .txt 扩展名', async () => {
+    const { relocate } = mockDesktop();
+    render(<Harness />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('ft-a.txt'));
+    await userEvent.click(screen.getByTestId('fm-rename'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed' } });
+      fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
+    });
+    expect(relocate).toHaveBeenCalledWith({
+      mutationId: 1,
+      sourceRelativePath: 'a.txt',
+      parentRelativePath: '',
+      name: 'renamed.txt',
+    });
+    expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
+    expect(screen.getByText('已重命名为 renamed.txt')).toBeDefined();
+  });
+
+  it('重命名：改为其他扩展名时拒绝（TYPE_CHANGE_NOT_ALLOWED）且不发 IPC', async () => {
+    const { relocate } = mockDesktop();
+    render(<Harness />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('ft-a.txt'));
+    await userEvent.click(screen.getByTestId('fm-rename'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed.md' } });
+      fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
+    });
+    expect(screen.getByTestId('fm-status').textContent).toBe('error');
+    expect(relocate).not.toHaveBeenCalled();
+    // 错误横幅在操作栏与对话框各展示一份（现有 UI 设计）
+    expect(screen.getAllByText('不允许改变文件类型').length).toBeGreaterThan(0);
+    expect((screen.getByTestId('fm-name-input') as HTMLInputElement).value).toBe('renamed.md');
+  });
+
+  it('重命名：普通文件（非 TXT/DOCX）不自动补扩展名', async () => {
+    const { relocate } = mockDesktop();
+    render(<Harness />);
+    await openWorkspace();
+    await userEvent.click(screen.getByTestId('ft-note.bin'));
+    await userEvent.click(screen.getByTestId('fm-rename'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed' } });
+      fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
+    });
+    expect(relocate).toHaveBeenCalledWith({
+      mutationId: 1,
+      sourceRelativePath: 'note.bin',
+      parentRelativePath: '',
+      name: 'renamed',
+    });
+    expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
   });
 
   it('删除：确认对话框含类型与未保存计数；确认后 trash IPC 并关闭标签', async () => {
@@ -332,5 +459,29 @@ describe('取消焦点恢复与 partial failure', () => {
     expect(screen.getByTestId('fm-status').textContent).toBe('partial-failure');
     expect(refresh).toHaveBeenCalled();
     expect(screen.getByText('操作部分完成')).toBeDefined();
+  });
+});
+
+describe('completeDocumentExtensionName（§4.3 扩展名补全纯函数）', () => {
+  it('已带目标扩展名：原样返回（大小写不敏感）', () => {
+    expect(completeDocumentExtensionName('a.txt', 'text')).toBe('a.txt');
+    expect(completeDocumentExtensionName('a.TXT', 'text')).toBe('a.TXT');
+    expect(completeDocumentExtensionName('a.docx', 'docx')).toBe('a.docx');
+    expect(completeDocumentExtensionName('a.DocX', 'docx')).toBe('a.DocX');
+    expect(completeDocumentExtensionName('archive.tar.txt', 'text')).toBe('archive.tar.txt');
+  });
+
+  it('无扩展名：自动追加目标扩展名', () => {
+    expect(completeDocumentExtensionName('a', 'text')).toBe('a.txt');
+    expect(completeDocumentExtensionName('a', 'docx')).toBe('a.docx');
+    expect(completeDocumentExtensionName('会议纪要', 'text')).toBe('会议纪要.txt');
+  });
+
+  it('带其他扩展名：返回 null（类型不匹配）', () => {
+    expect(completeDocumentExtensionName('a.md', 'text')).toBeNull();
+    expect(completeDocumentExtensionName('a.md', 'docx')).toBeNull();
+    expect(completeDocumentExtensionName('a.txt', 'docx')).toBeNull();
+    expect(completeDocumentExtensionName('a.docx', 'text')).toBeNull();
+    expect(completeDocumentExtensionName('.gitignore', 'text')).toBeNull();
   });
 });

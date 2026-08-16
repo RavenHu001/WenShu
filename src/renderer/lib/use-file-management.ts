@@ -128,6 +128,29 @@ function nameIsValid(name: string): boolean {
   return validateWindowsLeafName(name);
 }
 
+/** 扩展名不匹配时的稳定产品文案（§4.3：TXT 要求 .txt，DOCX 要求 .docx）。 */
+const TXT_EXTENSION_REQUIRED_MESSAGE = 'TXT 文件名必须以 .txt 结尾';
+const DOCX_EXTENSION_REQUIRED_MESSAGE = 'DOCX 文件名必须以 .docx 结尾';
+
+/**
+ * 文档名称扩展名自动补全/校验（§4.3）：
+ * - 已以目标扩展名结尾（大小写不敏感）→ 原样返回；
+ * - 名称不含任何扩展名（无 `.`）→ 自动追加目标扩展名；
+ * - 名称带有其他扩展名 → 返回 null，由调用方按场景给出稳定错误
+ *   （新建/另存为 → INVALID_NAME；重命名 → TYPE_CHANGE_NOT_ALLOWED）。
+ * 注意：调用方必须先做叶名校验再调用本函数（尾随点/保留名等已在前置拒绝）。
+ */
+export function completeDocumentExtensionName(name: string, kind: 'text' | 'docx'): string | null {
+  const extension = kind === 'text' ? '.txt' : '.docx';
+  if (name.toLowerCase().endsWith(extension)) {
+    return name;
+  }
+  if (!name.includes('.')) {
+    return `${name}${extension}`;
+  }
+  return null;
+}
+
 const SAVING_BLOCKED_ERROR: FileManagementError = {
   code: 'WRITE_FAILED',
   message: '存在正在保存的标签，请等待保存完成后再操作',
@@ -405,7 +428,27 @@ export function useFileManagement({
     ) {
       const kind =
         state.mode === 'create-text' ? 'text' : state.mode === 'create-docx' ? 'docx' : 'directory';
-      const request = { mutationId, parentRelativePath: state.parentRelativePath, name };
+      // 文档类型自动补全应有扩展名；带其他扩展名 → 拒绝（§4.3）
+      let finalName: string | null = name;
+      if (kind === 'text' || kind === 'docx') {
+        finalName = completeDocumentExtensionName(name, kind);
+        if (finalName === null) {
+          applyError({
+            code: 'INVALID_NAME',
+            message:
+              kind === 'text' ? TXT_EXTENSION_REQUIRED_MESSAGE : DOCX_EXTENSION_REQUIRED_MESSAGE,
+          });
+          return;
+        }
+        if (!nameIsValid(finalName)) {
+          applyError({
+            code: 'INVALID_NAME',
+            message: FILE_MANAGEMENT_ERROR_MESSAGES.INVALID_NAME,
+          });
+          return;
+        }
+      }
+      const request = { mutationId, parentRelativePath: state.parentRelativePath, name: finalName };
       const api =
         kind === 'text'
           ? window.desktop.workspace.createText
@@ -415,7 +458,7 @@ export function useFileManagement({
       api(request)
         .then(async (result) => {
           if (result.status === 'succeeded') {
-            await applySuccess(`已创建 ${name}`, () => {
+            await applySuccess(`已创建 ${finalName}`, () => {
               if (kind === 'text' || kind === 'docx') {
                 void openFile(result.relativePath);
               }
@@ -450,16 +493,35 @@ export function useFileManagement({
         applyError(SAVING_BLOCKED_ERROR);
         return;
       }
+      // 重命名保留原文档扩展名（§4.3）：无扩展名 → 自动补回；改为其他扩展名 → 拒绝
+      const sourceLower = source.toLowerCase();
+      let finalName: string | null = name;
+      if (sourceLower.endsWith('.txt')) {
+        finalName = completeDocumentExtensionName(name, 'text');
+      } else if (sourceLower.endsWith('.docx')) {
+        finalName = completeDocumentExtensionName(name, 'docx');
+      }
+      if (finalName === null) {
+        applyError({
+          code: 'TYPE_CHANGE_NOT_ALLOWED',
+          message: FILE_MANAGEMENT_ERROR_MESSAGES.TYPE_CHANGE_NOT_ALLOWED,
+        });
+        return;
+      }
+      if (!nameIsValid(finalName)) {
+        applyError({ code: 'INVALID_NAME', message: FILE_MANAGEMENT_ERROR_MESSAGES.INVALID_NAME });
+        return;
+      }
       window.desktop.workspace
         .relocate({
           mutationId,
           sourceRelativePath: source,
           parentRelativePath: state.parentRelativePath,
-          name,
+          name: finalName,
         })
         .then(async (result) => {
           if (result.status === 'succeeded') {
-            await applySuccess(`已重命名为 ${name}`, () => {
+            await applySuccess(`已重命名为 ${finalName}`, () => {
               commitRelocate(source, result);
               if (result.kind === 'directory') {
                 update({ expandedDirs: migrateExpanded(source, result.relativePath) });
@@ -488,11 +550,32 @@ export function useFileManagement({
         });
         return;
       }
-      const target = { parentRelativePath: state.parentRelativePath, name };
+      // 另存为按源标签类型自动补全应有扩展名（§4.3），带其他扩展名 → 拒绝
+      const sourceTab = tabsRef.current.find((item) => item.id === tabId);
+      const targetKind =
+        sourceTab !== undefined && sourceTab.relativePath.toLowerCase().endsWith('.docx')
+          ? 'docx'
+          : 'text';
+      const finalName = completeDocumentExtensionName(name, targetKind);
+      if (finalName === null) {
+        applyError({
+          code: 'INVALID_NAME',
+          message:
+            targetKind === 'text'
+              ? TXT_EXTENSION_REQUIRED_MESSAGE
+              : DOCX_EXTENSION_REQUIRED_MESSAGE,
+        });
+        return;
+      }
+      if (!nameIsValid(finalName)) {
+        applyError({ code: 'INVALID_NAME', message: FILE_MANAGEMENT_ERROR_MESSAGES.INVALID_NAME });
+        return;
+      }
+      const target = { parentRelativePath: state.parentRelativePath, name: finalName };
       saveAsTab(tabId, target)
         .then((result) => {
           if (result.status === 'saved') {
-            void applySuccess(`已另存为 ${name}`, () => {
+            void applySuccess(`已另存为 ${finalName}`, () => {
               void refreshWorkspace();
             });
           } else if (result.status === 'target-exists') {
