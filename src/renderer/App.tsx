@@ -531,9 +531,10 @@ export const App = (): React.JSX.Element => {
         if (!isLocateCurrent(locateId, epoch, requestId)) {
           return;
         }
-        // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用
+        // 6. 下发定位目标（带 locateId）：TXT / DOCX 宿主各自做二次校验与应用。
+        //    目标绑定稳定 tabId（路径迁移后仍指向同一标签，TASK-009 WP1 第 4.5 节）
         setLocateTarget({
-          tabId: relativePath,
+          tabId: tab.id,
           locateId,
           requestId,
           from: match.from,

@@ -12,6 +12,16 @@
  * - 本模块是 WP5+ controller 的多类型模型基座；`text-document-tabs.ts` 保持为
  *   TXT 分支的既有实现（TXT 全量回归不依赖本模块）。
  *
+ * ## TASK-009 WP1：stable tabId 与可变 relativePath（第 4.5 节）
+ *
+ * - `tabId` 是 renderer 会话内稳定、不可由路径推导的身份（由 controller 分配单调值）；
+ *   `relativePath`/`name`/磁盘快照路径是可迁移属性；
+ * - 打开去重按规范相对路径进行（同路径只能一个标签），与 id 完全解耦；
+ * - 单文件/目录路径迁移、save-as 完成、批量关闭都是纯转移：id、标签顺序、活动标签、
+ *   dirty、saving、编辑修订号与运行时（键为 tabId）保持；
+ * - 任一受影响标签正在保存时，路径迁移整次无操作（不部分迁移，第 4.5 节防止旧保存
+ *   写回旧路径）；目录前缀按段边界匹配（`a/b` 不误命中 `a/b2`）。
+ *
  * ## 状态转移（第 5.3 节不变量）
  *
  * - 同路径唯一、tabId 唯一、activeTabId 引用现存标签；
@@ -29,6 +39,11 @@
  */
 
 import type { DocxDocumentModel, DocxDocumentError, DocxDocumentSnapshot } from '../../shared/docx';
+import type {
+  SaveTextDocumentError,
+  TextDocumentError,
+  TextDocumentSnapshot,
+} from '../../shared/document';
 import type { ReadDocxDocumentResult, SaveDocxDocumentResult } from '../../shared/docx';
 import type { TextDocumentTabState, TextTabStatus } from './text-document-tabs';
 import {
@@ -274,16 +289,22 @@ function updateRuntimeEntry(
 }
 
 /**
- * 打开或激活 TXT 标签（与 `text-document-tabs.ts` 语义一致）：
- * 同一 relativePath 已存在时只激活原标签；新路径创建 loading 占位标签。
+ * 打开或激活 TXT 标签（TASK-009 WP1：stable tabId 与 relativePath 解耦）：
+ * 同一 relativePath 已存在时只激活原标签（保留原稳定 id）；
+ * 新路径以调用方分配的 `tabId` 创建 loading 占位标签 —— tabId 不可由路径推导，
+ * 重命名/移动/另存为后保持不变（第 4.5 节）。
  */
-export function openTab(model: DocumentTabsModel, relativePath: string): DocumentTabsModel {
+export function openTab(
+  model: DocumentTabsModel,
+  relativePath: string,
+  tabId: string,
+): DocumentTabsModel {
   const existing = model.state.tabs.find((tab) => tab.relativePath === relativePath);
   if (existing !== undefined) {
     return activateTab(model, existing.id);
   }
   const tab: TextDocumentTabState = {
-    id: relativePath,
+    id: tabId,
     relativePath,
     name: fileNameFromRelativePath(relativePath),
     status: 'loading',
@@ -303,14 +324,18 @@ export function openTab(model: DocumentTabsModel, relativePath: string): Documen
  * 打开或激活 DOCX 标签：同一 relativePath 已存在（TXT 或 DOCX）时只激活原标签；
  * 新路径创建 DOCX loading 占位标签（模型、快照、确认均为空）。
  */
-export function openDocxTab(model: DocumentTabsModel, relativePath: string): DocumentTabsModel {
+export function openDocxTab(
+  model: DocumentTabsModel,
+  relativePath: string,
+  tabId: string,
+): DocumentTabsModel {
   const existing = model.state.tabs.find((tab) => tab.relativePath === relativePath);
   if (existing !== undefined) {
     return activateTab(model, existing.id);
   }
   const tab: DocxDocumentTabState = {
     kind: 'docx',
-    id: relativePath,
+    id: tabId,
     relativePath,
     name: fileNameFromRelativePath(relativePath),
     status: 'loading',
@@ -401,6 +426,265 @@ export function closeTab(model: DocumentTabsModel, tabId: string): DocumentTabsM
 /** 工作区成功切换：一次清空全部标签、活动标签与全部运行时元数据。 */
 export function invalidateWorkspace(): DocumentTabsModel {
   return createEmptyModel();
+}
+
+/* ======================= TASK-009 WP1：路径迁移 / save-as / 批量关闭纯转移 ======================= */
+
+/** 路径迁移对标签公共字段的更新：relativePath/name 与基线快照路径跟随；id/顺序/活动标签不变。 */
+function withMigratedPath(tab: DocumentTabState, newRelativePath: string): DocumentTabState {
+  const name = fileNameFromRelativePath(newRelativePath);
+  if (isDocxTab(tab)) {
+    const document =
+      tab.document === null ? null : { ...tab.document, relativePath: newRelativePath, name };
+    return {
+      ...tab,
+      relativePath: newRelativePath,
+      name,
+      document,
+      // 伴随滚动备份跟随主文档（与目标同目录）；从未保存过（无备份）则保持 null
+      lastBackupRelativePath:
+        tab.lastBackupRelativePath === null ? null : `${newRelativePath}.wenshu.bak`,
+    };
+  }
+  const document =
+    tab.document === null ? null : { ...tab.document, relativePath: newRelativePath, name };
+  return { ...tab, relativePath: newRelativePath, name, document };
+}
+
+/**
+ * 单标签路径迁移（单文件重命名/移动；save-as 完成走 completeSaveAs）：
+ * 只改 relativePath/name 与基线快照路径，id、顺序、活动标签、dirty、saving、运行时全部保持；
+ * 目标路径已被其他标签占用、或目标标签正在保存时拒绝整次迁移（返回原模型，
+ * 防止在途保存写回旧路径造成数据分叉，第 4.5 节）。
+ */
+export function migrateTabPath(
+  model: DocumentTabsModel,
+  tabId: string,
+  newRelativePath: string,
+): DocumentTabsModel {
+  const tab = tabById(model, tabId);
+  if (tab === null || tab.relativePath === newRelativePath || tab.saving) {
+    return model;
+  }
+  if (
+    model.state.tabs.some((other) => other.id !== tabId && other.relativePath === newRelativePath)
+  ) {
+    return model;
+  }
+  return updateTab(model, tabId, (target) => withMigratedPath(target, newRelativePath));
+}
+
+/**
+ * 目录前缀迁移（目录重命名/移动）：fromPrefix 自身与全部后代按段边界迁移到 toPrefix。
+ * - 段边界：`a/b` 匹配 `a/b` 与 `a/b/*`，不匹配 `a/b2` 或 `a.txt`；
+ * - 保持标签顺序、活动标签、dirty、saving 与运行时（键为稳定 tabId）；
+ * - 任一受影响标签正在保存 → 整次迁移无操作（不部分迁移）；迁移后路径冲突 → 整次拒绝。
+ */
+export function migrateDescendantTabPaths(
+  model: DocumentTabsModel,
+  fromPrefix: string,
+  toPrefix: string,
+): DocumentTabsModel {
+  const boundary = fromPrefix === '' ? null : `${fromPrefix}/`;
+  const affected = model.state.tabs.filter(
+    (tab) =>
+      tab.relativePath === fromPrefix ||
+      (boundary !== null && tab.relativePath.startsWith(boundary)),
+  );
+  if (affected.length === 0) {
+    return model;
+  }
+  if (affected.some((tab) => tab.saving)) {
+    return model;
+  }
+  const nextTabs = model.state.tabs.map((tab) => {
+    if (tab.relativePath === fromPrefix) {
+      return withMigratedPath(tab, toPrefix);
+    }
+    if (boundary !== null && tab.relativePath.startsWith(boundary)) {
+      const rest = tab.relativePath.slice(boundary.length);
+      return withMigratedPath(tab, toPrefix === '' ? rest : `${toPrefix}/${rest}`);
+    }
+    return tab;
+  });
+  const paths = nextTabs.map((item) => item.relativePath);
+  if (new Set(paths).size !== paths.length) {
+    return model;
+  }
+  return { state: { ...model.state, tabs: nextTabs }, runtime: model.runtime };
+}
+
+/**
+ * 批量关闭（删除文件/目录成功后关闭受影响标签）：按规范相对路径精确匹配；
+ * saving 标签跳过（删除前 controller 已阻止，纯转移防御性跳过）；
+ * 活动标签关闭后的邻接激活规则与 closeTab 一致；运行时随标签释放。
+ */
+export function closeTabsByRelativePaths(
+  model: DocumentTabsModel,
+  relativePaths: readonly string[],
+): DocumentTabsModel {
+  const target = new Set(relativePaths);
+  const ids = model.state.tabs
+    .filter((tab) => target.has(tab.relativePath) && !tab.saving)
+    .map((tab) => tab.id);
+  let next = model;
+  for (const tabId of ids) {
+    next = closeTab(next, tabId);
+  }
+  return next;
+}
+
+/**
+ * save-as 开始：目标标签进入 saving（与普通保存互斥，关闭/路径迁移被阻止）。
+ * 前置门禁：loading / read-error / save-error / read-only 不得发起；无基线快照、
+ * 已有在途保存不得发起；DOCX degraded 未确认 → save-error（确认绑定基线 revision）。
+ */
+export function startSaveAs(model: DocumentTabsModel, tabId: string): DocumentTabsModel {
+  const tab = tabById(model, tabId);
+  const runtime = model.runtime.get(tabId);
+  if (tab === null || runtime === undefined || runtime.saveInFlight || tab.document === null) {
+    return model;
+  }
+  if (
+    tab.status === 'loading' ||
+    tab.status === 'read-error' ||
+    tab.status === 'save-error' ||
+    tab.status === 'read-only'
+  ) {
+    return model;
+  }
+  if (isDocxTab(tab) && !docxCompatibilityConfirmed(tab)) {
+    return updateTab(model, tabId, (target) => {
+      if (!isDocxTab(target)) {
+        return target;
+      }
+      return {
+        ...target,
+        status: 'save-error',
+        saving: false,
+        dirty: true,
+        error: {
+          code: 'COMPATIBILITY_CONFIRMATION_REQUIRED',
+          message: '文档包含不受支持的内容，需要确认后保存',
+        },
+      };
+    });
+  }
+  return updateTabRuntime(
+    updateTab(model, tabId, (target) => ({
+      ...target,
+      status: 'saving',
+      saving: true,
+      error: null,
+    })),
+    tabId,
+    (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: true }),
+  );
+}
+
+/**
+ * save-as 完成（成功）：标签原地迁移到新路径并成为目标文档会话（第 4.7 节）。
+ * - 目标标签必须处于 save-as（saveInFlight）状态，且快照 kind 与标签 kind 一致；
+ * - 编辑修订号匹配 → loaded-clean 并清除 dirty；保存期间继续编辑 → 保留新内容与 dirty；
+ * - 基线快照替换为目标快照；DOCX 兼容性确认按新 revision 重置、备份提示取返回的备份路径；
+ * - id、顺序、活动标签与运行时键保持（第 4.5 节）。
+ */
+export function completeSaveAs(
+  model: DocumentTabsModel,
+  tabId: string,
+  capturedEditRevision: number,
+  newRelativePath: string,
+  newDocument: TextDocumentSnapshot | DocxDocumentSnapshot,
+  backupRelativePath?: string,
+): DocumentTabsModel {
+  const tab = tabById(model, tabId);
+  const runtime = model.runtime.get(tabId);
+  if (tab === null || runtime === undefined || !runtime.saveInFlight) {
+    return model;
+  }
+  const docxTarget = isDocxTab(tab);
+  const docxSnapshot = 'kind' in newDocument && newDocument.kind === 'docx';
+  if (docxTarget !== docxSnapshot) {
+    return model;
+  }
+  if (
+    model.state.tabs.some((other) => other.id !== tabId && other.relativePath === newRelativePath)
+  ) {
+    return model;
+  }
+  const stillClean = textSaveCompletionClearsDirty(capturedEditRevision, runtime.editRevision);
+  const name = fileNameFromRelativePath(newRelativePath);
+  return updateTabRuntime(
+    updateTab(model, tabId, (target) => {
+      if (isDocxTab(target)) {
+        const savedDocx = newDocument as DocxDocumentSnapshot;
+        return {
+          ...target,
+          status: stillClean ? 'loaded-clean' : 'loaded-dirty',
+          saving: false,
+          relativePath: newRelativePath,
+          name,
+          document: savedDocx,
+          model: stillClean ? savedDocx.model : target.model,
+          dirty: !stillClean,
+          error: null,
+          // 新基线 revision：旧兼容性确认失效（第 4.2 节）
+          compatibilityConfirmationRevision: null,
+          lastBackupRelativePath: backupRelativePath ?? null,
+        };
+      }
+      const savedText = newDocument as TextDocumentSnapshot;
+      return {
+        ...target,
+        status: stillClean ? 'loaded-clean' : 'loaded-dirty',
+        saving: false,
+        relativePath: newRelativePath,
+        name,
+        document: savedText,
+        // 编辑器正文不随保存改写（与现有保存流程一致）：路径迁移不重建编辑器
+        content: target.content,
+        dirty: !stillClean,
+        error: null,
+      };
+    }),
+    tabId,
+    (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: false }),
+  );
+}
+
+/** save-as 失败：回到 save-error，路径不变、dirty 保留、释放在途保存。 */
+export function failSaveAs(
+  model: DocumentTabsModel,
+  tabId: string,
+  error: TextDocumentError | SaveTextDocumentError | DocxDocumentError,
+): DocumentTabsModel {
+  const tab = tabById(model, tabId);
+  const runtime = model.runtime.get(tabId);
+  if (tab === null || runtime === undefined || !runtime.saveInFlight) {
+    return model;
+  }
+  return updateTabRuntime(
+    updateTab(model, tabId, (target) => {
+      if (isDocxTab(target)) {
+        return {
+          ...target,
+          status: 'save-error',
+          saving: false,
+          dirty: true,
+          error: error as DocxDocumentError,
+        };
+      }
+      return {
+        ...target,
+        status: 'save-error',
+        saving: false,
+        dirty: true,
+        error: error as TextDocumentError | SaveTextDocumentError,
+      };
+    }),
+    tabId,
+    (runtimeEntry) => ({ ...runtimeEntry, saveInFlight: false }),
+  );
 }
 
 /* ======================= TXT 分支转移（与 text-document-tabs.ts 语义一致） ======================= */
@@ -699,6 +983,14 @@ export function completeDocxSave(
 /** 按 tabId 取标签；不存在返回 null。 */
 export function tabById(model: DocumentTabsModel, tabId: string): DocumentTabState | null {
   return model.state.tabs.find((tab) => tab.id === tabId) ?? null;
+}
+
+/** 按规范相对路径查找标签（打开去重入口；与稳定 tabId 完全解耦，TASK-009 WP1）。 */
+export function tabByRelativePath(
+  model: DocumentTabsModel,
+  relativePath: string,
+): DocumentTabState | null {
+  return model.state.tabs.find((tab) => tab.relativePath === relativePath) ?? null;
 }
 
 /** 当前活动标签；无标签或活动标签已被关闭时返回 null。 */

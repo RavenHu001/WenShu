@@ -5,6 +5,8 @@
  *
  * - `openFile`：文件树选择 → 按扩展名打开 TXT 或 DOCX；同路径去重（含 loading/error 态），
  *   新路径创建 loading 占位标签并发起唯一一次读取；
+ * - 打开去重按规范相对路径，新标签分配稳定 tabId（不可由路径推导），
+ *   重命名/移动/另存为路径变化不改变 tabId（TASK-009 WP1 第 4.5 节）；
  * - `openTextFile`：TXT 专用入口（Task 6 搜索结果定位复用），只返回 TXT 标签；
  * - 每标签独立读取请求：请求编号全局单调递增，结果提交前必须通过三重校验
  *   （工作区会话 / 目标标签 / 请求编号）；
@@ -48,6 +50,7 @@ import {
   saveCompletionClearsDirty,
   startDocxSave,
   tabById,
+  tabByRelativePath,
   updateTab,
   updateTabRuntime,
   type DocumentTabRuntime,
@@ -142,6 +145,12 @@ export function useDocuments(): DocumentsController {
   const epochRef = useRef(0);
   /** 读取请求编号：全局单调递增，避免关闭后重开标签的请求编号碰撞。 */
   const readRequestCounterRef = useRef(0);
+  /**
+   * 稳定 tabId 分配：单调递增、不可由路径推导（TASK-009 WP1 第 4.5 节）。
+   * 工作区切换/标签关闭不重置计数，保证会话内 id 永不碰撞。
+   */
+  const tabIdCounterRef = useRef(0);
+  const allocateTabId = useCallback(() => `tab-${++tabIdCounterRef.current}`, []);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -310,8 +319,16 @@ export function useDocuments(): DocumentsController {
     (relativePath: string): Promise<DocumentTabState | null> => {
       const current = modelRef.current;
       const docx = isDocxPath(relativePath);
-      const opened = docx ? openDocxTab(current, relativePath) : openTab(current, relativePath);
-      const tab = opened.state.tabs.find((item) => item.id === relativePath) ?? null;
+      // 打开去重按规范相对路径（与稳定 tabId 解耦）：已存在标签只激活原 id；
+      // 新路径才分配新的稳定 tabId（不可由路径推导）
+      const existing = tabByRelativePath(current, relativePath);
+      const opened =
+        existing !== null
+          ? activateTabState(current, existing.id)
+          : docx
+            ? openDocxTab(current, relativePath, allocateTabId())
+            : openTab(current, relativePath, allocateTabId());
+      const tab = tabByRelativePath(opened, relativePath) ?? null;
       if (tab === null) {
         return Promise.resolve(null);
       }
