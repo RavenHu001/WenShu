@@ -19,6 +19,7 @@ import type {
   EditorSearchControls,
   EditorSearchMode,
 } from './components/document/EditorSessionHost';
+import type { DocxCurrentSearchControls } from './lib/docx-current-search-plugin';
 import type { WorkspaceTextSearchFileResult, WorkspaceTextSearchMatch } from '../shared/search';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 import { FileManagementDialogs } from './components/workspace/FileManagementDialogs';
@@ -112,6 +113,15 @@ export const App = (): React.JSX.Element => {
   );
   const currentDocumentSearchPanelHostRef = useRef<HTMLDivElement | null>(null);
   const editorSearchControlsRef = useRef<EditorSearchControls | null>(null);
+  /** 活动 DOCX 标签的 current-search controls 引用（快捷键回调读最新值，避免闭包陈旧）。 */
+  const activeDocxSearchControlsRef = useRef<DocxCurrentSearchControls | null>(null);
+  /** 活动 DOCX 标签的 current-search controls（非 DOCX/无会话为 null；由 DocumentPane 原子更新）。 */
+  const [activeDocxSearchControls, setActiveDocxSearchControls] =
+    useState<DocxCurrentSearchControls | null>(null);
+  /** 打开 DOCX 面板时希望聚焦的输入框（Ctrl+F / Ctrl+H / 侧栏入口）。 */
+  const [currentSearchFocusMode, setCurrentSearchFocusMode] = useState<'find' | 'replace' | null>(
+    null,
+  );
   /** 待应用的搜索结果定位目标（App 校验通过后下发给编辑器宿主）。 */
   const [locateTarget, setLocateTarget] = useState<AppLocateTarget | null>(null);
   /** 非破坏性"搜索结果已过期"提示文案。 */
@@ -426,13 +436,77 @@ export const App = (): React.JSX.Element => {
     };
   }, []);
 
-  const handleCurrentDocumentSearchRequest = useCallback((): void => {
-    setSearchFocusTarget('current-document');
-    setActivity('search');
-  }, []);
+  const handleCurrentDocumentSearchRequest = useCallback(
+    (mode: EditorSearchMode = 'find'): void => {
+      setSearchFocusTarget('current-document');
+      setActivity('search');
+      setCurrentSearchFocusMode(mode);
+      // 与 TXT 宿主打开 CodeMirror 面板等价：DOCX 直接打开 WP2 controller 面板
+      const tab = activeTab(modelRef.current);
+      if (tab !== null && isDocxTab(tab)) {
+        activeDocxSearchControlsRef.current?.open(mode);
+      }
+    },
+    [],
+  );
 
-  const handleOpenCurrentDocumentSearch = useCallback((mode: EditorSearchMode): void => {
-    editorSearchControlsRef.current?.open(mode);
+  const handleOpenCurrentDocumentSearch = useCallback(
+    (mode: EditorSearchMode): void => {
+      setSearchFocusTarget('current-document');
+      setActivity('search');
+      setCurrentSearchFocusMode(mode);
+      // 按活动 kind 分派：DOCX 走 WP2 controller，TXT 继续走 CodeMirror 入口
+      const tab = activeTab(model);
+      if (tab !== null && isDocxTab(tab)) {
+        activeDocxSearchControlsRef.current?.open(mode);
+      } else {
+        editorSearchControlsRef.current?.open(mode);
+      }
+    },
+    [model],
+  );
+
+  const handleDocxSearchControlsChange = useCallback(
+    (controls: DocxCurrentSearchControls | null): void => {
+      activeDocxSearchControlsRef.current = controls;
+      setActiveDocxSearchControls(controls);
+    },
+    [],
+  );
+
+  // read-only DOCX：PM 对非 editable 视图不派发 keydown（prosemirror-view 实测），
+  // Tiptap 快捷键不会触发；这里补一个仅限 read-only 活动 DOCX 的窗口级快捷键入口
+  // （Ctrl+F / Ctrl+H / F3 / Shift+F3），可编辑 DOCX 仍由编辑器 keymap 处理，避免双重触发。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const tab = activeTab(modelRef.current);
+      if (tab === null || !isDocxTab(tab) || tab.status !== 'read-only') {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target !== null && target.closest('.docx-current-search-panel') !== null) {
+        return; // 面板内部按键由面板自身处理，避免与窗口监听重复
+      }
+      const key = event.key;
+      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'f') {
+        event.preventDefault();
+        handleCurrentDocumentSearchRequest('find');
+      } else if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'h') {
+        event.preventDefault();
+        handleCurrentDocumentSearchRequest('replace');
+      } else if (key === 'F3') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          activeDocxSearchControlsRef.current?.selectPrevious();
+        } else {
+          activeDocxSearchControlsRef.current?.selectNext();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）；
@@ -609,12 +683,33 @@ export const App = (): React.JSX.Element => {
       fileManagement.beginSaveAs(tab.id);
     }
   };
-  // 活动文档类型（TASK-008 第 4.10 节）：查找替换仅支持 TXT，活动 DOCX 时侧栏显示不可用说明。
+  // 活动文档类型（TASK-008 第 4.10 节 + TASK-010 WP3）：TXT 用 CodeMirror 面板，DOCX 用 WP2 面板。
   const activeDocumentTab = activeTab(model);
   const currentDocumentKind: 'txt' | 'docx' | null =
     activeDocumentTab === null ? null : isDocxTab(activeDocumentTab) ? 'docx' : 'txt';
   const currentDocumentAvailable =
     currentDocumentKind === 'txt' && activeDocumentTab?.document != null;
+  // DOCX 替换可用性与原因（WP3 恒不可用：不形成可执行假功能；权限原因明确展示）
+  let docxReplaceAvailability: { readonly available: boolean; readonly reason: string } | null =
+    null;
+  if (activeDocumentTab !== null && isDocxTab(activeDocumentTab)) {
+    if (activeDocumentTab.status === 'read-only') {
+      docxReplaceAvailability = { available: false, reason: '只读文档不支持替换' };
+    } else if (activeDocumentTab.status === 'read-error' && activeDocumentTab.document === null) {
+      docxReplaceAvailability = { available: false, reason: '文档读取失败，无法替换' };
+    } else if (
+      activeDocumentTab.document !== null &&
+      activeDocumentTab.document.compatibility.level === 'degraded' &&
+      activeDocumentTab.compatibilityConfirmationRevision !== activeDocumentTab.document.revision
+    ) {
+      docxReplaceAvailability = {
+        available: false,
+        reason: '文档包含不受支持内容，需先确认兼容性',
+      };
+    } else {
+      docxReplaceAvailability = { available: false, reason: '替换功能将在后续版本提供' };
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -684,6 +779,9 @@ export const App = (): React.JSX.Element => {
               currentDocumentPanelHostRef={currentDocumentSearchPanelHostRef}
               currentDocumentKind={currentDocumentKind}
               currentDocumentAvailable={currentDocumentAvailable}
+              docxSearchControls={activeDocxSearchControls}
+              docxReplaceAvailability={docxReplaceAvailability}
+              currentDocumentFocusMode={currentSearchFocusMode}
               onOpenCurrentDocumentSearch={handleOpenCurrentDocumentSearch}
               onMatchActivate={handleMatchActivate}
             />
@@ -711,6 +809,7 @@ export const App = (): React.JSX.Element => {
             onSearchControlsChange={(controls) => {
               editorSearchControlsRef.current = controls;
             }}
+            onDocxSearchControlsChange={handleDocxSearchControlsChange}
           />
         </section>
       </main>

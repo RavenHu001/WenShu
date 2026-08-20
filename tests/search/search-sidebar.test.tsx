@@ -453,7 +453,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
     expect(screen.getByText(/DOCX 仅覆盖已进入结构化模型的正文/)).toBeDefined();
   });
 
-  it('活动 DOCX 时当前文档查找显示不可用说明，不出现假可用面板', async () => {
+  it('活动 DOCX 时当前文档查找显示 DOCX 面板（TASK-010 WP3 取代 TXT-only 说明）', async () => {
     const api = makeDesktopMock();
     api.open.mockResolvedValue({
       status: 'selected',
@@ -469,15 +469,17 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
     await act(async () => {});
     await act(async () => {});
 
-    // 打开搜索侧栏并切到"查找与替换"
+    // 打开搜索侧栏并切到"查找与替换"：DOCX 面板直接可用
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '搜' }));
     });
-    fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
-    expect(screen.getByText('当前文件查找替换仅支持 TXT 文档。')).toBeDefined();
-    // 不可用时 CodeMirror 面板挂载点为空（无假可用输入框）
-    const panel = document.querySelector('.current-document-search-panel');
-    expect(panel?.textContent ?? '').toBe('');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
+    });
+    expect(screen.getByLabelText('查找内容')).toBeDefined();
+    expect(screen.queryByText('当前文件查找替换仅支持 TXT 文档。')).toBeNull();
+    // TXT 的 CodeMirror 挂载点不再用于 DOCX（无假可用输入框）
+    expect(document.querySelector('.current-document-search-panel')).toBeNull();
   });
 
   it('cancelled：主动取消后展示已取消且结果不恢复', async () => {

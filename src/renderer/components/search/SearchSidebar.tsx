@@ -11,7 +11,9 @@
  * - 一次查询搜索磁盘上已保存的 TXT 与 DOCX 规范正文；结果分组携带 kind 类型标识，
  *   DOCX 行列明确属于提取正文；
  * - 结果来自磁盘已保存快照，侧栏明确提示不包含未保存编辑；
- * - 当前文件查找替换仍只支持 TXT：活动 DOCX 时显示不可用说明，不出现假可用状态；
+ * - TASK-010 WP3：当前文档查找替换按活动 kind 判别——TXT 继续使用 CodeMirror 面板
+ *   宿主（不重写 TXT matcher），DOCX 使用 DocxCurrentSearchPanel（WP2 controls）；
+ *   同一时刻只显示活动 kind 的面板；loading / read-error（无快照）不显示假可用面板；
  * - 片段由 React 文本节点渲染，不使用 `dangerouslySetInnerHTML`；
  * - 本组件不调用 Node API，不从展示字符串解析路径、行列或匹配范围。
  */
@@ -25,6 +27,8 @@ import type {
   WorkspaceTextSearchResult,
 } from '../../../shared/search';
 import { SearchResults } from './SearchResults';
+import { DocxCurrentSearchPanel, type DocxReplaceAvailability } from './DocxCurrentSearchPanel';
+import type { DocxCurrentSearchControls } from '../../lib/docx-current-search-plugin';
 
 interface SearchSidebarProps {
   readonly search: WorkspaceSearchController;
@@ -41,6 +45,12 @@ interface SearchSidebarProps {
   /** 活动文档类型：`txt` / `docx` / 无活动文档为 null（TASK-008 第 4.10 节）。 */
   readonly currentDocumentKind?: 'txt' | 'docx' | null;
   readonly currentDocumentAvailable?: boolean;
+  /** 活动 DOCX 标签的 current-search controls（null = 无可用 DOCX 会话）。 */
+  readonly docxSearchControls?: DocxCurrentSearchControls | null;
+  /** DOCX 替换可用性与不可用原因（WP3 恒不可用；read-only/degraded 原因明确）。 */
+  readonly docxReplaceAvailability?: DocxReplaceAvailability | null;
+  /** 打开面板时希望聚焦的输入框（Ctrl+F / Ctrl+H / 侧栏入口）。 */
+  readonly currentDocumentFocusMode?: 'find' | 'replace' | null;
   readonly onOpenCurrentDocumentSearch?: (mode: EditorSearchMode) => void;
   /** 点击匹配结果后的打开 / 定位入口（WP5 接入）。 */
   readonly onMatchActivate?: (
@@ -65,6 +75,9 @@ export function SearchSidebar({
   currentDocumentPanelHostRef,
   currentDocumentKind = null,
   currentDocumentAvailable = false,
+  docxSearchControls = null,
+  docxReplaceAvailability = null,
+  currentDocumentFocusMode = null,
   onOpenCurrentDocumentSearch,
   onMatchActivate,
 }: SearchSidebarProps): React.JSX.Element {
@@ -93,7 +106,9 @@ export function SearchSidebar({
     onFocusTargetChange?.(target);
     if (target === 'workspace') {
       window.setTimeout(() => inputRef.current?.focus(), 0);
-    } else if (currentDocumentAvailable) {
+    } else if (
+      currentDocumentKind === 'docx' ? docxSearchControls !== null : currentDocumentAvailable
+    ) {
       // “查找与替换”标签本身就是功能入口，进入后直接展示完整面板。
       onOpenCurrentDocumentSearch?.('find');
     }
@@ -133,17 +148,27 @@ export function SearchSidebar({
         className="search-view-panel current-document-view"
         hidden={focusTarget !== 'current-document'}
       >
-        <div
-          ref={currentDocumentPanelHostRef}
-          className="current-document-search-panel"
-          aria-label="当前文档查找与替换"
-        />
-        {!currentDocumentAvailable && (
-          <div className="current-document-search-empty">
-            {currentDocumentKind === 'docx'
-              ? '当前文件查找替换仅支持 TXT 文档。'
-              : '打开一个 TXT 文件后可查找或替换。'}
-          </div>
+        {currentDocumentKind === 'docx' ? (
+          docxSearchControls !== null && docxReplaceAvailability !== null ? (
+            <DocxCurrentSearchPanel
+              controls={docxSearchControls}
+              replaceAvailability={docxReplaceAvailability}
+              focusMode={currentDocumentFocusMode}
+            />
+          ) : (
+            <div className="current-document-search-empty">打开 DOCX 文件后可查找或替换。</div>
+          )
+        ) : (
+          <>
+            <div
+              ref={currentDocumentPanelHostRef}
+              className="current-document-search-panel"
+              aria-label="当前文档查找与替换"
+            />
+            {!currentDocumentAvailable && (
+              <div className="current-document-search-empty">打开一个 TXT 文件后可查找或替换。</div>
+            )}
+          </>
         )}
       </section>
 

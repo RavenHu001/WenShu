@@ -59,6 +59,22 @@ export interface CurrentSearchPluginState {
   readonly generation: number;
 }
 
+/** WP3+ 窄 controls：UI 只经此接口操作查找会话，不接触 Editor/EditorView（任务第 5.2 节）。 */
+export interface DocxCurrentSearchControls {
+  /** 稳定标签身份（不从路径/名称推导 editor）。 */
+  readonly tabId: string;
+  getSnapshot(): DocxCurrentSearchSnapshot;
+  subscribe(listener: () => void): () => void;
+  open(mode: 'find' | 'replace'): void;
+  close(): void;
+  setQuery(query: string): void;
+  setCaseSensitive(value: boolean): void;
+  selectNext(): void;
+  selectPrevious(): void;
+  /** 关闭面板后把焦点还给编辑器（read-only 为安全 no-op）。 */
+  focusEditor(): void;
+}
+
 /** controller 暴露给 UI 的只读快照（任务第 5.1 节形状，不含 DecorationSet）。 */
 export interface DocxCurrentSearchSnapshot {
   readonly open: boolean;
@@ -296,7 +312,7 @@ export function createCurrentSearchPlugin(
  *   不 dirty、不进撤销历史；
  * - 异步回调经插件 generation/销毁守卫；controller.destroy 后不再通知/不再 dispatch。
  */
-export class DocxCurrentSearchController {
+export class DocxCurrentSearchController implements DocxCurrentSearchControls {
   private readonly hooks: CurrentSearchPluginHooks;
   private readonly listeners = new Set<() => void>();
   private lastSnapshot: DocxCurrentSearchSnapshot | null = null;
@@ -360,6 +376,14 @@ export class DocxCurrentSearchController {
     this.navigate(-1);
   }
 
+  /** 关闭面板后把焦点还给编辑器（read-only 为安全 no-op，WP0 F7）。 */
+  focusEditor(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.editor.commands.focus();
+  }
+
   destroy(): void {
     if (this.disposed) {
       return;
@@ -367,6 +391,22 @@ export class DocxCurrentSearchController {
     this.disposed = true;
     this.hooks.onStateChange = null;
     this.listeners.clear();
+  }
+
+  /** 返回绑定 this 的窄接口（供 React/组件直接传递，避免方法解绑丢失 this）。 */
+  asControls(): DocxCurrentSearchControls {
+    return {
+      tabId: this.tabId,
+      getSnapshot: () => this.getSnapshot(),
+      subscribe: (listener) => this.subscribe(listener),
+      open: (mode) => this.open(mode),
+      close: () => this.close(),
+      setQuery: (query) => this.setQuery(query),
+      setCaseSensitive: (value) => this.setCaseSensitive(value),
+      selectNext: () => this.selectNext(),
+      selectPrevious: () => this.selectPrevious(),
+      focusEditor: () => this.focusEditor(),
+    };
   }
 
   private readState(): CurrentSearchPluginState | undefined {

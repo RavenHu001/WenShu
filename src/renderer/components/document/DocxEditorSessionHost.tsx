@@ -1,4 +1,4 @@
-﻿/**
+/**
  * DOCX 富文本编辑器宿主 —— 每标签 Tiptap/ProseMirror 会话（TASK-007 WP5，第 4.6 / 6.5 节）。
  *
  * ## 会话与内容同步
@@ -30,7 +30,17 @@ import { docxModelToTiptapJson, tiptapJsonToDocxModel } from '../../../shared/do
 import { joinDocxTextBlocks } from '../../../shared/docx-search-text';
 import type { DocxDocumentModel } from '../../../shared/docx';
 import type { DocxDocumentTabState } from '../../lib/document-tabs';
-import type { EditorLocateOutcome, EditorLocateTarget } from './EditorSessionHost';
+import {
+  DocxCurrentSearchController,
+  createCurrentSearchPlugin,
+  type CurrentSearchPluginHooks,
+  type DocxCurrentSearchControls,
+} from '../../lib/docx-current-search-plugin';
+import type {
+  EditorLocateOutcome,
+  EditorLocateTarget,
+  EditorSearchMode,
+} from './EditorSessionHost';
 
 /** 最小扩展集（WP0 冻结结论 3）：StarterKit v3 已含下划线；link 输入能力关闭。 */
 export const DOCX_EDITOR_EXTENSIONS = [
@@ -54,6 +64,8 @@ export function DocxEditorSessionHost({
   onEditorRegister,
   locateTarget = null,
   onLocateOutcome,
+  onSearchPanelRequest,
+  onSearchControlsRegister,
 }: {
   readonly tab: DocxDocumentTabState;
   /** 是否可编辑（read-only / read-error 无快照时 false）。 */
@@ -68,6 +80,13 @@ export function DocxEditorSessionHost({
   readonly locateTarget?: EditorLocateTarget | null;
   /** 定位结果回报：`applied` 应用成功 / `stale` 二次校验失败（携带 locateId）。 */
   readonly onLocateOutcome?: (locateId: number, outcome: EditorLocateOutcome) => void;
+  /** Ctrl+F / Ctrl+H 请求打开搜索侧栏的 DOCX 当前查找面板（与 TXT 宿主同协议）。 */
+  readonly onSearchPanelRequest?: (mode: EditorSearchMode) => void;
+  /** 注册/注销本标签的 DOCX 当前查找 controls（稳定 tabId 绑定）。 */
+  readonly onSearchControlsRegister?: (
+    tabId: string,
+    controls: DocxCurrentSearchControls | null,
+  ) => void;
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -77,6 +96,9 @@ export function DocxEditorSessionHost({
   const saveRequestRef = useRef(onSaveRequest);
   const registerRef = useRef(onEditorRegister);
   const locateOutcomeRef = useRef(onLocateOutcome);
+  const searchPanelRequestRef = useRef(onSearchPanelRequest);
+  const searchControlsRegisterRef = useRef(onSearchControlsRegister);
+  const controllerRef = useRef<DocxCurrentSearchController | null>(null);
   /** 已应用过的定位目标：同一对象只应用一次（rerender 不重复抢焦点）。 */
   const appliedLocateRef = useRef<EditorLocateTarget | null>(null);
 
@@ -85,6 +107,8 @@ export function DocxEditorSessionHost({
     saveRequestRef.current = onSaveRequest;
     registerRef.current = onEditorRegister;
     locateOutcomeRef.current = onLocateOutcome;
+    searchPanelRequestRef.current = onSearchPanelRequest;
+    searchControlsRegisterRef.current = onSearchControlsRegister;
   });
 
   // 创建编辑器（只创建一次；模型变化经下方 effect 同步内容）
@@ -102,9 +126,33 @@ export function DocxEditorSessionHost({
         },
       }),
     });
+    // WP3：每 editor 安装一次 current-search 插件/controller；快捷键与 TXT 宿主同协议
+    const searchHooks: CurrentSearchPluginHooks = { onStateChange: null, onRecompute: null };
+    const searchExtension = Extension.create({
+      name: 'wenshu-docx-current-search',
+      addKeyboardShortcuts: () => ({
+        'Mod-f': () => {
+          searchPanelRequestRef.current?.('find');
+          return true;
+        },
+        'Mod-h': () => {
+          searchPanelRequestRef.current?.('replace');
+          return true;
+        },
+        F3: () => {
+          controllerRef.current?.selectNext();
+          return true;
+        },
+        'Shift-F3': () => {
+          controllerRef.current?.selectPrevious();
+          return true;
+        },
+      }),
+      addProseMirrorPlugins: () => [createCurrentSearchPlugin(searchHooks)],
+    });
     const editor = new Editor({
       element: container,
-      extensions: [...DOCX_EDITOR_EXTENSIONS, saveKeymap],
+      extensions: [...DOCX_EDITOR_EXTENSIONS, saveKeymap, searchExtension],
       content: docxModelToTiptapJson(
         tab.model ?? { schemaVersion: 1, blocks: [] },
       ) as unknown as Content,
@@ -122,9 +170,16 @@ export function DocxEditorSessionHost({
     });
     editorRef.current = editor;
     onEditorRegister(tab.id, editor);
+    // 每标签查找 controller：绑定稳定 tabId，注册窄 controls（不暴露 editor）
+    const controller = new DocxCurrentSearchController(tab.id, editor, searchHooks);
+    controllerRef.current = controller;
+    searchControlsRegisterRef.current?.(tab.id, controller.asControls());
     // 测试/调试访问点：编辑器实例挂在容器 DOM 上（不进入 React 状态、IPC 或持久化）
     (container as HTMLElement & { __wenshuEditor?: Editor }).__wenshuEditor = editor;
     return () => {
+      searchControlsRegisterRef.current?.(tab.id, null);
+      controllerRef.current?.destroy();
+      controllerRef.current = null;
       if (editorRef.current === editor) {
         onEditorRegister(tab.id, null);
         editorRef.current = null;
