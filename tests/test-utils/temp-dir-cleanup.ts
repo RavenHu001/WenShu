@@ -22,12 +22,19 @@
  * 对同时新建的多个 junction 的锁定窗口可超过 1 秒（串行运行与单文件运行均不出现，
  * 连续两次并行全量/多文件运行复现）。默认重试预算由 5×200ms 调整为 10×250ms（约 2.5s），
  * 仍为固定有界重试：只对瞬时错误码生效，重试耗尽仍抛出原始错误，不掩盖真实失败。
+ *
+ * ## 2026-08-20 再次调整（TASK-010 WP1 全量并行实测）
+ *
+ * 全量并行（56 个测试文件，maxForks 4）再次复现同一 EBUSY：read-docx-document 与
+ * search-mixed-workspace 的 beforeAll 探测目录清理在 2.5s 重试预算内未解除锁定，导致两个
+ * 套件整体失败（单独运行均通过，确认是并行负载下的瞬时锁而非业务失败）。默认重试预算
+ * 调整为 20×250ms（约 5s），语义不变：只对瞬时错误码生效，重试耗尽仍抛出原始错误。
  */
 
 import { rm } from 'node:fs/promises';
 
 export interface RemoveDirWithRetryOptions {
-  /** 最大尝试次数（含首次），默认 10。 */
+  /** 最大尝试次数（含首次），默认 20（约 5s 有界重试窗口）。 */
   readonly attempts?: number;
   /** 失败重试间隔毫秒，默认 250。 */
   readonly delayMs?: number;
@@ -44,7 +51,7 @@ export async function removeDirWithRetry(
   path: string,
   options: RemoveDirWithRetryOptions = {},
 ): Promise<void> {
-  const attempts = options.attempts ?? 10;
+  const attempts = options.attempts ?? 20;
   const delayMs = options.delayMs ?? 250;
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
