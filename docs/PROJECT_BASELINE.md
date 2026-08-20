@@ -210,6 +210,8 @@ Task 6 已完成 TXT 查找与搜索闭环（见 [TASK-006 完成报告](./TASK_
 
 Task 7 仍不把 DOCX 隐式加入 Task 6 的 TXT 搜索器。Task 8 已完成（见 [TASK-008 完成报告](./TASK_008_COMPLETION_REPORT.md)）：工作区 DOCX 正文搜索与富文本结果定位复用搜索任务身份、取消、预算和 revision 过期原则，但为 DOCX 单独设计基于结构化模型（`DocxDocumentModel`）的规范正文投影（`src/shared/docx-search-text.ts`，深度优先文本块 + 人工 `\n` 分隔的纯函数）、文本块位置映射与 ProseMirror 公开 API 定位；主进程混合搜索执行总候选 1000（其中 DOCX 200）、总并发 4（其中 DOCX 并发 2）；结果定位必须通过 kind、revision、范围与匹配文本双重校验（App 实时投影校验 + DOCX 宿主同规则投影二次校验），任何过期、结构变化或映射失败只显示非破坏性提示，不错误定位、不修改正文；搜索不写工作区、不建立索引。
 
+Task 10 已完成（见 [TASK-010 完成报告](./TASK_010_COMPLETION_REPORT.md)）：当前 DOCX 内查找与替换与 TXT 共用“查找与替换”侧栏入口——DOCX 搜索唯一来源是活动 Tiptap/ProseMirror 实时文档（复用 Task 8 的 `joinDocxTextBlocks` 投影规则，不读磁盘、不搜索模型旧快照或编辑器 DOM）；literal + ASCII 大小写折叠、非重叠、单行与长度规则、最多 2000 匹配（2001+ 截断并禁用全部替换）；普通/当前匹配经项目自有 plugin 的 DecorationSet 双 class 高亮，查找/导航/关闭面板不修改正文、不 dirty、不进撤销历史；替换当前项执行瞬间重新扫描复验实时范围，非空替换继承匹配起点字符 marks（跨不同 marks run 只取起点），全部替换 ≤2000 项逆序写入同一 transaction、一次 undo/redo，dispatch 前对候选 `tr.doc` 执行 `tiptapJsonToDocxModel` + 序列化预算验证（任一失败 0 dispatch、0 dirty）；read-only 可查不可替换，degraded 确认绑定当前 revision 后可替换（重新读取后旧确认失效），saving 期间替换不被旧保存完成清除；每标签状态绑定稳定 tabId，重命名/移动/另存为后会话保持，关闭标签/重开/工作区切换完整清理；工作区结果定位与 mutationEpoch 不污染当前查找状态；无新增 IPC/preload/DesktopApi。
+
 ### 5.7 设置
 
 基础设置包括：
@@ -442,6 +444,8 @@ Task 6 已在 CodeMirror 会话中增加当前文件查找替换（`@codemirror/
 Task 7 已采用 Tiptap/ProseMirror 作为 DOCX renderer 编辑会话，编辑器实例不跨 IPC；项目自有 `DocxDocumentModel` 是导入、编辑状态和导出的稳定边界（`src/shared/docx.ts` 契约 + `src/shared/docx-convert.ts` 纯转换）。TXT 继续使用 CodeMirror，通用标签生命周期通过文件类型判别联合复用（`src/renderer/lib/document-tabs.ts`），TXT 与 DOCX 的正文模型和编辑器 runtime 保持隔离。具体实施结果见 [TASK-007 完成报告](./TASK_007_COMPLETION_REPORT.md)。
 
 Task 8 已把工作区搜索扩展为 TXT + DOCX 混合搜索与富文本结果定位（见 [TASK-008 完成报告](./TASK_008_COMPLETION_REPORT.md)）：DOCX 搜索文本的唯一语义来源是 `DocxDocumentModel` 的规范正文投影（`src/shared/docx-search-text.ts`，深度优先文本块 + 人工 `\n` 分隔，UTF-16 偏移与 ProseMirror 文本位置一致），不把 DOCX 当作 UTF-8 TXT，也不直接搜索 OOXML、Mammoth HTML 或编辑器 DOM；主进程搜索器复用受控读取器并执行总候选 1000（DOCX 200）、总并发 4（DOCX 2）、协作式取消与单文件错误隔离；结果定位经 App 实时投影校验与 DOCX 宿主同规则投影二次校验后，用 ProseMirror 公开命令（`setTextSelection` / `scrollIntoView` / `focus`）设置选区、滚动与聚焦，任何过期或映射失败只显示非破坏性提示；搜索只读，不写工作区、不建索引或缓存。
+
+Task 10 已为 DOCX 编辑器会话增加项目自有 current-search plugin 与每标签 controller（`src/renderer/lib/docx-current-search.ts` 纯函数层 + `docx-current-search-plugin.ts` ProseMirror 插件与窄 controls）：每编辑器安装一次插件、每稳定 tabId 一个 controller，重算使用微任务单次调度 + generation 丢弃旧计算（不引入 worker/索引/防抖定时器），编辑器销毁与控制器销毁完整清理订阅；替换通过公开 transaction API 构建并复用既有 `editDocxTab` / dirty / editRevision / 保存门禁（read-only、degraded 确认、saving 中继续编辑、冲突与路径迁移语义不变），不扩大 IPC/preload 暴露面。
 
 ### 8.4 DOCX 处理
 
