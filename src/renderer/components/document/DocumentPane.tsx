@@ -12,7 +12,7 @@
  *   全部从目标标签状态派生，目标标签绑定 tabId。
  */
 
-import { useMemo, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { Editor } from '@tiptap/core';
 import type { DocxDocumentModel } from '../../../shared/docx';
 import { TabBar } from './TabBar';
@@ -24,6 +24,7 @@ import {
   type EditorSearchMode,
 } from './EditorSessionHost';
 import { useEditorSessions } from '../../lib/use-editor-sessions';
+import type { DocxCurrentSearchControls } from '../../lib/docx-current-search-plugin';
 import {
   isDocxTab,
   type DocxDocumentTabState,
@@ -52,6 +53,7 @@ export function DocumentPane({
   searchPanelHostRef,
   onSearchPanelRequest,
   onSearchControlsChange,
+  onDocxSearchControlsChange,
 }: {
   readonly tabs: readonly DocumentTabState[];
   readonly activeTabId: string | null;
@@ -79,6 +81,8 @@ export function DocumentPane({
   readonly searchPanelHostRef?: RefObject<HTMLElement | null>;
   readonly onSearchPanelRequest?: (mode: EditorSearchMode) => void;
   readonly onSearchControlsChange?: (controls: EditorSearchControls | null) => void;
+  /** 活动 DOCX 标签的 current-search controls（切换/挂载/卸载时原子更新；非 DOCX 为 null）。 */
+  readonly onDocxSearchControlsChange?: (controls: DocxCurrentSearchControls | null) => void;
 }): React.JSX.Element {
   const liveTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
   const sessions = useEditorSessions(liveTabIds);
@@ -86,6 +90,10 @@ export function DocumentPane({
   const editable = activeTab !== null && isEditable(activeTab);
   /** 活动 DOCX 标签的编辑器实例注册表（状态驱动：注册/注销触发工具栏重渲染）。 */
   const [docxEditors, setDocxEditors] = useState<ReadonlyMap<string, Editor>>(() => new Map());
+  /** 每 DOCX 标签的 current-search controls 注册表（稳定 tabId 键）。 */
+  const [docxSearchControls, setDocxSearchControls] = useState<
+    ReadonlyMap<string, DocxCurrentSearchControls>
+  >(() => new Map());
 
   const registerDocxEditor = (tabId: string, editor: Editor | null): void => {
     setDocxEditors((previous) => {
@@ -99,8 +107,35 @@ export function DocumentPane({
     });
   };
 
+  const registerDocxSearchControls = (
+    tabId: string,
+    controls: DocxCurrentSearchControls | null,
+  ): void => {
+    setDocxSearchControls((previous) => {
+      const next = new Map(previous);
+      if (controls === null) {
+        next.delete(tabId);
+      } else {
+        next.set(tabId, controls);
+      }
+      return next;
+    });
+  };
+
   const activeDocxEditor =
     activeTab !== null && isDocxTab(activeTab) ? (docxEditors.get(activeTab.id) ?? null) : null;
+  const activeDocxSearchControls =
+    activeTab !== null && isDocxTab(activeTab)
+      ? (docxSearchControls.get(activeTab.id) ?? null)
+      : null;
+  const docxSearchControlsChangeRef = useRef(onDocxSearchControlsChange);
+  useEffect(() => {
+    docxSearchControlsChangeRef.current = onDocxSearchControlsChange;
+  });
+  // 活动 DOCX 标签变化/宿主挂载卸载时，把活动 controls 原子交给 App（旧标签不可再操作）
+  useEffect(() => {
+    docxSearchControlsChangeRef.current?.(activeDocxSearchControls);
+  }, [activeDocxSearchControls, activeTabId]);
 
   return (
     <>
@@ -179,6 +214,8 @@ export function DocumentPane({
               onContentChange={onDocxContentChange}
               onSaveRequest={onSave}
               onEditorRegister={registerDocxEditor}
+              {...(onSearchPanelRequest !== undefined ? { onSearchPanelRequest } : {})}
+              onSearchControlsRegister={registerDocxSearchControls}
               locateTarget={
                 locateTarget !== null && locateTarget !== undefined && locateTarget.tabId === tab.id
                   ? {

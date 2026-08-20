@@ -1538,3 +1538,104 @@ body {
 .docx-compat-warnings li {
   margin: 2px 0;
 }
+
+/* ======================= TASK-010 WP3：DOCX 当前查找面板与匹配装饰（最小样式） ======================= */
+
+.docx-current-search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+
+.docx-search-fields,
+.docx-replace-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docx-search-input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  color: #343a48;
+  background: #ffffff;
+  border: 1px solid #d4d9e2;
+  border-radius: 5px;
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.docx-search-input:focus-visible {
+  border-color: #5268ad;
+  box-shadow: 0 0 0 2px rgb(82 104 173 / 22%);
+}
+
+.docx-search-input:disabled {
+  color: #9aa1ae;
+  background: #f5f6f9;
+}
+
+.docx-search-actions,
+.docx-replace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.docx-search-actions button,
+.docx-replace-actions button {
+  padding: 5px 10px;
+  color: #51596a;
+  background: #f5f6f9;
+  border: 1px solid #d9dde6;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.docx-search-actions button:hover:not(:disabled),
+.docx-replace-actions button:hover:not(:disabled) {
+  color: #40589e;
+  background: #e9edf7;
+}
+
+.docx-search-actions button:disabled,
+.docx-replace-actions button:disabled {
+  color: #a9afbc;
+  cursor: default;
+}
+
+.docx-search-actions button:focus-visible,
+.docx-replace-actions button:focus-visible {
+  outline: 2px solid #8fa4d8;
+  outline-offset: 1px;
+}
+
+.docx-search-status {
+  min-height: 1.5em;
+  color: #6d7382;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.docx-replace-reason {
+  color: #a2a8b5;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 匹配装饰：当前匹配同时有背景与描边（不只依赖颜色区分，高对比下仍可辨识） */
+.wenshu-search-match {
+  background: rgb(255 213 79 / 45%);
+  border-radius: 2px;
+}
+
+.wenshu-search-current {
+  background: rgb(255 179 71 / 65%);
+  outline: 2px solid rgb(214 128 8 / 70%);
+  outline-offset: 1px;
+}
