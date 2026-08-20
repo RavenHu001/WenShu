@@ -164,7 +164,7 @@ Task 10 将把"当前文件查找替换"扩展为 TXT 与 DOCX 共用入口，�
 - 已按 [TASK-010 规划](./TASK_010_DOCX_FIND_REPLACE.md) 第 3.3 节完成实时 textblock 投影、跨 marks 范围映射、Decoration、替换事务、模型预验证、read-only/degraded/saving 与性能策略的最小 Tiptap/ProseMirror 验证（WP0 报告见 `TASK_010_WP0_REPORT.md`）；
 - 每个 Task 10 工作包继续运行完整 `check` 和 `build`，不得以新增 DOCX 当前查找测试替代 Task 1 至 Task 9 的回归。
 
-Task 10 实施结果（见 [TASK-010 完成报告](./TASK_010_COMPLETION_REPORT.md)）：WP0-WP7 逐包验收；最终全量测试为 **62 个测试文件、1131 通过、10 条件跳过**（均为真实符号链接/junction 权限条件，拒绝分支由 mock 确定性覆盖）；`check` 与 `build` 依次执行退出码均为 0；开发模式与生产构建 Windows 冒烟通过（本包另记录 WP6 性能与泄漏观察）；任务第八节手工界面清单由项目所有者执行并通过（用户确认手动测试通过）。
+Task 10 实施结果（见 [TASK-010 完成报告](./TASK_010_COMPLETION_REPORT.md)）：WP0-WP7 逐包验收；最终全量测试为 **62 个测试文件、1133 通过、10 条件跳过**（均为真实符号链接/junction 权限条件，拒绝分支由 mock 确定性覆盖）；`check` 与 `build` 依次执行退出码均为 0；开发模式与生产构建 Windows 冒烟通过（本包另记录 WP6 性能与泄漏观察）；任务第八节手工界面清单由项目所有者执行并通过（用户确认手动测试通过）。
 
 ## 3. 开发模式界面验收
 

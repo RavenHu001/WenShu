@@ -247,6 +247,12 @@ describe('WP1：literal 匹配语义（第 4.3 / 4.4 节）', () => {
     expect(capped.truncated).toBe(true);
     expect(CURRENT_SEARCH_MAX_MATCHES).toBe(2000);
   });
+
+  it('恰好 2000 项且末尾仍有不匹配文本时不误报截断', () => {
+    const exactWithUnmatchedTail = findLiteralMatches('a'.repeat(2000) + 'b', 'a', true);
+    expect(exactWithUnmatchedTail.matches).toHaveLength(2000);
+    expect(exactWithUnmatchedTail.truncated).toBe(false);
+  });
 });
 
 /* ======================= 与工作区 matcher 实测一致 ======================= */

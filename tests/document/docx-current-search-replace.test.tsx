@@ -337,16 +337,16 @@ describe('WP4：全部替换（第 8.5 节）', () => {
 
   it('2000 项允许；2001+ 截断整体拒绝（0 部分替换）', async () => {
     const { editor, controller, updates } = await hostWithQuery(
-      modelOf([paragraph('a'.repeat(4000))]),
+      modelOf([paragraph('a'.repeat(4000) + 'x')]),
       'aa',
     );
     controller.setReplacement('b');
     controller.replaceAll();
     await flush();
-    expect(editor.view.state.doc.textContent).toBe('b'.repeat(2000));
+    expect(editor.view.state.doc.textContent).toBe('b'.repeat(2000) + 'x');
     expect(updates()).toBe(1);
     expect(editor.commands.undo()).toBe(true);
-    expect(editor.view.state.doc.textContent).toBe('a'.repeat(4000));
+    expect(editor.view.state.doc.textContent).toBe('a'.repeat(4000) + 'x');
 
     // 第 2001 个匹配：全部替换整体拒绝
     const over = await hostWithQuery(modelOf([paragraph('a'.repeat(4000))]), 'a');
@@ -380,6 +380,23 @@ describe('WP4：全部替换（第 8.5 节）', () => {
     expect(editor.view.state.doc.textContent).toBe('aa');
     expect(updates()).toBe(1);
     expect(controller.getSnapshot().matches).toHaveLength(2);
+  });
+
+  it('替换结果仍匹配查询时，当前项前进到替换区间之后的下一处', async () => {
+    const { editor, controller, updates } = await hostWithQuery(
+      modelOf([paragraph('foo foo')]),
+      'foo',
+    );
+    controller.setReplacement('Foo');
+    controller.replaceCurrent();
+    await flush();
+
+    expect(editor.view.state.doc.textContent).toBe('Foo foo');
+    expect(updates()).toBe(1);
+    const snapshot = controller.getSnapshot();
+    expect(snapshot.matches).toHaveLength(2);
+    expect(snapshot.currentIndex).toBe(1);
+    expect(snapshot.matches[snapshot.currentIndex!]!.pmFrom).toBe(5);
   });
 
   it(

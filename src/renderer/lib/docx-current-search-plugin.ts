@@ -61,6 +61,8 @@ export interface CurrentSearchPluginState {
   /** 最近一次替换/操作反馈（成功数量或非破坏性拒绝原因）；查询/大小写变化时清除。 */
   readonly operationMessage: string | null;
   readonly decorations: DecorationSet;
+  /** 替换当前项后，下次重算从替换区间末尾继续；重算完成后立即清空。 */
+  readonly nextRecomputeAnchor: number | null;
   /** 每次状态变更/重算递增：快照通知与异步回调的陈旧性判断基准。 */
   readonly generation: number;
 }
@@ -120,6 +122,7 @@ function emptyPluginState(): CurrentSearchPluginState {
     validationError: null,
     operationMessage: null,
     decorations: DecorationSet.empty,
+    nextRecomputeAnchor: null,
     generation: 0,
   };
 }
@@ -259,11 +262,12 @@ export function createCurrentSearchPlugin(
     let currentIndex: number | null = null;
     if (matches.length > 0) {
       const previousAnchor =
-        prev.currentIndex !== null &&
+        prev.nextRecomputeAnchor ??
+        (prev.currentIndex !== null &&
         prev.currentIndex >= 0 &&
         prev.currentIndex < prev.matches.length
           ? prev.matches[prev.currentIndex]!.pmFrom
-          : null;
+          : null);
       currentIndex =
         previousAnchor === null
           ? pickInitialCurrentIndex(matches, view.state.selection.from)
@@ -277,6 +281,7 @@ export function createCurrentSearchPlugin(
       truncated,
       validationError,
       decorations,
+      nextRecomputeAnchor: null,
       generation: prev.generation + 1,
     };
     view.dispatch(view.state.tr.setMeta(currentSearchPluginKey, next));
@@ -296,6 +301,8 @@ export function createCurrentSearchPlugin(
           return value;
         }
         const decorations = value.decorations.map(tr.mapping, newState.doc);
+        const nextRecomputeAnchor =
+          value.nextRecomputeAnchor === null ? null : tr.mapping.map(value.nextRecomputeAnchor);
         if (!value.open) {
           // 外部 setContent/编辑发生在面板关闭时：保留 query/选项，清空过期匹配与装饰
           // （generation +1：清空也是可观察状态变化，快照订阅必须收到通知）
@@ -305,10 +312,11 @@ export function createCurrentSearchPlugin(
             matches: [],
             currentIndex: null,
             truncated: false,
+            nextRecomputeAnchor,
             generation: value.generation + 1,
           };
         }
-        return { ...value, decorations };
+        return { ...value, decorations, nextRecomputeAnchor };
       },
     },
     props: {
@@ -396,6 +404,7 @@ export class DocxCurrentSearchController implements DocxCurrentSearchControls {
       ...state,
       open: false,
       decorations: DecorationSet.empty,
+      nextRecomputeAnchor: null,
       generation: state.generation + 1,
     }));
   }
@@ -556,8 +565,25 @@ export class DocxCurrentSearchController implements DocxCurrentSearchControls {
       this.setOperationMessage('替换结果超出文档模型预算或结构无效，已取消');
       return;
     }
+    const pluginState = currentSearchPluginKey.getState(view.state);
+    if (pluginState === undefined) {
+      return;
+    }
+    const operationMessage = kind === 'all' ? '已替换 ' + matches.length + ' 处' : '已替换 1 处';
+    const nextRecomputeAnchor = kind === 'current' ? matches[0]!.pmFrom + replacement.length : null;
+    // 成功反馈与后续导航锚点随正文写入同一 transaction；先清空旧范围，微任务随后按实时
+    // 文档重算。替换文本仍包含查询串时，从替换区间末尾继续，避免反复选中刚替换的内容。
+    tr = tr.setMeta(currentSearchPluginKey, {
+      ...pluginState,
+      matches: [],
+      currentIndex: null,
+      truncated: false,
+      decorations: DecorationSet.empty,
+      operationMessage,
+      nextRecomputeAnchor,
+      generation: pluginState.generation + 1,
+    } satisfies CurrentSearchPluginState);
     view.dispatch(tr);
-    this.setOperationMessage(kind === 'all' ? '已替换 ' + matches.length + ' 处' : '已替换 1 处');
   }
 
   private setOperationMessage(operationMessage: string): void {

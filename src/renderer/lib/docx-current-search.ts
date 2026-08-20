@@ -177,14 +177,14 @@ export function findLiteralMatches(
       pos += 1;
       continue;
     }
+    if (matches.length >= maxMatches) {
+      // 只有实际扫描到第 maxMatches + 1 个匹配才算截断；仅有足够剩余长度不代表仍有匹配。
+      truncated = true;
+      break;
+    }
     const from = pos;
     const to = pos + needle.length;
     matches.push({ from, to, matchedText: text.slice(from, to) });
-    if (matches.length >= maxMatches) {
-      // 与 matchText 完全一致的截断判定：已收集的最后一个匹配之后仍有空间可能再匹配
-      truncated = to + needle.length <= text.length;
-      break;
-    }
     pos = to; // 非重叠：下一次匹配从本匹配结束位置开始
   }
   return { matches, truncated };

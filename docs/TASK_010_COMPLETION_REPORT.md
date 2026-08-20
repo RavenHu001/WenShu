@@ -48,17 +48,17 @@ WP6 性能观察、Windows 冒烟与风险收敛 → WP7 整体验收、文档�
 
 ### 新增测试文件
 
-| 文件                                                             | 覆盖                                                                                                                                                                                                                                            |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/docx/docx-current-search-assumptions.test.tsx`（WP0）     | 最小 Tiptap/ProseMirror 技术验证（22 用例）：投影一致性、跨 marks 范围、UTF-16（中文/emoji/组合字符）、Decoration、替换 marks 实测、逆序单事务、模型预算失败、read-only/degraded/saving 语义、性能观察                                          |
-| `tests/docx/docx-current-search.test.ts`（WP1）                  | 纯模块（22 用例）：输入校验、literal/大小写/非重叠/截断、投影与 PM 映射、标题/列表/中文/emoji、循环/最近匹配、2000/2001                                                                                                                         |
-| `tests/document/docx-current-search-plugin.test.tsx`（WP2）      | 插件/controller（15 用例）：状态/快照/装饰范围与 class、不 dirty/不进历史、循环导航与选区焦点（可编辑与 read-only）、编辑后/外部 setContent/快速输入重算调度、多 editor 隔离、销毁清理与 generation                                             |
-| `tests/search/docx-current-search-panel.test.tsx`（WP3）         | 面板组件（8 用例）：受控输入、计数/截断/错误、大小写与按钮、键盘导航、Escape 焦点恢复、read-only/degraded 禁用、WP4 替换区接线与截断禁用                                                                                                        |
-| `tests/search/docx-current-search-app.test.tsx`（WP3/WP4）       | App 集成（12 用例）：Ctrl+F/H、即时搜索与装饰、导航、Escape、TXT/DOCX 混合面板切换、多 DOCX 隔离、read-only/degraded/loading、关闭标签清理、替换当前项/全部替换 → dirty 与一次 undo                                                             |
-| `tests/document/docx-current-search-replace.test.tsx`（WP4）     | 替换（14 用例）：单/跨 marks 起点格式继承、空/短/长/中文/emoji、结构保持、实时复验 stale 拒绝、权限命令内拒绝、输入校验、逆序单事务无漂移、一次 undo/redo、0 匹配无操作、2000/2001、快速重复点击、结果仍含查询安全重算、模型预算失败 0 dispatch |
-| `tests/search/docx-current-search-lifecycle.test.tsx`（WP5）     | 兼容性与生命周期（15 用例）：read-only/degraded 确认与 revision 失效、saving 期间替换、save-error/conflict/read-error、关闭重开、工作区切换、两 DOCX 旧 controls 不污染、重命名/移动/另存为会话保持、工作区定位/mutationEpoch 互不污染          |
-| `tests/docx/docx-current-search-wp6-observation.test.tsx`（WP6） | 性能与泄漏观察（7 用例）：典型 100 段、20,000 textblock（0/200/20000 匹配）、近序列化上限、全部替换 2000 项耗时、快速输入合并、20 次开关面板无重复订阅、20 次标签切换无控制台错误/单一输入/堆观察                                               |
-| `docs/TASK_010_WP0_REPORT.md`（WP0）                             | WP0 基线、技术验证、冻结决策与性能观察                                                                                                                                                                                                          |
+| 文件                                                             | 覆盖                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/docx/docx-current-search-assumptions.test.tsx`（WP0）     | 最小 Tiptap/ProseMirror 技术验证（22 用例）：投影一致性、跨 marks 范围、UTF-16（中文/emoji/组合字符）、Decoration、替换 marks 实测、逆序单事务、模型预算失败、read-only/degraded/saving 语义、性能观察                                                |
+| `tests/docx/docx-current-search.test.ts`（WP1）                  | 纯模块（23 用例）：输入校验、literal/大小写/非重叠/截断、投影与 PM 映射、标题/列表/中文/emoji、循环/最近匹配、2000/2001（含恰好 2000 项后接非匹配尾部）                                                                                               |
+| `tests/document/docx-current-search-plugin.test.tsx`（WP2）      | 插件/controller（15 用例）：状态/快照/装饰范围与 class、不 dirty/不进历史、循环导航与选区焦点（可编辑与 read-only）、编辑后/外部 setContent/快速输入重算调度、多 editor 隔离、销毁清理与 generation                                                   |
+| `tests/search/docx-current-search-panel.test.tsx`（WP3）         | 面板组件（8 用例）：受控输入、计数/截断/错误、大小写与按钮、键盘导航、Escape 焦点恢复、read-only/degraded 禁用、WP4 替换区接线与截断禁用                                                                                                              |
+| `tests/search/docx-current-search-app.test.tsx`（WP3/WP4）       | App 集成（12 用例）：Ctrl+F/H、即时搜索与装饰、导航、Escape、TXT/DOCX 混合面板切换、多 DOCX 隔离、read-only/degraded/loading、关闭标签清理、替换当前项/全部替换 → dirty 与一次 undo                                                                   |
+| `tests/document/docx-current-search-replace.test.tsx`（WP4）     | 替换（15 用例）：单/跨 marks 起点格式继承、空/短/长/中文/emoji、结构保持、实时复验 stale 拒绝、权限命令内拒绝、输入校验、逆序单事务无漂移、一次 undo/redo、0 匹配无操作、2000/2001、快速重复点击、结果仍含查询时前进到下一项、模型预算失败 0 dispatch |
+| `tests/search/docx-current-search-lifecycle.test.tsx`（WP5）     | 兼容性与生命周期（15 用例）：read-only/degraded 确认与 revision 失效、saving 期间替换、save-error/conflict/read-error、关闭重开、工作区切换、两 DOCX 旧 controls 不污染、重命名/移动/另存为会话保持、工作区定位/mutationEpoch 互不污染                |
+| `tests/docx/docx-current-search-wp6-observation.test.tsx`（WP6） | 性能与泄漏观察（7 用例）：典型 100 段、20,000 textblock（0/200/20000 匹配）、近序列化上限、全部替换 2000 项耗时、快速输入合并、20 次开关面板无重复订阅、20 次标签切换无控制台错误/单一输入/堆观察                                                     |
+| `docs/TASK_010_WP0_REPORT.md`（WP0）                             | WP0 基线、技术验证、冻结决策与性能观察                                                                                                                                                                                                                |
 
 ## 3. 固定语义落地（任务第四节）
 
@@ -109,7 +109,7 @@ WP6 性能观察、Windows 冒烟与风险收敛 → WP7 整体验收、文档�
 | `typecheck`（5 tsconfig）   | **通过**                                                                                        |
 | `lint`（--max-warnings=0）  | **通过**（0 warning）                                                                           |
 | `format:check`              | **通过**                                                                                        |
-| `test`（62 文件 1141 用例） | **通过**：1131 passed / 10 skipped                                                              |
+| `test`（62 文件 1143 用例） | **通过**：1133 passed / 10 skipped                                                              |
 | `check`                     | **通过**（退出码 0，约 30 s，Vitest 约 50-63 s）                                                |
 | `build`                     | **通过**（退出码 0；main 154.91 kB / preload 4.10 kB / renderer JS 2,205.76 kB / CSS 27.84 kB） |
 
@@ -149,7 +149,7 @@ WP6 性能观察、Windows 冒烟与风险收敛 → WP7 整体验收、文档�
 - **11.2 替换（10 项）**：实时复验（replace）；空/短/长/中文/emoji（replace）；起点 marks（replace/assumptions）；结构保持（replace）；逆序单 transaction（replace）；一次 undo/redo（replace/assumptions）；0 匹配/2001+ 整体拒绝（replace）；模型/预算失败 0 dispatch（replace/assumptions）；dirty/editRevision 且不自动保存（app/lifecycle）；保存走既有 revision/备份/安全替换（lifecycle/docx save 回归）。
 - **11.3 兼容性与生命周期（9 项）**：read-only；degraded 确认与 revision 失效；saving 期间替换；save-error/conflict/read-error；多标签隔离；关闭/重开/工作区切换清理；重命名/移动/save-as stable tabId；定位/mutationEpoch 互不污染；无迟到 controls/重复订阅/定时器/editor 泄漏（WP5 lifecycle + WP2 销毁 + WP6 泄漏观察）。
 - **11.4 UI、可访问性与安全边界（8 项）**：TXT CodeMirror 回归（find-replace 9 用例 + 混合切换测试）；面板控件/计数/错误/截断/禁用原因（panel）；快捷键/焦点/名称（panel/app）；当前匹配不只依赖颜色 + 最小窗口（双 class + WP6 冒烟）；公开 API 审查；无日志正文（grep 审查）；无新增 IPC/preload（契约测试 + handle 计数）；无新依赖（package-lock 审查）。
-- **11.5 质量、性能与文档（9 项）**：测试完整（62 文件 1131 通过）；check 通过且跳过项有合理条件；build 通过；开发/生产冒烟通过；性能观察（WP6）；无控制台异常/泄漏/残留（WP6 + 残留审查）；README/PROJECT_BASELINE/TESTING/项目结构同步（本包更新）；WP0 报告 + 本完成报告完整；Task 1-9 无回归。
+- **11.5 质量、性能与文档（9 项）**：测试完整（62 文件 1133 通过）；check 通过且跳过项有合理条件；build 通过；开发/生产冒烟通过；性能观察（WP6）；无控制台异常/泄漏/残留（WP6 + 残留审查）；README/PROJECT_BASELINE/TESTING/项目结构同步（本包更新）；WP0 报告 + 本完成报告完整；Task 1-9 无回归。
 
 ## 11. 已知限制
 
@@ -163,7 +163,7 @@ WP6 性能观察、Windows 冒烟与风险收敛 → WP7 整体验收、文档�
 ## 12. 是否满足 Task 10 全部验收标准
 
 - 任务文档第十一节 11.1-11.5 全部验收项（共 45 项）已逐项核对并勾选为 `[x]`：每项均有对应自动化测试、WP0 技术验证、代码审查、性能记录或手工冒烟证据，无凭推测勾选项；
-- `check`（62 文件 / 1131 通过 / 10 条件跳过）与 `build` 依次通过（退出码 0）；开发与生产 Windows 冒烟通过；无未解决的数据丢失、部分替换、权限扩大或明显卡顿问题；
+- `check`（62 文件 / 1133 通过 / 10 条件跳过）与 `build` 依次通过（退出码 0）；开发与生产 Windows 冒烟通过；无未解决的数据丢失、部分替换、权限扩大或明显卡顿问题；
 - 本任务状态已改为「已完成」，README / PROJECT_BASELINE / TESTING / 项目结构同步更新，WP0 报告与完成报告内容完整。
 
 **结论：Task 10 全部验收标准满足。**
