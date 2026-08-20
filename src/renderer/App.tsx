@@ -689,7 +689,7 @@ export const App = (): React.JSX.Element => {
     activeDocumentTab === null ? null : isDocxTab(activeDocumentTab) ? 'docx' : 'txt';
   const currentDocumentAvailable =
     currentDocumentKind === 'txt' && activeDocumentTab?.document != null;
-  // DOCX 替换可用性与原因（WP3 恒不可用：不形成可执行假功能；权限原因明确展示）
+  // DOCX 替换可用性与原因（WP4：可编辑且确认后可用；权限原因明确展示，命令内另有防御检查）
   let docxReplaceAvailability: { readonly available: boolean; readonly reason: string } | null =
     null;
   if (activeDocumentTab !== null && isDocxTab(activeDocumentTab)) {
@@ -707,7 +707,7 @@ export const App = (): React.JSX.Element => {
         reason: '文档包含不受支持内容，需先确认兼容性',
       };
     } else {
-      docxReplaceAvailability = { available: false, reason: '替换功能将在后续版本提供' };
+      docxReplaceAvailability = { available: true, reason: '' };
     }
   }
 

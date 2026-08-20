@@ -18,10 +18,12 @@
 
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
-import type { Node as PmNode } from '@tiptap/pm/model';
+import type { Mark as PmMark, Node as PmNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/core';
+import { tiptapJsonToDocxModel } from '../../shared/docx-convert';
 import {
   CURRENT_SEARCH_INPUT_ERROR_MESSAGES,
+  CURRENT_SEARCH_MAX_MATCHES,
   nextCurrentIndex,
   pickInitialCurrentIndex,
   pickRecentCurrentIndex,
@@ -29,7 +31,9 @@ import {
   projectPmTextblocks,
   searchCurrentDocProjection,
   validateCurrentSearchQuery,
+  validateCurrentSearchReplacement,
   type PmMatch,
+  type PmMatchOutcome,
   type PmTextBlock,
 } from './docx-current-search';
 
@@ -54,6 +58,8 @@ export interface CurrentSearchPluginState {
   readonly currentIndex: number | null;
   readonly truncated: boolean;
   readonly validationError: string | null;
+  /** 最近一次替换/操作反馈（成功数量或非破坏性拒绝原因）；查询/大小写变化时清除。 */
+  readonly operationMessage: string | null;
   readonly decorations: DecorationSet;
   /** 每次状态变更/重算递增：快照通知与异步回调的陈旧性判断基准。 */
   readonly generation: number;
@@ -68,9 +74,14 @@ export interface DocxCurrentSearchControls {
   open(mode: 'find' | 'replace'): void;
   close(): void;
   setQuery(query: string): void;
+  setReplacement(replacement: string): void;
   setCaseSensitive(value: boolean): void;
   selectNext(): void;
   selectPrevious(): void;
+  /** 替换当前项：执行瞬间重新投影/复验；只 dispatch 一个文档事务。 */
+  replaceCurrent(): void;
+  /** 全部替换：≤2000 项逆序单事务；截断/模型失败整体拒绝。 */
+  replaceAll(): void;
   /** 关闭面板后把焦点还给编辑器（read-only 为安全 no-op）。 */
   focusEditor(): void;
 }
@@ -85,6 +96,7 @@ export interface DocxCurrentSearchSnapshot {
   readonly currentIndex: number | null;
   readonly truncated: boolean;
   readonly validationError: string | null;
+  readonly operationMessage: string | null;
   readonly generation: number;
 }
 
@@ -106,6 +118,7 @@ function emptyPluginState(): CurrentSearchPluginState {
     currentIndex: null,
     truncated: false,
     validationError: null,
+    operationMessage: null,
     decorations: DecorationSet.empty,
     generation: 0,
   };
@@ -121,6 +134,7 @@ function toSnapshot(state: CurrentSearchPluginState): DocxCurrentSearchSnapshot 
     currentIndex: state.currentIndex,
     truncated: state.truncated,
     validationError: state.validationError,
+    operationMessage: state.operationMessage,
     generation: state.generation,
   };
 }
@@ -134,6 +148,7 @@ const EMPTY_SNAPSHOT: DocxCurrentSearchSnapshot = {
   currentIndex: null,
   truncated: false,
   validationError: null,
+  operationMessage: null,
   generation: 0,
 };
 
@@ -147,6 +162,29 @@ export function collectPmTextblocks(doc: PmNode): readonly PmTextBlock[] {
     return true;
   });
   return blocks;
+}
+
+/**
+ * 起点字符 marks（WP0 F1 冻结）：匹配起点所在 text node 的 marks。
+ * 「doc.resolve(from).marks()」在跨 marks 边界会返回边界前（上一 text node）的 marks，
+ * 替换必须继承「起点字符」的格式，因此按包含 from 的 text 节点查找。
+ */
+export function startCharMarksAt(doc: PmNode, from: number): readonly PmMark[] {
+  const $from = doc.resolve(from);
+  let found: readonly PmMark[] = [];
+  $from.parent.forEach((child, offset) => {
+    const start = $from.start() + offset;
+    if (child.isText && start <= from && from < start + child.nodeSize) {
+      found = child.marks;
+    }
+  });
+  if (found.length === 0) {
+    const node = doc.nodeAt(from);
+    if (node !== null && node.isText) {
+      found = node.marks;
+    }
+  }
+  return found;
 }
 
 /** 由匹配列表构建普通/当前匹配 DecorationSet（当前项同时带两个 class）。 */
@@ -317,6 +355,8 @@ export class DocxCurrentSearchController implements DocxCurrentSearchControls {
   private readonly listeners = new Set<() => void>();
   private lastSnapshot: DocxCurrentSearchSnapshot | null = null;
   private disposed = false;
+  /** 替换权限（宿主按标签状态派生：read-only/degraded 未确认关闭）；命令内防御性检查。 */
+  private replaceEnabled = false;
 
   constructor(
     readonly tabId: string,
@@ -361,11 +401,30 @@ export class DocxCurrentSearchController implements DocxCurrentSearchControls {
   }
 
   setQuery(query: string): void {
-    this.update((state) => ({ ...state, query, generation: state.generation + 1 }));
+    this.update((state) => ({
+      ...state,
+      query,
+      operationMessage: null,
+      generation: state.generation + 1,
+    }));
+  }
+
+  setReplacement(replacement: string): void {
+    this.update((state) => ({ ...state, replacement, generation: state.generation + 1 }));
   }
 
   setCaseSensitive(value: boolean): void {
-    this.update((state) => ({ ...state, caseSensitive: value, generation: state.generation + 1 }));
+    this.update((state) => ({
+      ...state,
+      caseSensitive: value,
+      operationMessage: null,
+      generation: state.generation + 1,
+    }));
+  }
+
+  /** 替换权限由宿主按标签状态派生（read-only/degraded 未确认 → false）。 */
+  setReplaceEnabled(enabled: boolean): void {
+    this.replaceEnabled = enabled;
   }
 
   selectNext(): void {
@@ -374,6 +433,50 @@ export class DocxCurrentSearchController implements DocxCurrentSearchControls {
 
   selectPrevious(): void {
     this.navigate(-1);
+  }
+
+  replaceCurrent(): void {
+    if (this.disposed) {
+      return;
+    }
+    const view = this.editor.view;
+    const state = currentSearchPluginKey.getState(view.state);
+    if (state === undefined || !state.open) {
+      return;
+    }
+    if (state.currentIndex === null || state.matches.length === 0) {
+      this.setOperationMessage('没有可替换的匹配');
+      return;
+    }
+    const target = state.matches[state.currentIndex]!;
+    // 执行瞬间重新投影并复验当前范围（不信任快照中的旧范围，第 4.6 节）
+    const fresh = this.scanCurrentMatches(state.query, state.caseSensitive).matches.find(
+      (match) => match.pmFrom === target.pmFrom && match.pmTo === target.pmTo,
+    );
+    if (fresh === undefined) {
+      this.setOperationMessage('匹配已过期，请重新搜索');
+      return;
+    }
+    this.applyReplace([fresh], state.replacement, 'current');
+  }
+
+  replaceAll(): void {
+    if (this.disposed) {
+      return;
+    }
+    const state = currentSearchPluginKey.getState(this.editor.view.state);
+    if (state === undefined || !state.open) {
+      return;
+    }
+    const outcome = this.scanCurrentMatches(state.query, state.caseSensitive);
+    if (outcome.matches.length === 0) {
+      return; // 0 匹配无操作：不 dispatch、不 dirty、不产生成功假提示
+    }
+    if (outcome.truncated || outcome.matches.length > CURRENT_SEARCH_MAX_MATCHES) {
+      this.setOperationMessage('匹配超过 2000 处，全部替换已被禁用');
+      return;
+    }
+    this.applyReplace(outcome.matches, state.replacement, 'all');
   }
 
   /** 关闭面板后把焦点还给编辑器（read-only 为安全 no-op，WP0 F7）。 */
@@ -402,11 +505,63 @@ export class DocxCurrentSearchController implements DocxCurrentSearchControls {
       open: (mode) => this.open(mode),
       close: () => this.close(),
       setQuery: (query) => this.setQuery(query),
+      setReplacement: (replacement) => this.setReplacement(replacement),
       setCaseSensitive: (value) => this.setCaseSensitive(value),
       selectNext: () => this.selectNext(),
       selectPrevious: () => this.selectPrevious(),
+      replaceCurrent: () => this.replaceCurrent(),
+      replaceAll: () => this.replaceAll(),
       focusEditor: () => this.focusEditor(),
     };
+  }
+
+  private scanCurrentMatches(query: string, caseSensitive: boolean): PmMatchOutcome {
+    const doc = this.editor.view.state.doc;
+    const projection = projectPmTextblocks(collectPmTextblocks(doc));
+    return searchCurrentDocProjection(projection, query, caseSensitive);
+  }
+
+  private applyReplace(
+    matches: readonly PmMatch[],
+    replacement: string,
+    kind: 'current' | 'all',
+  ): void {
+    // 防御性权限检查必须在 command 内存在，不能只依赖按钮 disabled（第 4.8 节）
+    if (!this.replaceEnabled || !this.editor.isEditable) {
+      this.setOperationMessage('当前文档不可替换');
+      return;
+    }
+    const validation = validateCurrentSearchReplacement(replacement);
+    if (!validation.ok) {
+      this.setOperationMessage(CURRENT_SEARCH_INPUT_ERROR_MESSAGES[validation.error]);
+      return;
+    }
+    const view = this.editor.view;
+    const schema = this.editor.schema;
+    let tr = view.state.tr;
+    // 从末到前写入同一 transaction：前方位置不漂移（第 4.7 节）
+    for (let index = matches.length - 1; index >= 0; index -= 1) {
+      const match = matches[index]!;
+      // 非空替换继承匹配起点字符 marks；空替换 = 删除（WP0 F1）
+      const startMarks = startCharMarksAt(view.state.doc, match.pmFrom);
+      if (replacement.length === 0) {
+        tr = tr.delete(match.pmFrom, match.pmTo);
+      } else {
+        tr = tr.replaceWith(match.pmFrom, match.pmTo, schema.text(replacement, startMarks));
+      }
+    }
+    // dispatch 前模型预验证（第 4.6 / 4.7 节）：结构/序列化预算任一失败 → 0 dispatch、0 dirty
+    const converted = tiptapJsonToDocxModel(tr.doc.toJSON());
+    if (converted.status !== 'ok') {
+      this.setOperationMessage('替换结果超出文档模型预算或结构无效，已取消');
+      return;
+    }
+    view.dispatch(tr);
+    this.setOperationMessage(kind === 'all' ? '已替换 ' + matches.length + ' 处' : '已替换 1 处');
+  }
+
+  private setOperationMessage(operationMessage: string): void {
+    this.update((state) => ({ ...state, operationMessage, generation: state.generation + 1 }));
   }
 
   private readState(): CurrentSearchPluginState | undefined {
@@ -486,6 +641,7 @@ function snapshotsEqual(a: DocxCurrentSearchSnapshot, b: DocxCurrentSearchSnapsh
     a.currentIndex === b.currentIndex &&
     a.truncated === b.truncated &&
     a.validationError === b.validationError &&
+    a.operationMessage === b.operationMessage &&
     a.matches === b.matches
   );
 }

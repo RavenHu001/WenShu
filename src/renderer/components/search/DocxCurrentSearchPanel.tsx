@@ -5,7 +5,7 @@
  *   Editor/EditorView/插件状态内部；
  * - 查找输入受控自快照（即时搜索，不设草稿/防抖）；计数、截断、输入错误、
  *   read-only/degraded 替换不可用原因均由快照/权限 props 派生；
- * - WP4 前替换字段与按钮只展示为禁用状态（不形成可执行假功能）；
+ * - WP4：替换输入/替换当前项/全部替换接入 WP4 controller；不可用时保持禁用并说明原因；
  * - Enter/Shift+Enter、F3/Shift+F3 导航，Escape 关闭并恢复编辑器焦点；
  * - 最小样式与可访问性状态（aria-label / role=status / 非颜色依赖的当前匹配）。
  */
@@ -145,21 +145,48 @@ function DocxCurrentSearchPanelBody({
           ref={replaceInputRef}
           className="docx-search-input"
           type="text"
-          disabled
-          placeholder="替换为（即将可用）"
+          disabled={!replaceAvailability.available}
+          value={snapshot.replacement}
+          onChange={(event) => controls.setReplacement(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && replaceAvailability.available) {
+              event.preventDefault();
+              controls.replaceCurrent();
+            }
+          }}
+          placeholder={replaceAvailability.available ? '替换为…' : '替换为（不可用）'}
           aria-label="替换为"
         />
         <div className="docx-replace-actions">
-          <button type="button" disabled aria-label="替换当前项（即将可用）">
+          <button
+            type="button"
+            disabled={!replaceAvailability.available || snapshot.matches.length === 0}
+            onClick={() => controls.replaceCurrent()}
+            aria-label="替换当前项"
+          >
             替换
           </button>
-          <button type="button" disabled aria-label="全部替换（即将可用）">
+          <button
+            type="button"
+            disabled={
+              !replaceAvailability.available || snapshot.matches.length === 0 || snapshot.truncated
+            }
+            onClick={() => controls.replaceAll()}
+            aria-label="全部替换"
+          >
             全部替换
           </button>
         </div>
-        <div className="docx-replace-reason" role="note">
-          {replaceAvailability.reason}
-        </div>
+        {snapshot.operationMessage !== null && (
+          <div className="docx-replace-feedback" role="status">
+            {snapshot.operationMessage}
+          </div>
+        )}
+        {!replaceAvailability.available && (
+          <div className="docx-replace-reason" role="note">
+            {replaceAvailability.reason}
+          </div>
+        )}
       </div>
     </div>
   );

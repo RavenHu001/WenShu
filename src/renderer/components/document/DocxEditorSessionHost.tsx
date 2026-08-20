@@ -194,6 +194,16 @@ export function DocxEditorSessionHost({
     editorRef.current?.setEditable(editable);
   }, [editable]);
 
+  // 替换权限派生（WP4）：可编辑 +（非 degraded 或已确认绑定当前 revision）
+  const canReplace =
+    editable &&
+    (tab.document === null ||
+      tab.document.compatibility.level !== 'degraded' ||
+      tab.compatibilityConfirmationRevision === tab.document.revision);
+  useEffect(() => {
+    controllerRef.current?.setReplaceEnabled(canReplace);
+  }, [canReplace]);
+
   // 自编辑模型由同一对象回写，直接跳过；保存回写等价模型也不触碰编辑器。
   // 重新读取的模型进行完整语义比较，确保纯格式变化同样能替换编辑器内容。
   useEffect(() => {

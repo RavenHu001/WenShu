@@ -47,6 +47,7 @@ function emptySnapshot(
     currentIndex: null,
     truncated: false,
     validationError: null,
+    operationMessage: null,
     generation: 0,
     ...overrides,
   };
@@ -56,9 +57,12 @@ interface FakeCalls {
   readonly open: ReturnType<typeof vi.fn>;
   readonly close: ReturnType<typeof vi.fn>;
   readonly setQuery: ReturnType<typeof vi.fn>;
+  readonly setReplacement: ReturnType<typeof vi.fn>;
   readonly setCaseSensitive: ReturnType<typeof vi.fn>;
   readonly selectNext: ReturnType<typeof vi.fn>;
   readonly selectPrevious: ReturnType<typeof vi.fn>;
+  readonly replaceCurrent: ReturnType<typeof vi.fn>;
+  readonly replaceAll: ReturnType<typeof vi.fn>;
   readonly focusEditor: ReturnType<typeof vi.fn>;
 }
 
@@ -76,9 +80,12 @@ function fakeControls(initial: DocxCurrentSearchSnapshot): FakeHarness {
     open: vi.fn(),
     close: vi.fn(),
     setQuery: vi.fn(),
+    setReplacement: vi.fn(),
     setCaseSensitive: vi.fn(),
     selectNext: vi.fn(),
     selectPrevious: vi.fn(),
+    replaceCurrent: vi.fn(),
+    replaceAll: vi.fn(),
     focusEditor: vi.fn(),
   };
   const emit = (): void => {
@@ -110,6 +117,11 @@ function fakeControls(initial: DocxCurrentSearchSnapshot): FakeHarness {
       snapshot = { ...snapshot, query };
       emit();
     },
+    setReplacement: (replacement) => {
+      calls.setReplacement(replacement);
+      snapshot = { ...snapshot, replacement };
+      emit();
+    },
     setCaseSensitive: (value) => {
       calls.setCaseSensitive(value);
       snapshot = { ...snapshot, caseSensitive: value };
@@ -120,6 +132,12 @@ function fakeControls(initial: DocxCurrentSearchSnapshot): FakeHarness {
     },
     selectPrevious: () => {
       calls.selectPrevious();
+    },
+    replaceCurrent: () => {
+      calls.replaceCurrent();
+    },
+    replaceAll: () => {
+      calls.replaceAll();
     },
     focusEditor: () => {
       calls.focusEditor();
@@ -142,13 +160,17 @@ function match(from: number, to: number, pmFrom: number, pmTo: number) {
 
 function renderPanel(
   harness: FakeHarness,
-  options: { replaceReason?: string; focusMode?: 'find' | 'replace' | null } = {},
+  options: {
+    replaceReason?: string;
+    focusMode?: 'find' | 'replace' | null;
+    available?: boolean;
+  } = {},
 ): void {
   render(
     <DocxCurrentSearchPanel
       controls={harness.controls}
       replaceAvailability={{
-        available: false,
+        available: options.available ?? false,
         reason: options.replaceReason ?? '替换功能将在后续版本提供',
       }}
       focusMode={options.focusMode ?? null}
@@ -251,5 +273,46 @@ describe('WP3：DOCX 当前查找面板组件（第 8.7 节）', () => {
       expect(screen.getByRole('button', { name: /全部替换/ })).toHaveProperty('disabled', true);
       expect(screen.getByText(reason)).toBeDefined();
     }
+  });
+
+  it('WP4 可用替换区：输入/按钮启用并接线，反馈与 Enter 替换', () => {
+    const harness = fakeControls(
+      emptySnapshot({
+        matches: [match(0, 3, 1, 4), match(4, 7, 5, 8)],
+        currentIndex: 0,
+        operationMessage: '已替换 1 处',
+      }),
+    );
+    renderPanel(harness, { available: true, replaceReason: '' });
+    const replaceInput = screen.getByLabelText('替换为') as HTMLInputElement;
+    expect(replaceInput).not.toHaveProperty('disabled', true);
+    // 输入接线
+    fireEvent.change(replaceInput, { target: { value: 'XY' } });
+    expect(harness.calls.setReplacement).toHaveBeenCalledWith('XY');
+    expect(replaceInput.value).toBe('XY');
+    // 按钮接线：替换当前项 / 全部替换
+    fireEvent.click(screen.getByRole('button', { name: /替换当前项/ }));
+    fireEvent.click(screen.getByRole('button', { name: /全部替换/ }));
+    expect(harness.calls.replaceCurrent).toHaveBeenCalledTimes(1);
+    expect(harness.calls.replaceAll).toHaveBeenCalledTimes(1);
+    // 替换输入内 Enter → replaceCurrent
+    fireEvent.keyDown(replaceInput, { key: 'Enter' });
+    expect(harness.calls.replaceCurrent).toHaveBeenCalledTimes(2);
+    // 操作反馈展示
+    expect(screen.getByText('已替换 1 处')).toBeDefined();
+  });
+
+  it('WP4 全部替换在截断时禁用（2001+ 不可执行）', () => {
+    const harness = fakeControls(
+      emptySnapshot({
+        matches: [match(0, 3, 1, 4), match(4, 7, 5, 8)],
+        currentIndex: 0,
+        truncated: true,
+      }),
+    );
+    renderPanel(harness, { available: true, replaceReason: '' });
+    expect(screen.getByRole('button', { name: '上一个匹配' })).not.toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /全部替换/ })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /替换当前项/ })).not.toHaveProperty('disabled', true);
   });
 });

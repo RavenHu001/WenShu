@@ -254,13 +254,16 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
     expect(docxEditor()!.view.state.doc.textContent).toBe('abc abc');
   });
 
-  it('Ctrl+H 打开面板；WP3 替换区禁用并显示原因（支持文档）', async () => {
+  it('Ctrl+H 打开面板；支持文档替换可用（WP4 启用）', async () => {
     await openWorkspace([entry('b.docx')]);
     await openFileFromTree('b.docx');
     ctrlH(docxEditor()!.view.dom);
     expect(screen.getByLabelText('查找内容')).toBeDefined();
-    expect(screen.getByLabelText('替换为')).toHaveProperty('disabled', true);
-    expect(screen.getByText('替换功能将在后续版本提供')).toBeDefined();
+    // WP4：可编辑支持文档替换输入可用，不再显示"即将可用"原因
+    expect(screen.getByLabelText('替换为')).not.toHaveProperty('disabled', true);
+    expect(screen.queryByText('替换功能将在后续版本提供')).toBeNull();
+    // 尚无匹配：替换按钮因无匹配而禁用（不是权限禁用）
+    expect(screen.getByRole('button', { name: /全部替换/ })).toHaveProperty('disabled', true);
   });
 
   it('F3/Shift+F3（编辑器）与 Enter/Shift+Enter（面板）循环导航并选中匹配', async () => {
@@ -462,5 +465,49 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
     await act(async () => {});
     expect(screen.queryByLabelText('查找内容')).toBeNull();
     expect(screen.getByText('打开一个 TXT 文件后可查找或替换。')).toBeDefined();
+  });
+
+  it('WP4：替换当前项 → 内容变化并进入 dirty，一次 undo 恢复', async () => {
+    await openWorkspace([entry('b.docx')]);
+    await openFileFromTree('b.docx');
+    await openDocxPanelAndQuery('abc');
+    const replaceInput = screen.getByLabelText('替换为') as HTMLInputElement;
+    expect(replaceInput).not.toHaveProperty('disabled', true);
+    await act(async () => {
+      fireEvent.change(replaceInput, { target: { value: 'xyz' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /替换当前项/ }));
+      await flush();
+    });
+    const editor = docxEditor()!;
+    expect(editor.view.state.doc.textContent).toBe('xyz abc');
+    expect(document.querySelectorAll('.tab .tab-dirty').length).toBe(1);
+    expect(screen.getByText('已替换 1 处')).toBeDefined();
+    expect(editor.commands.undo()).toBe(true);
+    expect(editor.view.state.doc.textContent).toBe('abc abc');
+  });
+
+  it('WP4：全部替换 → 单次应用、dirty、操作数量反馈与一次 undo', async () => {
+    await openWorkspace([entry('b.docx')]);
+    await openFileFromTree('b.docx');
+    await openDocxPanelAndQuery('abc');
+    const replaceInput = screen.getByLabelText('替换为') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(replaceInput, { target: { value: 'xyz' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /全部替换/ }));
+      await flush();
+    });
+    const editor = docxEditor()!;
+    expect(editor.view.state.doc.textContent).toBe('xyz xyz');
+    expect(document.querySelectorAll('.tab .tab-dirty').length).toBe(1);
+    expect(screen.getByText('已替换 2 处')).toBeDefined();
+    // 全部替换是一次可撤销编辑事务
+    expect(editor.commands.undo()).toBe(true);
+    expect(editor.view.state.doc.textContent).toBe('abc abc');
+    expect(editor.commands.redo()).toBe(true);
+    expect(editor.view.state.doc.textContent).toBe('xyz xyz');
   });
 });
