@@ -160,7 +160,7 @@
 - [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)）。
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
-- [ ] [未来 UI 优化：设计体系、信息架构与视觉质量门禁](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)（已纳入 Roadmap，尚未排期）。
+- [ ] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（方案已整理，待排期实施；包含右键菜单、文件树内部拖拽与视觉质量门禁）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
