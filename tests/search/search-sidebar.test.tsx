@@ -187,25 +187,25 @@ async function openWorkspace(): Promise<void> {
 /** 打开搜索侧栏并提交查询。 */
 async function submitSearch(query: string): Promise<void> {
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: '搜' }));
+  await user.click(screen.getByRole('button', { name: '搜索面板' }));
   await user.type(screen.getByLabelText('搜索内容'), query);
   await user.keyboard('{Enter}');
 }
 
 describe('活动栏（第 4.10 节）', () => {
-  it('文件/搜索为真实按钮并带活动状态语义，设置保持不可用占位', () => {
+  it('文件/搜索使用明确名称与 SVG，并且不展示伪可用设置入口', () => {
     makeDesktopMock();
     render(<App />);
 
-    const filesBtn = screen.getByRole('button', { name: '文' });
-    const searchBtn = screen.getByRole('button', { name: '搜' });
-    const settingsBtn = screen.getByRole('button', { name: '设' });
+    const filesBtn = screen.getByRole('button', { name: '文件面板' });
+    const searchBtn = screen.getByRole('button', { name: '搜索面板' });
 
     expect(filesBtn.tagName).toBe('BUTTON');
     expect(filesBtn.getAttribute('aria-pressed')).toBe('true');
     expect(searchBtn.getAttribute('aria-pressed')).toBe('false');
-    expect(settingsBtn.hasAttribute('disabled')).toBe(true);
-    expect(settingsBtn.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('button', { name: /设置/ })).toBeNull();
+    expect(filesBtn.querySelector('svg')).not.toBeNull();
+    expect(searchBtn.querySelector('svg')).not.toBeNull();
 
     act(() => {
       searchBtn.click();
@@ -232,6 +232,18 @@ describe('活动栏（第 4.10 节）', () => {
     const input = screen.getByLabelText('搜索内容') as HTMLInputElement;
     expect(input).toBeDefined();
     expect(document.activeElement).toBe(input);
+  });
+
+  it('侧栏可折叠，并可通过活动栏恢复且不伪造设置入口', async () => {
+    makeDesktopMock();
+    render(<App />);
+    const sidebar = document.querySelector<HTMLElement>('aside.sidebar');
+    expect(sidebar?.hidden).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: '折叠侧栏' }));
+    expect(sidebar?.hidden).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
+    expect(sidebar?.hidden).toBe(false);
+    expect(screen.queryByRole('button', { name: /设置/ })).toBeNull();
   });
 });
 
@@ -261,7 +273,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
     await openWorkspace();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: '搜' }));
+    await user.click(screen.getByRole('button', { name: '搜索面板' }));
     const input = screen.getByLabelText('搜索内容') as HTMLInputElement;
     await user.type(input, 'hello');
     await user.keyboard('{Enter}');
@@ -324,7 +336,9 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
     });
 
     expect(screen.getByText('a.txt')).toBeDefined();
-    expect(screen.getByText('sub/b.txt')).toBeDefined();
+    expect(screen.getByTitle('sub/b.txt')).toBeDefined();
+    expect(screen.getByText('b.txt')).toBeDefined();
+    expect(screen.getByText('sub')).toBeDefined();
     expect(screen.getByText('1:7')).toBeDefined();
     expect(screen.getByText('2:1')).toBeDefined();
     // 安全高亮：mark 元素由文本节点渲染，无 innerHTML 注入
@@ -448,7 +462,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
     await openWorkspace();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: '搜' }));
+    await user.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText(/结果来自磁盘上已保存的文件，不包含未保存的编辑/)).toBeDefined();
     expect(screen.getByText(/DOCX 仅覆盖已进入结构化模型的正文/)).toBeDefined();
   });
@@ -471,7 +485,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
 
     // 打开搜索侧栏并切到"查找与替换"：DOCX 面板直接可用
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -492,7 +506,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
     await openWorkspace();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: '搜' }));
+    await user.click(screen.getByRole('button', { name: '搜索面板' }));
     await user.type(screen.getByLabelText('搜索内容'), 'hello');
     await user.keyboard('{Enter}');
     expect(screen.getByText('正在搜索…')).toBeDefined();
@@ -541,7 +555,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
     await openWorkspace();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: '搜' }));
+    await user.click(screen.getByRole('button', { name: '搜索面板' }));
     const input = screen.getByLabelText('搜索内容') as HTMLInputElement;
     await user.type(input, 'alpha');
     await user.keyboard('{Enter}');
@@ -595,9 +609,9 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
     expect(screen.getByText('deep.txt')).toBeDefined();
 
     // 切到搜索再切回文件：展开状态保留
-    await user.click(screen.getByRole('button', { name: '搜' }));
+    await user.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByLabelText('搜索内容')).toBeDefined();
-    await user.click(screen.getByRole('button', { name: '文' }));
+    await user.click(screen.getByRole('button', { name: '文件面板' }));
     expect(screen.getByText('deep.txt')).toBeDefined();
     expect(screen.getByText('test-root')).toBeDefined();
   });

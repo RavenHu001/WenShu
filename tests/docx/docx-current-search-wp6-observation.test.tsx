@@ -337,7 +337,7 @@ describe('WP6：泄漏观察（第 8.8 节；重复订阅 / 装饰清理 / 控�
     await openFileFromTree('a.docx');
     await openPanelAndQuery('abc');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await openFileFromTree('b.docx');
     await openPanelAndQuery('def');

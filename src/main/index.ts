@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, Menu, session } from 'electron';
 import { join } from 'node:path';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
@@ -46,6 +46,8 @@ const createMainWindow = (): BrowserWindow => {
 };
 
 void app.whenReady().then(() => {
+  // 文枢使用 renderer 内可测试、可访问的中文菜单；移除 Electron 默认英文菜单，避免双菜单。
+  Menu.setApplicationMenu(null);
   // 当前应用无需摄像头、定位等 Web 权限，因此采用拒绝优先策略。
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);

@@ -514,7 +514,7 @@ describe('WP5：兼容性门禁（read-only / degraded / saving / save-error / c
     });
     await userEvent.setup().click(screen.getByRole('button', { name: '保存' }));
     await act(async () => {});
-    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(screen.getByText('磁盘冲突')).toBeDefined();
     api.readDocx.mockResolvedValueOnce({
       status: 'loaded',
       document: docxSnapshot('dg.docx', paragraphModel('r2 正文'), {
@@ -596,7 +596,7 @@ describe('WP5：兼容性门禁（read-only / degraded / saving / save-error / c
     });
     await userEvent.setup().click(screen.getByRole('button', { name: '保存' }));
     await act(async () => {});
-    expect(screen.getByText('保存失败')).toBeDefined();
+    expect(screen.getByText('写入错误')).toBeDefined();
     expect(dirtyTabCount()).toBe(1);
 
     await openPanelAndQuery('abc');
@@ -625,7 +625,7 @@ describe('WP5：兼容性门禁（read-only / degraded / saving / save-error / c
     });
     await userEvent.setup().click(screen.getByRole('button', { name: '保存' }));
     await act(async () => {});
-    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(screen.getByText('磁盘冲突')).toBeDefined();
 
     await openPanelAndQuery('abc');
     const replaceInput = screen.getByLabelText('替换为') as HTMLInputElement;
@@ -704,7 +704,7 @@ describe('WP5：兼容性门禁（read-only / degraded / saving / save-error / c
     expect(screen.getByText('无法读取文件 bad.docx')).toBeDefined();
     expect(docxEditor()).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -734,14 +734,14 @@ describe('WP5：多标签、关闭重开、工作区切换与旧 controls', () =
 
     // 重开同路径：新稳定 tabId → 新 editor 实例，面板默认关闭、查询为空
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await openFileFromTree('b.docx');
     const reopened = docxEditor();
     expect(reopened).not.toBeNull();
     expect(reopened).not.toBe(closedEditor);
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -794,7 +794,7 @@ describe('WP5：多标签、关闭重开、工作区切换与旧 controls', () =
     expect(document.querySelector('.docx-search-status')?.textContent).toBe('第 1 / 2 处');
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await openFileFromTree('b.docx');
     await openPanelAndQuery('def');
@@ -834,10 +834,11 @@ describe('WP5：重命名、移动与另存为保持稳定 tabId 搜索会话', 
 
     // 文件管理：选择已打开文件 → 重命名
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await userEvent.setup().click(screen.getByTestId('ft-doc.docx'));
-    await userEvent.setup().click(screen.getByTestId('fm-rename'));
+    fireEvent.contextMenu(screen.getByTestId('ft-doc.docx'), { clientX: 30, clientY: 30 });
+    await userEvent.setup().click(screen.getByRole('menuitem', { name: '重命名' }));
     const input = screen.getByTestId('fm-name-input') as HTMLInputElement;
     expect(input.value).toBe('doc.docx');
     await userEvent.setup().clear(input);
@@ -857,7 +858,7 @@ describe('WP5：重命名、移动与另存为保持稳定 tabId 搜索会话', 
 
     // 路径迁移后：同一 editor 实例、面板与查询保持、装饰保持
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -883,10 +884,11 @@ describe('WP5：重命名、移动与另存为保持稳定 tabId 搜索会话', 
     const editorBefore = docxEditor();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await userEvent.setup().click(screen.getByTestId('ft-doc.docx'));
-    await userEvent.setup().click(screen.getByTestId('fm-move'));
+    fireEvent.contextMenu(screen.getByTestId('ft-doc.docx'), { clientX: 30, clientY: 30 });
+    await userEvent.setup().click(screen.getByRole('menuitem', { name: '移动到…' }));
     await userEvent.setup().click(screen.getByTestId('fm-target-sub'));
     await userEvent.setup().click(screen.getByTestId('fm-target-confirm'));
     await act(async () => {
@@ -903,7 +905,7 @@ describe('WP5：重命名、移动与另存为保持稳定 tabId 搜索会话', 
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -922,9 +924,13 @@ describe('WP5：重命名、移动与另存为保持稳定 tabId 搜索会话', 
     expect(dirtyTabCount()).toBe(0);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
-    await userEvent.setup().click(screen.getByTestId('fm-save-as'));
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, key: 's' }),
+      );
+    });
     await userEvent.setup().click(screen.getByTestId('fm-target-root'));
     await userEvent.setup().click(screen.getByTestId('fm-target-confirm'));
     const nameInput = screen.getByTestId('fm-name-input') as HTMLInputElement;
@@ -940,7 +946,7 @@ describe('WP5：重命名、移动与另存为保持稳定 tabId 搜索会话', 
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -1064,9 +1070,10 @@ describe('WP5：工作区结果定位与 mutationEpoch 互不污染当前搜索'
 
     // 新建 TXT 成功 → mutationEpoch 递增 → 只作废工作区搜索
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
-    await userEvent.setup().click(screen.getByTestId('fm-create-text'));
+    await userEvent.setup().click(screen.getByRole('button', { name: '新建' }));
+    await userEvent.setup().click(screen.getByRole('menuitem', { name: '新建 TXT' }));
     await userEvent.setup().type(screen.getByTestId('fm-name-input'), 'brand-new{Enter}');
     await act(async () => {
       await flush();
@@ -1078,7 +1085,7 @@ describe('WP5：工作区结果定位与 mutationEpoch 互不污染当前搜索'
       fireEvent.click(screen.getByRole('tab', { name: /doc\.docx/ }));
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     expect(screen.getByText('输入查询后按 Enter 或点击搜索。')).toBeDefined();
     expect(screen.queryByText(/共 1 处匹配/)).toBeNull();

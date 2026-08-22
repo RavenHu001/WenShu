@@ -54,7 +54,10 @@ function snapshot(overrides: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot
 
 function openBtn(): HTMLButtonElement {
   const buttons = screen.getAllByText('打开文件夹');
-  return (buttons[0] ?? buttons[buttons.length - 1]) as HTMLButtonElement;
+  const candidate = buttons[0] ?? buttons[buttons.length - 1];
+  const button = candidate?.closest('button');
+  if (!(button instanceof HTMLButtonElement)) throw new Error('expected open-folder button');
+  return button;
 }
 
 /** 与 App 相同的接线：useWorkspace controller + 纯展示 WorkspaceSidebar。 */
@@ -288,7 +291,7 @@ describe('WorkspaceSidebar 纯展示', () => {
     expect(screen.getByText('current.txt')).toBeDefined();
     expect(screen.getByText('正在读取新工作区…')).toBeDefined();
     expect(openBtn().disabled).toBe(true);
-    expect((screen.getByText('刷新') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('刷新').closest('button') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('shows a recoverable error when opening rejects unexpectedly', async () => {

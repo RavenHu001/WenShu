@@ -311,7 +311,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
     // 先打开 TXT：查找与替换标签显示 CodeMirror 面板
     await openFileFromTree('a.txt');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
@@ -321,7 +321,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
 
     // 切到 DOCX：先回文件活动栏（搜索侧栏激活时文件树被 hidden），再打开 b.docx
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await openFileFromTree('b.docx');
     await openDocxPanelAndQuery('abc');
@@ -347,7 +347,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
     await openDocxPanelAndQuery('abc');
     // 先回文件活动栏再打开第二个 DOCX（搜索侧栏激活时文件树被 hidden）
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '文' }));
+      fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     });
     await openFileFromTree('b.docx');
     await openDocxPanelAndQuery('def');
@@ -432,7 +432,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
     });
     await openFileFromTree('slow.docx');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));

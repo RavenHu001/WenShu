@@ -1,0 +1,233 @@
+.editor-area {
+  background: var(--color-workspace);
+}
+
+.doc-toolbar-row {
+  min-height: 38px;
+  padding: 5px 10px;
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.docx-editor-header {
+  position: relative;
+  z-index: 10;
+  flex: none;
+  gap: 0;
+  padding: 0 10px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.docx-toolbar {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0;
+  overflow: visible;
+  border: 0;
+}
+
+.docx-tool-group,
+.docx-toolbar-extras {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.docx-tool-group + .docx-tool-group,
+.docx-toolbar-extras > .docx-tool-group:first-child {
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid var(--color-border);
+}
+
+.docx-toolbar-extras[hidden],
+.docx-toolbar-overflow[hidden] {
+  display: none;
+}
+
+.docx-tool-btn.icon-button {
+  min-width: 26px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.docx-tool-btn.icon-button:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
+.docx-tool-btn.icon-button[aria-pressed='true'] {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-color: #b9c8e5;
+}
+
+.docx-tool-select {
+  max-width: 112px;
+  height: 27px;
+  padding: 2px 22px 2px 7px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.docx-tool-color {
+  display: inline-flex;
+  width: 27px;
+  height: 27px;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.docx-tool-color:hover {
+  background: var(--color-hover);
+}
+
+.docx-tool-color input[type='color'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.docx-toolbar-overflow {
+  position: relative;
+  margin-left: auto;
+}
+
+.docx-toolbar-overflow > summary {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  list-style: none;
+  place-items: center;
+}
+
+.docx-toolbar-overflow > summary:hover,
+.docx-toolbar-overflow[open] > summary {
+  background: var(--color-hover);
+}
+
+.docx-toolbar-overflow > summary::-webkit-details-marker {
+  display: none;
+}
+
+.docx-toolbar-overflow-panel {
+  position: absolute;
+  z-index: var(--z-menu);
+  top: 32px;
+  right: 0;
+  display: grid;
+  min-width: 270px;
+  gap: 7px;
+  padding: 8px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-menu);
+}
+
+.docx-toolbar-overflow-panel .docx-tool-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.docx-editor-host {
+  background: var(--color-workspace);
+}
+
+.docx-editor {
+  padding: 30px 34px 48px;
+  overflow: auto;
+  background: var(--color-workspace);
+  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.docx-editor .ProseMirror {
+  width: min(820px, 100%);
+  min-height: calc(100% - 8px);
+  margin: 0 auto;
+  padding: 54px clamp(38px, 7vw, 72px) 80px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid #e0e3e8;
+  border-radius: 2px;
+  box-shadow: 0 2px 10px rgb(27 34 47 / 6%);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.welcome-panel {
+  background: var(--color-surface);
+}
+
+.welcome-copy h1 {
+  color: var(--color-text);
+  font-size: clamp(44px, 7vw, 76px);
+}
+
+.scope-note {
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border);
+  border-left-color: var(--color-primary);
+}
+
+@media (max-width: 1000px) {
+  .docx-editor {
+    padding: 18px 20px 32px;
+  }
+
+  .docx-editor .ProseMirror {
+    padding: 38px 36px 60px;
+  }
+}
+
+@media (max-width: 600px) {
+  .welcome-panel {
+    padding: 20px 14px;
+    overflow-x: hidden;
+  }
+
+  .welcome-copy h1 {
+    font-size: 36px;
+    letter-spacing: 0.05em;
+  }
+
+  .welcome-copy > p {
+    margin: 14px 0 18px;
+    font-size: var(--font-size-md);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  .scope-note {
+    padding: 12px;
+  }
+}
+
+@media (forced-colors: active) {
+  .docx-editor .ProseMirror {
+    border: 2px solid CanvasText;
+    box-shadow: none;
+  }
+}

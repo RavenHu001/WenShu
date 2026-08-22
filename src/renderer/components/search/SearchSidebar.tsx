@@ -29,6 +29,7 @@ import type {
 import { SearchResults } from './SearchResults';
 import { DocxCurrentSearchPanel, type DocxReplaceAvailability } from './DocxCurrentSearchPanel';
 import type { DocxCurrentSearchControls } from '../../lib/docx-current-search-plugin';
+import { Icon } from '../common/Icon';
 
 interface SearchSidebarProps {
   readonly search: WorkspaceSearchController;
@@ -105,7 +106,7 @@ export function SearchSidebar({
   const handleViewChange = (target: 'workspace' | 'current-document'): void => {
     onFocusTargetChange?.(target);
     if (target === 'workspace') {
-      window.setTimeout(() => inputRef.current?.focus(), 0);
+      queueMicrotask(() => inputRef.current?.focus());
     } else if (
       currentDocumentKind === 'docx' ? docxSearchControls !== null : currentDocumentAvailable
     ) {
@@ -183,7 +184,7 @@ export function SearchSidebar({
 
         {!workspaceAvailable ? (
           <div className="ws-idle">
-            <div className="folder-icon" aria-hidden="true" />
+            <Icon name="folder" size={42} aria-hidden="true" />
             <p>尚未打开工作区</p>
             <span>打开文件夹后可搜索已保存的 TXT 和 DOCX 正文</span>
           </div>
@@ -224,9 +225,12 @@ export function SearchSidebar({
               </div>
             </form>
 
-            <div className="search-note">
-              结果来自磁盘上已保存的文件，不包含未保存的编辑；DOCX 仅覆盖已进入结构化模型的正文。
-            </div>
+            <details className="search-help">
+              <summary>搜索范围说明</summary>
+              <div className="search-note">
+                结果来自磁盘上已保存的文件，不包含未保存的编辑；DOCX 仅覆盖已进入结构化模型的正文。
+              </div>
+            </details>
 
             <div className="search-status-region">
               <SearchStatus search={search} onMatchActivate={onMatchActivate} />

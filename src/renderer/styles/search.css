@@ -1,0 +1,179 @@
+.search-sidebar,
+.workspace-search-view,
+.current-document-view {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-subtle);
+}
+
+.search-view-tabs {
+  min-height: 38px;
+  padding: 0 8px;
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border);
+}
+
+.search-view-tab {
+  min-height: 37px;
+  padding: 0 8px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.search-view-tab.active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+}
+
+.search-form,
+.docx-current-search-form {
+  gap: var(--space-2);
+  padding: 8px 12px 10px;
+}
+
+.search-input,
+.docx-current-search-input {
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
+.search-help {
+  margin: 0 12px 8px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.search-help summary {
+  cursor: pointer;
+}
+
+.search-note {
+  margin-top: 5px;
+  color: var(--color-text-muted);
+  line-height: var(--line-height-normal);
+}
+
+.search-results-note {
+  padding: 7px 10px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.search-file-group {
+  margin: 0 6px 8px;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.search-file-path {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 8px;
+  color: var(--color-text);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.search-file-title {
+  overflow: hidden;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-file-parent {
+  grid-column: 2 / 4;
+  margin-top: -5px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-file-count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.search-file-kind {
+  padding: 1px 4px;
+  color: var(--color-info);
+  background: var(--color-info-soft);
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.search-file-kind.is-docx {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.search-file-kind-note {
+  padding: 5px 8px 2px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.search-match-list {
+  margin: 0;
+  padding: 3px 0;
+}
+
+.search-match-btn,
+.search-match-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  gap: 8px;
+  align-items: start;
+}
+
+.search-match-btn {
+  padding: 7px 9px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.search-match-btn:hover,
+.search-match-btn:focus-visible {
+  background: var(--color-hover);
+}
+
+.search-match-preview {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
+.search-match-preview mark {
+  color: inherit;
+  background: #f7dda1;
+  border-bottom: 1px solid #bb8321;
+}
+
+.search-match-loc {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .search-match-preview mark {
+    color: HighlightText;
+    background: Highlight;
+    border: 1px solid HighlightText;
+  }
+}

@@ -46,8 +46,11 @@ function FileResultGroup({
   readonly onMatchActivate?: SearchResultsProps['onMatchActivate'];
 }): React.JSX.Element {
   const kindLabel = file.kind === 'docx' ? 'DOCX' : 'TXT';
+  const segments = file.relativePath.split('/');
+  const fileName = segments.at(-1) ?? file.relativePath;
+  const parentPath = segments.slice(0, -1).join('/');
   return (
-    <div className="search-file-group">
+    <div className="search-file-group" role="group" aria-label={`${file.relativePath} 的匹配结果`}>
       <div className="search-file-path" title={file.relativePath}>
         <span
           className={`search-file-kind${file.kind === 'docx' ? ' is-docx' : ''}`}
@@ -55,7 +58,9 @@ function FileResultGroup({
         >
           {kindLabel}
         </span>
-        {file.relativePath}
+        <span className="search-file-title">{fileName}</span>
+        <span className="search-file-parent">{parentPath}</span>
+        <span className="search-file-count">{file.matches.length} 处</span>
         {file.truncated ? <span className="search-file-truncated">（已截断）</span> : null}
       </div>
       {file.kind === 'docx' && (
@@ -86,11 +91,11 @@ function MatchRow({
 }): React.JSX.Element {
   const content = (
     <>
-      <span className="search-match-loc">
-        {match.line}:{match.column}
-      </span>
       <span className="search-match-preview">
         <PreviewText match={match} />
+      </span>
+      <span className="search-match-loc">
+        {match.line}:{match.column}
       </span>
     </>
   );
@@ -102,6 +107,7 @@ function MatchRow({
       <button
         type="button"
         className="search-match-btn"
+        aria-label={`${file.relativePath} 第 ${match.line} 行第 ${match.column} 列`}
         onClick={() => onMatchActivate(file, match)}
       >
         {content}

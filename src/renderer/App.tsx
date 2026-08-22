@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatRuntimeInfo } from './lib/runtime-info';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useDocuments } from './lib/use-documents';
 import { useWorkspace } from './lib/use-workspace';
 import { useWorkspaceSearch } from './lib/use-workspace-search';
@@ -27,21 +26,18 @@ import { SearchSidebar } from './components/search/SearchSidebar';
 import { DocumentPane } from './components/document/DocumentPane';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 import { useFileManagement } from './lib/use-file-management';
-
-/** 活动栏面板：文件 / 搜索为真实可访问入口；设置保持不可用占位（第 4.10 节）。 */
-type ActivityPanel = 'files' | 'search';
+import { AppMenuBar } from './components/shell/AppMenuBar';
+import { ActivityBar, type ActivityPanel } from './components/shell/ActivityBar';
+import { AboutDialog } from './components/shell/AboutDialog';
+import { StatusBar } from './components/shell/StatusBar';
+import { ToastRegion, type ToastMessage } from './components/common/ToastRegion';
+import { clampSidebarWidth, SIDEBAR_DEFAULT_WIDTH } from './lib/sidebar-size';
 
 /** App 层定位身份：编辑器目标外继续绑定来源搜索与标签。 */
 type AppLocateTarget = EditorLocateTarget & {
   readonly requestId: number;
   readonly tabId: string;
 };
-
-const activityItems = [
-  { id: 'files', label: '文', title: '文件' },
-  { id: 'search', label: '搜', title: '搜索' },
-  { id: 'settings', label: '设', title: '设置（未提供）', disabled: true },
-] as const;
 
 const MIXED_LINE_ENDINGS_CODE = 'MIXED_LINE_ENDINGS_CONFIRMATION_REQUIRED';
 
@@ -64,7 +60,6 @@ type PendingDiscard =
     };
 
 export const App = (): React.JSX.Element => {
-  const runtimeLabel = formatRuntimeInfo(window.desktop.runtime);
   const {
     model,
     openFile,
@@ -108,6 +103,12 @@ export const App = (): React.JSX.Element => {
   const completedSearchRequestIdRef = useRef<number | null>(completedSearchRequestId);
   completedSearchRequestIdRef.current = completedSearchRequestId;
   const [activity, setActivity] = useState<ActivityPanel>('files');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
+  const toastCounterRef = useRef(0);
+  const lastFileFeedbackRef = useRef<string | null>(null);
   const [searchFocusTarget, setSearchFocusTarget] = useState<'workspace' | 'current-document'>(
     'workspace',
   );
@@ -677,12 +678,72 @@ export const App = (): React.JSX.Element => {
     activeDocumentTabForSaveAs.document === null ||
     activeDocumentTabForSaveAs.status === 'loading' ||
     (isDocxTab(activeDocumentTabForSaveAs) && activeDocumentTabForSaveAs.status === 'read-only');
-  const handleSaveAsActive = (): void => {
+  const handleSaveAsActive = useCallback((): void => {
     const tab = activeTab(model);
     if (tab !== null && !saveAsDisabled) {
       fileManagement.beginSaveAs(tab.id);
     }
-  };
+  }, [fileManagement, model, saveAsDisabled]);
+
+  useEffect(() => {
+    const feedback =
+      fileManagement.state.status === 'succeeded' && fileManagement.state.message !== null
+        ? { message: fileManagement.state.message, tone: 'success' as const, persistent: false }
+        : fileManagement.state.status === 'error' &&
+            fileManagement.state.mode === null &&
+            fileManagement.state.error !== null
+          ? {
+              message: fileManagement.state.error.message,
+              tone: 'error' as const,
+              persistent: true,
+            }
+          : null;
+    if (feedback === null) {
+      lastFileFeedbackRef.current = null;
+      return;
+    }
+    const key = `${feedback.tone}:${feedback.message}`;
+    if (lastFileFeedbackRef.current === key) return;
+    lastFileFeedbackRef.current = key;
+    setToasts((current) => [
+      ...current.slice(-2),
+      {
+        id: ++toastCounterRef.current,
+        message: feedback.message,
+        tone: feedback.tone,
+        persistent: feedback.persistent,
+      },
+    ]);
+  }, [
+    fileManagement.state.error,
+    fileManagement.state.message,
+    fileManagement.state.mode,
+    fileManagement.state.status,
+  ]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (
+          pendingRef.current === null &&
+          (fileManagement.state.status === 'idle' || fileManagement.state.status === 'succeeded')
+        ) {
+          handleSaveAsActive();
+        }
+      } else if (event.key === 'F5' && workspace.state.workspace !== null) {
+        event.preventDefault();
+        if (fileManagement.state.status !== 'running') void handleManualRefresh();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    fileManagement.state.status,
+    handleManualRefresh,
+    handleSaveAsActive,
+    workspace.state.workspace,
+  ]);
   // 活动文档类型（TASK-008 第 4.10 节 + TASK-010 WP3）：TXT 用 CodeMirror 面板，DOCX 用 WP2 面板。
   const activeDocumentTab = activeTab(model);
   const currentDocumentKind: 'txt' | 'docx' | null =
@@ -711,47 +772,86 @@ export const App = (): React.JSX.Element => {
     }
   }
 
+  const activeSaveStatus = (() => {
+    if (activeDocumentTab === null) return { label: '就绪', tone: 'neutral' as const };
+    switch (activeDocumentTab.status) {
+      case 'loaded-clean':
+        return {
+          label:
+            isDocxTab(activeDocumentTab) && activeDocumentTab.lastBackupRelativePath !== null
+              ? '已保存 · 已备份'
+              : '已保存',
+          tone: 'success' as const,
+        };
+      case 'loaded-dirty':
+        return { label: '未保存', tone: 'warning' as const };
+      case 'saving':
+        return { label: '正在保存…', tone: 'neutral' as const };
+      case 'save-error':
+        return { label: '写入错误', tone: 'error' as const };
+      case 'conflict':
+        return { label: '磁盘冲突', tone: 'error' as const };
+      case 'read-only':
+        return { label: '只读', tone: 'neutral' as const };
+      default:
+        return { label: '正在读取', tone: 'neutral' as const };
+    }
+  })();
+
+  const changeActivity = (next: ActivityPanel): void => {
+    setActivity(next);
+    setSidebarCollapsed(false);
+    if (next === 'search') setSearchFocusTarget('workspace');
+  };
+  const workspaceStyle: CSSProperties & { '--sidebar-width': string } = {
+    '--sidebar-width': `${sidebarWidth}px`,
+  };
+
   return (
     <div className="app-shell">
       <header className="titlebar">
         <span className="brand-mark">文枢</span>
-        <nav aria-label="应用菜单" className="menu-placeholder">
-          <span>文件</span>
-          <span>编辑</span>
-          <span>视图</span>
-          <span>帮助</span>
-        </nav>
+        <AppMenuBar
+          actions={{
+            openWorkspace: () => void handleOpenWorkspace(),
+            createText: () => fileManagement.beginCreate('text'),
+            createDocx: () => fileManagement.beginCreate('docx'),
+            createDirectory: () => fileManagement.beginCreate('directory'),
+            save: () => {
+              if (activeDocumentTab !== null) handleSaveRequest(activeDocumentTab.id);
+            },
+            saveAs: handleSaveAsActive,
+            closeTab: () => {
+              if (activeDocumentTab !== null) handleCloseTabRequest(activeDocumentTab.id);
+            },
+            find: () => handleOpenCurrentDocumentSearch('find'),
+            replace: () => handleOpenCurrentDocumentSearch('replace'),
+            workspaceSearch: () => {
+              setSearchFocusTarget('workspace');
+              setSidebarCollapsed(false);
+              setActivity('search');
+            },
+            toggleSidebar: () => setSidebarCollapsed((value) => !value),
+            about: () => setAboutOpen(true),
+          }}
+          capabilities={{
+            hasWorkspace: workspace.state.workspace !== null,
+            hasActiveTab: activeDocumentTab !== null,
+            canSave:
+              activeDocumentTab !== null && activeDocumentTab.dirty && !activeDocumentTab.saving,
+            canSaveAs: !saveAsDisabled,
+            sidebarCollapsed,
+          }}
+        />
       </header>
 
-      <main className="workspace">
-        <aside aria-label="活动栏" className="activity-bar">
-          {activityItems.map((item) => {
-            const isSettings = item.id === 'settings';
-            return (
-              <button
-                type="button"
-                key={item.id}
-                className={`activity-item${activity === item.id ? ' active' : ''}`}
-                title={item.title}
-                aria-pressed={isSettings ? undefined : activity === item.id}
-                aria-disabled={isSettings ? true : undefined}
-                disabled={isSettings}
-                onClick={() => {
-                  if (!isSettings) {
-                    if (item.id === 'search') {
-                      setSearchFocusTarget('workspace');
-                    }
-                    setActivity(item.id);
-                  }
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </aside>
+      <main
+        className={`workspace${sidebarCollapsed ? ' workspace--sidebar-collapsed' : ''}`}
+        style={workspaceStyle}
+      >
+        <ActivityBar activity={activity} onChange={changeActivity} />
 
-        <aside aria-label="侧栏" className="sidebar">
+        <aside aria-label="侧栏" className="sidebar" hidden={sidebarCollapsed}>
           {/* 两个侧栏保持挂载，用 hidden 切换：切换活动栏不丢失工作区或文件树展开状态 */}
           <div className="sidebar-panel sidebar-panel-files" hidden={activity !== 'files'}>
             <WorkspaceSidebar
@@ -765,8 +865,10 @@ export const App = (): React.JSX.Element => {
               onSelectEntry={fileManagement.selectEntry}
               onToggleDir={fileManagement.toggleDir}
               fileManagement={fileManagement}
-              onSaveAsActive={handleSaveAsActive}
-              saveAsDisabled={saveAsDisabled}
+              workspaceEpoch={workspace.epoch}
+              sidebarWidth={sidebarWidth}
+              onSidebarWidthChange={(width) => setSidebarWidth(clampSidebarWidth(width))}
+              onCollapse={() => setSidebarCollapsed(true)}
             />
           </div>
           <div className="sidebar-panel sidebar-panel-search" hidden={activity !== 'search'}>
@@ -814,10 +916,18 @@ export const App = (): React.JSX.Element => {
         </section>
       </main>
 
-      <footer className="statusbar">
-        <span>就绪</span>
-        <span className="runtime-status">{runtimeLabel}</span>
-      </footer>
+      <StatusBar
+        documentType={
+          activeDocumentTab === null ? null : isDocxTab(activeDocumentTab) ? 'DOCX' : 'TXT · UTF-8'
+        }
+        saveStatus={activeSaveStatus.label}
+        tone={activeSaveStatus.tone}
+        {...(activeDocumentTab !== null &&
+        isDocxTab(activeDocumentTab) &&
+        activeDocumentTab.lastBackupRelativePath !== null
+          ? { saveStatusTitle: `备份：${activeDocumentTab.lastBackupRelativePath}` }
+          : {})}
+      />
 
       {pending === null && (
         <FileManagementDialogs
@@ -856,6 +966,13 @@ export const App = (): React.JSX.Element => {
           onCancel={cancelPending}
         />
       )}
+      {aboutOpen && (
+        <AboutDialog runtime={window.desktop.runtime} onClose={() => setAboutOpen(false)} />
+      )}
+      <ToastRegion
+        toasts={toasts}
+        onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
+      />
     </div>
   );
 };

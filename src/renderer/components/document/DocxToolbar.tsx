@@ -1,20 +1,10 @@
-/**
- * DOCX 基础格式工具栏 —— 只含第 4.1 节受支持格式（TASK-007 WP5，第 6.5 节）。
- *
- * - 粗体 / 斜体 / 下划线；段落与标题 1-3；
- * - 字号白名单（`DOCX_FONT_SIZE_WHITELIST`，冻结常量）；文字颜色（`#RRGGBB`）；
- * - 项目符号 / 编号列表；左/中/右/两端对齐；撤销 / 重做；
- * - 编辑器不可用（loading / read-only / read-error）时整条禁用；
- * - 不包含超出范围的功能（无字体选择、无复杂样式、无分页）。
- */
-
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
+import { IconButton } from '../common/IconButton';
+import { Icon, type IconName } from '../common/Icon';
 
-/** 受支持字号白名单（磅值）；与导入/导出映射一致（导出为半磅 w:sz）。 */
 export const DOCX_FONT_SIZE_WHITELIST = [9, 10.5, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72] as const;
 
-/** 受支持对齐值（Tiptap 侧 justify 对应模型 both）。 */
 const ALIGNMENTS = [
   { label: '左对齐', value: 'left' },
   { label: '居中', value: 'center' },
@@ -22,22 +12,22 @@ const ALIGNMENTS = [
   { label: '两端对齐', value: 'justify' },
 ] as const;
 
+const COMPACT_BREAKPOINT = 700;
+
 export function DocxToolbar({
   editor,
   disabled,
 }: {
-  /** 活动标签的编辑器实例；不可用时为 null。 */
   readonly editor: Editor | null;
-  /** 编辑器不可用（loading / read-only / read-error）时禁用整条工具栏。 */
   readonly disabled: boolean;
 }): React.JSX.Element {
-  // 订阅编辑器事务：选中/内容变化时刷新按钮激活状态
   const [, setVersion] = useState(0);
+  const [compact, setCompact] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
-    if (editor === null) {
-      return;
-    }
-    const refresh = (): void => setVersion((v) => v + 1);
+    if (editor === null) return;
+    const refresh = (): void => setVersion((version) => version + 1);
     editor.on('transaction', refresh);
     editor.on('selectionUpdate', refresh);
     return () => {
@@ -46,178 +36,211 @@ export function DocxToolbar({
     };
   }, [editor]);
 
-  const run = (fn: (editor: Editor) => void): void => {
-    if (editor !== null && !disabled) {
-      fn(editor);
-    }
+  useLayoutEffect(() => {
+    const element = toolbarRef.current;
+    if (element === null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width !== undefined) setCompact(width < COMPACT_BREAKPOINT);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const unavailable = disabled || editor === null;
+  const run = (action: (activeEditor: Editor) => void): void => {
+    if (editor !== null && !disabled) action(editor);
   };
-  const active = (predicate: (editor: Editor) => boolean): boolean =>
+  const active = (predicate: (activeEditor: Editor) => boolean): boolean =>
     editor !== null && !disabled && predicate(editor);
 
-  const toggleBtn = (
+  const toolButton = (
     label: string,
-    isActive: (editor: Editor) => boolean,
-    action: (editor: Editor) => void,
+    icon: IconName,
+    isActive: (activeEditor: Editor) => boolean,
+    action: (activeEditor: Editor) => void,
   ): React.JSX.Element => (
-    <button
-      type="button"
-      className={`docx-tool-btn${active(isActive) ? ' is-active' : ''}`}
-      disabled={disabled || editor === null}
+    <IconButton
       aria-pressed={active(isActive)}
+      className="docx-tool-btn"
+      disabled={unavailable}
+      icon={icon}
+      key={label}
+      label={label}
       onClick={() => run(action)}
-    >
-      {label}
-    </button>
+      size="compact"
+    />
   );
 
   const currentFontSize = (): string => {
-    if (editor === null) {
-      return '';
-    }
+    if (editor === null) return '';
     const attrs = editor.getAttributes('textStyle') as { fontSize?: string };
     return typeof attrs.fontSize === 'string' ? attrs.fontSize : '';
   };
   const currentColor = (): string => {
-    if (editor === null) {
-      return '#000000';
-    }
+    if (editor === null) return '#000000';
     const attrs = editor.getAttributes('textStyle') as { color?: string };
     return typeof attrs.color === 'string' ? attrs.color : '#000000';
   };
+  const currentAlignment = (): string => {
+    if (editor === null) return '';
+    return (
+      (editor.getAttributes('paragraph').textAlign as string) ||
+      (editor.getAttributes('heading').textAlign as string) ||
+      ''
+    );
+  };
 
-  return (
-    <div className="docx-toolbar" aria-label="DOCX 格式工具栏">
-      {toggleBtn(
-        '粗体',
-        (e) => e.isActive('bold'),
-        (e) => e.chain().focus().toggleBold().run(),
-      )}
-      {toggleBtn(
-        '斜体',
-        (e) => e.isActive('italic'),
-        (e) => e.chain().focus().toggleItalic().run(),
-      )}
-      {toggleBtn(
-        '下划线',
-        (e) => e.isActive('underline'),
-        (e) => e.chain().focus().toggleUnderline().run(),
-      )}
-
-      <select
-        className="docx-tool-select"
-        aria-label="段落样式"
-        disabled={disabled || editor === null}
-        value={
-          editor !== null && editor.isActive('heading')
-            ? String(editor.getAttributes('heading').level ?? 1)
-            : 'paragraph'
-        }
-        onChange={(event) => {
-          const value = event.target.value;
-          run((e) => {
-            const chain = e.chain().focus();
-            if (value === 'paragraph') {
-              chain.setParagraph().run();
-            } else {
-              chain.toggleHeading({ level: Number(value) as 1 | 2 | 3 }).run();
-            }
-          });
-        }}
-      >
-        <option value="paragraph">正文</option>
-        <option value="1">标题 1</option>
-        <option value="2">标题 2</option>
-        <option value="3">标题 3</option>
-      </select>
-
-      <select
-        className="docx-tool-select"
-        aria-label="字号"
-        disabled={disabled || editor === null}
-        value={currentFontSize()}
-        onChange={(event) => {
-          const value = event.target.value;
-          run((e) => {
-            if (value === '') {
-              e.chain().focus().unsetFontSize().run();
-            } else {
-              e.chain().focus().setFontSize(value).run();
-            }
-          });
-        }}
-      >
-        <option value="">默认字号</option>
-        {DOCX_FONT_SIZE_WHITELIST.map((size) => (
-          <option key={size} value={`${size}px`}>
-            {size} pt
-          </option>
-        ))}
-      </select>
-
-      <label className="docx-tool-color">
-        颜色
-        <input
-          type="color"
-          aria-label="文字颜色"
-          disabled={disabled || editor === null}
-          value={currentColor()}
+  const extras = (suffix: string): React.JSX.Element => (
+    <>
+      <div className="docx-tool-group" aria-label="字符外观">
+        <select
+          aria-label="字号"
+          className="docx-tool-select"
+          disabled={unavailable}
           onChange={(event) => {
             const value = event.target.value;
-            run((e) => e.chain().focus().setColor(value).run());
+            run((activeEditor) => {
+              if (value === '') activeEditor.chain().focus().unsetFontSize().run();
+              else activeEditor.chain().focus().setFontSize(value).run();
+            });
           }}
-        />
-      </label>
-      {toggleBtn(
-        '清除颜色',
-        () => false,
-        (e) => e.chain().focus().unsetColor().run(),
-      )}
+          value={currentFontSize()}
+        >
+          <option value="">默认字号</option>
+          {DOCX_FONT_SIZE_WHITELIST.map((size) => (
+            <option key={`${suffix}-${size}`} value={`${size}px`}>
+              {size} pt
+            </option>
+          ))}
+        </select>
+        <label className="docx-tool-color" title={`文字颜色 ${currentColor()}`}>
+          <span className="sr-only">文字颜色</span>
+          <Icon name="palette" size={15} />
+          <input
+            aria-label="文字颜色"
+            disabled={unavailable}
+            onChange={(event) =>
+              run((activeEditor) => activeEditor.chain().focus().setColor(event.target.value).run())
+            }
+            type="color"
+            value={currentColor()}
+          />
+        </label>
+        {toolButton(
+          '清除颜色',
+          'close',
+          () => false,
+          (activeEditor) => activeEditor.chain().focus().unsetColor().run(),
+        )}
+      </div>
+      <div className="docx-tool-group" aria-label="列表">
+        {toolButton(
+          '项目符号',
+          'list-bulleted',
+          (activeEditor) => activeEditor.isActive('bulletList'),
+          (activeEditor) => activeEditor.chain().focus().toggleBulletList().run(),
+        )}
+        {toolButton(
+          '编号',
+          'list-numbered',
+          (activeEditor) => activeEditor.isActive('orderedList'),
+          (activeEditor) => activeEditor.chain().focus().toggleOrderedList().run(),
+        )}
+      </div>
+      <div className="docx-tool-group" aria-label="对齐">
+        <select
+          aria-label="对齐方式"
+          className="docx-tool-select"
+          disabled={unavailable}
+          onChange={(event) =>
+            run((activeEditor) =>
+              activeEditor.chain().focus().setTextAlign(event.target.value).run(),
+            )
+          }
+          value={currentAlignment()}
+        >
+          <option value="">默认对齐</option>
+          {ALIGNMENTS.map((alignment) => (
+            <option key={`${suffix}-${alignment.value}`} value={alignment.value}>
+              {alignment.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
 
-      {toggleBtn(
-        '项目符号',
-        (e) => e.isActive('bulletList'),
-        (e) => e.chain().focus().toggleBulletList().run(),
-      )}
-      {toggleBtn(
-        '编号',
-        (e) => e.isActive('orderedList'),
-        (e) => e.chain().focus().toggleOrderedList().run(),
-      )}
-
-      <select
-        className="docx-tool-select"
-        aria-label="对齐方式"
-        disabled={disabled || editor === null}
-        value={
-          editor !== null
-            ? (editor.getAttributes('paragraph').textAlign as string) ||
-              (editor.getAttributes('heading').textAlign as string) ||
-              ''
-            : ''
-        }
-        onChange={(event) => {
-          const value = event.target.value;
-          run((e) => e.chain().focus().setTextAlign(value).run());
-        }}
-      >
-        <option value="">默认对齐</option>
-        {ALIGNMENTS.map((alignment) => (
-          <option key={alignment.value} value={alignment.value}>
-            {alignment.label}
-          </option>
-        ))}
-      </select>
-
-      {toggleBtn(
-        '撤销',
-        () => false,
-        (e) => e.chain().focus().undo().run(),
-      )}
-      {toggleBtn(
-        '重做',
-        () => false,
-        (e) => e.chain().focus().redo().run(),
-      )}
+  return (
+    <div aria-label="DOCX 格式工具栏" className="docx-toolbar" ref={toolbarRef} role="toolbar">
+      <div className="docx-tool-group" aria-label="历史">
+        {toolButton(
+          '撤销',
+          'undo',
+          () => false,
+          (activeEditor) => activeEditor.chain().focus().undo().run(),
+        )}
+        {toolButton(
+          '重做',
+          'redo',
+          () => false,
+          (activeEditor) => activeEditor.chain().focus().redo().run(),
+        )}
+      </div>
+      <div className="docx-tool-group" aria-label="字符格式">
+        {toolButton(
+          '粗体',
+          'bold',
+          (activeEditor) => activeEditor.isActive('bold'),
+          (activeEditor) => activeEditor.chain().focus().toggleBold().run(),
+        )}
+        {toolButton(
+          '斜体',
+          'italic',
+          (activeEditor) => activeEditor.isActive('italic'),
+          (activeEditor) => activeEditor.chain().focus().toggleItalic().run(),
+        )}
+        {toolButton(
+          '下划线',
+          'underline',
+          (activeEditor) => activeEditor.isActive('underline'),
+          (activeEditor) => activeEditor.chain().focus().toggleUnderline().run(),
+        )}
+      </div>
+      <div className="docx-tool-group docx-tool-group--style" aria-label="段落样式组">
+        <select
+          aria-label="段落样式"
+          className="docx-tool-select"
+          disabled={unavailable}
+          onChange={(event) => {
+            const value = event.target.value;
+            run((activeEditor) => {
+              const chain = activeEditor.chain().focus();
+              if (value === 'paragraph') chain.setParagraph().run();
+              else chain.toggleHeading({ level: Number(value) as 1 | 2 | 3 }).run();
+            });
+          }}
+          value={
+            editor !== null && editor.isActive('heading')
+              ? String(editor.getAttributes('heading').level ?? 1)
+              : 'paragraph'
+          }
+        >
+          <option value="paragraph">正文</option>
+          <option value="1">标题 1</option>
+          <option value="2">标题 2</option>
+          <option value="3">标题 3</option>
+        </select>
+      </div>
+      <div className="docx-toolbar-extras" hidden={compact}>
+        {extras('wide')}
+      </div>
+      <details className="docx-toolbar-overflow" hidden={!compact}>
+        <summary aria-label="更多格式" title="更多格式">
+          <Icon name="more" size={17} />
+        </summary>
+        <div className="docx-toolbar-overflow-panel">{extras('compact')}</div>
+      </details>
     </div>
   );
 }

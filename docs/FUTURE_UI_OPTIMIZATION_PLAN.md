@@ -1,6 +1,6 @@
 # 文枢未来 UI 优化计划
 
-> **状态：已整理为 [TASK-011：桌面应用外壳、信息架构与编辑体验重构](./TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)，待排期实施。**
+> **状态：已由 [TASK-011：桌面应用外壳、信息架构与编辑体验重构](./TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md) 实施；详见 [完成报告](./TASK_011_COMPLETION_REPORT.md)。**
 >
 > 本计划记录 Task 9 完成后的系统性界面优化方向。当前阶段只补齐文件管理界面的缺失样式、滚动区域、选择状态与消息展示，不在修复中重构已经通过验收的文件管理流程。
 

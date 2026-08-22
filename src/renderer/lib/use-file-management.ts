@@ -20,7 +20,7 @@
  * - 成功操作触发工作区刷新；partial failure 强制刷新。
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FILE_MANAGEMENT_ERROR_MESSAGES,
   validateWindowsLeafName,
@@ -79,11 +79,18 @@ export interface FileManagementController {
   readonly selectEntry: (relativePath: string) => void;
   readonly toggleDir: (relativePath: string) => void;
   readonly beginCreate: (kind: 'text' | 'docx' | 'directory') => void;
-  readonly beginRename: () => void;
-  readonly beginMove: () => void;
+  readonly beginRename: (relativePath?: string) => void;
+  readonly beginMove: (relativePath?: string) => void;
   readonly beginSaveAs: (tabId: string) => void;
-  readonly beginDelete: () => void;
-  readonly revealSelected: () => void;
+  readonly beginDelete: (relativePath?: string) => void;
+  readonly revealSelected: (relativePath?: string) => void;
+  readonly revealRoot: () => void;
+  readonly isPathSaving: (relativePath: string) => boolean;
+  readonly relocateByDrop: (
+    sourceRelativePath: string,
+    targetParentRelativePath: string,
+    expectedWorkspaceEpoch: number,
+  ) => Promise<void>;
   readonly setInputName: (name: string) => void;
   readonly submitInput: () => void;
   readonly pickTarget: (parentRelativePath: string) => void;
@@ -206,12 +213,34 @@ export function useFileManagement({
     message: null,
   });
   const mutationIdRef = useRef(0);
+  const dropPendingRef = useRef(false);
   const epochRef = useRef(workspaceEpoch);
   epochRef.current = workspaceEpoch;
+  const previousWorkspaceEpochRef = useRef(workspaceEpoch);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const onMutationCommittedRef = useRef(onMutationCommitted);
   onMutationCommittedRef.current = onMutationCommitted;
+
+  useEffect(() => {
+    if (previousWorkspaceEpochRef.current === workspaceEpoch) return;
+    previousWorkspaceEpochRef.current = workspaceEpoch;
+    dropPendingRef.current = false;
+    setState({
+      status: 'idle',
+      mode: null,
+      selectedPath: null,
+      expandedDirs: new Set<string>(),
+      parentRelativePath: '',
+      inputName: '',
+      saveAsTabId: null,
+      pendingOverwrite: null,
+      pendingTrash: null,
+      runningMutationId: null,
+      error: null,
+      message: null,
+    });
+  }, [workspaceEpoch]);
 
   const update = useCallback((patch: Partial<FileManagementUiState>) => {
     setState((prev) => ({ ...prev, ...patch }));
@@ -223,6 +252,11 @@ export function useFileManagement({
       (tab) => tab.relativePath === relativePath || tab.relativePath.startsWith(`${relativePath}/`),
     );
   }, []);
+
+  const isPathSaving = useCallback(
+    (relativePath: string): boolean => affectedTabs(relativePath).some((tab) => tab.saving),
+    [affectedTabs],
+  );
 
   /** 展开集合按段边界迁移（目录 relocate）。 */
   const migrateExpanded = useCallback(
@@ -313,34 +347,40 @@ export function useFileManagement({
     [state.selectedPath, update, workspace],
   );
 
-  const beginRename = useCallback((): void => {
-    const selected = state.selectedPath;
-    if (selected === null || selected === '') {
-      return;
-    }
-    update({
-      status: 'editing-input',
-      mode: 'rename',
-      parentRelativePath: parentOf(selected),
-      inputName: basenameOf(selected),
-      error: null,
-      message: null,
-    });
-  }, [state.selectedPath, update]);
+  const beginRename = useCallback(
+    (relativePath?: string): void => {
+      const selected = relativePath ?? state.selectedPath;
+      if (selected === null || selected === '') {
+        return;
+      }
+      update({
+        status: 'editing-input',
+        mode: 'rename',
+        parentRelativePath: parentOf(selected),
+        inputName: basenameOf(selected),
+        error: null,
+        message: null,
+      });
+    },
+    [state.selectedPath, update],
+  );
 
-  const beginMove = useCallback((): void => {
-    const selected = state.selectedPath;
-    if (selected === null || selected === '') {
-      return;
-    }
-    update({
-      status: 'choosing-target',
-      mode: 'move',
-      parentRelativePath: parentOf(selected),
-      error: null,
-      message: null,
-    });
-  }, [state.selectedPath, update]);
+  const beginMove = useCallback(
+    (relativePath?: string): void => {
+      const selected = relativePath ?? state.selectedPath;
+      if (selected === null || selected === '') {
+        return;
+      }
+      update({
+        status: 'choosing-target',
+        mode: 'move',
+        parentRelativePath: parentOf(selected),
+        error: null,
+        message: null,
+      });
+    },
+    [state.selectedPath, update],
+  );
 
   const beginSaveAs = useCallback(
     (tabId: string): void => {
@@ -363,55 +403,149 @@ export function useFileManagement({
     [update],
   );
 
-  const beginDelete = useCallback((): void => {
-    const selected = state.selectedPath;
-    if (selected === null || selected === '') {
-      return;
-    }
-    if (affectedTabs(selected).some((tab) => tab.saving)) {
-      applyError(SAVING_BLOCKED_ERROR);
-      return;
-    }
-    const dirtyCount = affectedTabs(selected).filter((tab) => tab.dirty).length;
-    const lower = selected.toLowerCase();
-    const kindLabel = lower.endsWith('.txt')
-      ? '文本文件'
-      : lower.endsWith('.docx')
-        ? 'Word 文档'
-        : affectedTabs(selected).some((tab) => tab.relativePath !== selected)
-          ? '文件夹'
-          : '文件';
-    update({
-      status: 'confirming-trash',
-      pendingTrash: { relativePath: selected, kindLabel, dirtyCount },
-      error: null,
-      message: null,
-    });
-  }, [state.selectedPath, affectedTabs, applyError, update]);
+  const beginDelete = useCallback(
+    (relativePath?: string): void => {
+      const selected = relativePath ?? state.selectedPath;
+      if (selected === null || selected === '') {
+        return;
+      }
+      if (affectedTabs(selected).some((tab) => tab.saving)) {
+        applyError(SAVING_BLOCKED_ERROR);
+        return;
+      }
+      const dirtyCount = affectedTabs(selected).filter((tab) => tab.dirty).length;
+      const lower = selected.toLowerCase();
+      const kindLabel = lower.endsWith('.txt')
+        ? '文本文件'
+        : lower.endsWith('.docx')
+          ? 'Word 文档'
+          : affectedTabs(selected).some((tab) => tab.relativePath !== selected)
+            ? '文件夹'
+            : '文件';
+      update({
+        status: 'confirming-trash',
+        pendingTrash: { relativePath: selected, kindLabel, dirtyCount },
+        error: null,
+        message: null,
+      });
+    },
+    [state.selectedPath, affectedTabs, applyError, update],
+  );
 
-  const revealSelected = useCallback((): void => {
-    const selected = state.selectedPath;
-    if (selected === null || selected === '') {
-      return;
-    }
-    const mutationId = ++mutationIdRef.current;
-    update({ status: 'running', runningMutationId: mutationId, error: null, message: null });
-    window.desktop.workspace
-      .reveal({ revealRoot: false, relativePath: selected })
-      .then((result) => {
-        if (result.status === 'revealed') {
-          void applySuccess(`已在资源管理器中显示 ${basenameOf(selected)}`, () => undefined);
+  const revealTarget = useCallback(
+    (
+      request:
+        | { readonly revealRoot: true }
+        | { readonly revealRoot: false; readonly relativePath: string },
+      label: string,
+    ): void => {
+      const mutationId = ++mutationIdRef.current;
+      update({ status: 'running', runningMutationId: mutationId, error: null, message: null });
+      window.desktop.workspace
+        .reveal(request)
+        .then((result) => {
+          if (result.status === 'revealed') {
+            update({
+              status: 'succeeded',
+              runningMutationId: null,
+              error: null,
+              message: `已在资源管理器中显示 ${label}`,
+            });
+          } else {
+            applyError(result.error);
+          }
+        })
+        .catch(() =>
+          applyError({
+            code: 'REVEAL_FAILED',
+            message: FILE_MANAGEMENT_ERROR_MESSAGES.REVEAL_FAILED,
+          }),
+        );
+    },
+    [applyError, update],
+  );
+
+  const revealSelected = useCallback(
+    (relativePath?: string): void => {
+      const selected = relativePath ?? state.selectedPath;
+      if (selected === null || selected === '') return;
+      revealTarget({ revealRoot: false, relativePath: selected }, basenameOf(selected));
+    },
+    [revealTarget, state.selectedPath],
+  );
+
+  const revealRoot = useCallback((): void => {
+    revealTarget({ revealRoot: true }, '工作区');
+  }, [revealTarget]);
+
+  const relocateByDrop = useCallback(
+    async (
+      sourceRelativePath: string,
+      targetParentRelativePath: string,
+      expectedWorkspaceEpoch: number,
+    ): Promise<void> => {
+      if (
+        dropPendingRef.current ||
+        expectedWorkspaceEpoch !== epochRef.current ||
+        isPathSaving(sourceRelativePath)
+      ) {
+        if (isPathSaving(sourceRelativePath)) applyError(SAVING_BLOCKED_ERROR);
+        return;
+      }
+      dropPendingRef.current = true;
+      const mutationId = ++mutationIdRef.current;
+      update({ status: 'running', runningMutationId: mutationId, error: null, message: null });
+      try {
+        const result = await window.desktop.workspace.relocate({
+          mutationId,
+          sourceRelativePath,
+          parentRelativePath: targetParentRelativePath,
+          name: basenameOf(sourceRelativePath),
+        });
+        if (expectedWorkspaceEpoch !== epochRef.current) return;
+        if (result.status === 'succeeded') {
+          await applySuccess(`已移动 ${basenameOf(sourceRelativePath)}`, () => {
+            onMutationCommittedRef.current?.();
+            commitRelocate(sourceRelativePath, result);
+            if (result.kind === 'directory') {
+              update({ expandedDirs: migrateExpanded(sourceRelativePath, result.relativePath) });
+            }
+            selectEntry(result.relativePath);
+          });
+        } else if (result.error.code === 'PARTIAL_FAILURE') {
+          onMutationCommittedRef.current?.();
+          await refreshWorkspace();
+          update({
+            status: 'partial-failure',
+            runningMutationId: null,
+            error: null,
+            message: '移动部分完成，已刷新工作区，请核对实际文件状态',
+          });
         } else {
           applyError(result.error);
         }
-      })
-      .catch(() =>
-        applyError({
-          code: 'REVEAL_FAILED',
-          message: FILE_MANAGEMENT_ERROR_MESSAGES.REVEAL_FAILED,
-        }),
-      );
-  }, [state.selectedPath, applySuccess, applyError, update]);
+      } catch {
+        if (expectedWorkspaceEpoch === epochRef.current) {
+          applyError({
+            code: 'WRITE_FAILED',
+            message: FILE_MANAGEMENT_ERROR_MESSAGES.WRITE_FAILED,
+          });
+        }
+      } finally {
+        dropPendingRef.current = false;
+      }
+    },
+    [
+      applyError,
+      applySuccess,
+      commitRelocate,
+      isPathSaving,
+      migrateExpanded,
+      refreshWorkspace,
+      selectEntry,
+      update,
+    ],
+  );
 
   const setInputName = useCallback(
     (name: string): void => {
@@ -815,6 +949,9 @@ export function useFileManagement({
     beginSaveAs,
     beginDelete,
     revealSelected,
+    revealRoot,
+    isPathSaving,
+    relocateByDrop,
     setInputName,
     submitInput,
     pickTarget,

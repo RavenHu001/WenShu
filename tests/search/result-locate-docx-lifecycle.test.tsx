@@ -362,7 +362,7 @@ async function openWorkspace(): Promise<void> {
 /** 打开搜索侧栏并提交查询（fireEvent 通道，避免 act/user-event 焦点碰撞，与 TXT 定位测试一致）。 */
 async function submitSearch(query: string): Promise<void> {
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     fireEvent.change(screen.getByLabelText('搜索内容'), { target: { value: query } });
     fireEvent.keyDown(screen.getByLabelText('搜索内容'), { key: 'Enter' });
     fireEvent.submit(screen.getByLabelText('搜索内容').closest('form') as HTMLFormElement);
@@ -624,7 +624,8 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
       api.resolveSaveDocx();
     });
     await act(async () => {});
-    expect(screen.getByText('已保存（备份 doc.docx.wenshu.bak）')).toBeDefined();
+    expect(screen.getByText('已保存 · 已备份')).toBeDefined();
+    expect(screen.getByTitle('备份：doc.docx.wenshu.bak')).toBeDefined();
     expect(dirtyTabCount()).toBe(0);
     expect(api.saveDocx.mock.calls[0]?.[0]?.expectedRevision).toBe('rev-doc');
   });
@@ -773,7 +774,8 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
     });
     await act(async () => {});
     expect(dirtyTabCount()).toBe(0);
-    expect(screen.getByText('已保存（备份 doc.docx.wenshu.bak）')).toBeDefined();
+    expect(screen.getByText('已保存 · 已备份')).toBeDefined();
+    expect(screen.getByTitle('备份：doc.docx.wenshu.bak')).toBeDefined();
   });
 });
 
