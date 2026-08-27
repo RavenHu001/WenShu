@@ -451,21 +451,21 @@ export const App = (): React.JSX.Element => {
     [],
   );
 
-  const handleOpenCurrentDocumentSearch = useCallback(
-    (mode: EditorSearchMode): void => {
-      setSearchFocusTarget('current-document');
-      setActivity('search');
-      setCurrentSearchFocusMode(mode);
-      // 按活动 kind 分派：DOCX 走 WP2 controller，TXT 继续走 CodeMirror 入口
-      const tab = activeTab(model);
-      if (tab !== null && isDocxTab(tab)) {
-        activeDocxSearchControlsRef.current?.open(mode);
-      } else {
-        editorSearchControlsRef.current?.open(mode);
-      }
-    },
-    [model],
-  );
+  const handleOpenCurrentDocumentSearch = useCallback((mode: EditorSearchMode): void => {
+    const tab = activeTab(modelRef.current);
+    if (tab === null) {
+      return;
+    }
+    setSearchFocusTarget('current-document');
+    setActivity('search');
+    setCurrentSearchFocusMode(mode);
+    // 按活动 kind 分派：DOCX 走 WP2 controller，TXT 继续走 CodeMirror 入口
+    if (isDocxTab(tab)) {
+      activeDocxSearchControlsRef.current?.open(mode);
+    } else {
+      editorSearchControlsRef.current?.open(mode);
+    }
+  }, []);
 
   const handleDocxSearchControlsChange = useCallback(
     (controls: DocxCurrentSearchControls | null): void => {
@@ -475,27 +475,32 @@ export const App = (): React.JSX.Element => {
     [],
   );
 
-  // read-only DOCX：PM 对非 editable 视图不派发 keydown（prosemirror-view 实测），
-  // Tiptap 快捷键不会触发；这里补一个仅限 read-only 活动 DOCX 的窗口级快捷键入口
-  // （Ctrl+F / Ctrl+H / F3 / Shift+F3），可编辑 DOCX 仍由编辑器 keymap 处理，避免双重触发。
+  // Ctrl+F / Ctrl+H 使用窗口级兜底，使焦点位于文件树、标签栏或工具栏时仍可打开
+  // 当前文档查找。编辑器 keymap 已处理的事件会 preventDefault，这里据此避免重复触发。
+  // read-only DOCX 的 F3 / Shift+F3 继续由窗口层补偿（非 editable PM 不派发 keydown）。
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const tab = activeTab(modelRef.current);
-      if (tab === null || !isDocxTab(tab) || tab.status !== 'read-only') {
+      if (event.defaultPrevented) {
         return;
       }
-      const target = event.target as HTMLElement | null;
-      if (target !== null && target.closest('.docx-current-search-panel') !== null) {
-        return; // 面板内部按键由面板自身处理，避免与窗口监听重复
+      const tab = activeTab(modelRef.current);
+      if (tab === null) {
+        return;
       }
       const key = event.key;
-      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'f') {
+      const isUnshiftedPrimaryShortcut =
+        (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey;
+      if (isUnshiftedPrimaryShortcut && key.toLowerCase() === 'f') {
         event.preventDefault();
-        handleCurrentDocumentSearchRequest('find');
-      } else if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'h') {
+        handleOpenCurrentDocumentSearch('find');
+      } else if (isUnshiftedPrimaryShortcut && key.toLowerCase() === 'h') {
         event.preventDefault();
-        handleCurrentDocumentSearchRequest('replace');
-      } else if (key === 'F3') {
+        handleOpenCurrentDocumentSearch('replace');
+      } else if (isDocxTab(tab) && tab.status === 'read-only' && key === 'F3') {
+        const target = event.target as HTMLElement | null;
+        if (target !== null && target.closest('.docx-current-search-panel') !== null) {
+          return; // 面板内部 F3 由面板自身处理，避免与窗口监听重复
+        }
         event.preventDefault();
         if (event.shiftKey) {
           activeDocxSearchControlsRef.current?.selectPrevious();
@@ -508,7 +513,7 @@ export const App = (): React.JSX.Element => {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [handleOpenCurrentDocumentSearch]);
 
   // 工作区成功切换：清空挂起的定位目标与过期提示（旧工作区的定位请求作废）；
   // 磁盘变更（mutationEpoch）后旧搜索结果的定位目标与过期提示同样清空（§4.11）

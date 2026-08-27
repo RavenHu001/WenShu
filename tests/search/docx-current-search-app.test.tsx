@@ -242,6 +242,23 @@ async function openDocxPanelAndQuery(query: string): Promise<void> {
 }
 
 describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
+  it('编辑器未获得焦点时，Ctrl+F / Ctrl+H 仍打开当前 DOCX 的查找与替换', async () => {
+    await openWorkspace([entry('b.docx')]);
+    await openFileFromTree('b.docx');
+    await act(async () => {});
+
+    const activityButton = screen.getByRole('button', { name: '搜索面板' });
+    activityButton.focus();
+    expect(document.activeElement).toBe(activityButton);
+
+    ctrlF(activityButton);
+    expect(document.activeElement).toBe(screen.getByLabelText('查找内容'));
+
+    activityButton.focus();
+    ctrlH(activityButton);
+    expect(document.activeElement).toBe(screen.getByLabelText('替换为'));
+  });
+
   it('Ctrl+F 打开 DOCX 面板：即时搜索、计数与匹配装饰', async () => {
     await openWorkspace([entry('b.docx')]);
     await openFileFromTree('b.docx');

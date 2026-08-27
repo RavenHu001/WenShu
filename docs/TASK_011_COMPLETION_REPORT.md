@@ -4,6 +4,8 @@
 > WP0–WP5 已按顺序完成产品实现、定向测试与自动质量门禁。真实 Electron 截图、开发/
 > 生产启动冒烟和最终命令结果见第 8–10 节。Windows 物理 100%/125%/150% 显示缩放会
 > 修改会话级系统设置，当前自动化会话未擅自切换，保留项目所有者最终确认项。
+> 2026-08-27 补充：修复 `Ctrl+F` / `Ctrl+H` 仅在编辑器获得焦点后生效的问题；项目
+> 所有者已确认实际交互有效，自动回归与完整质量门禁通过，详见 WP4、第 5 节和第 8 节。
 
 ## 1. 实际完成结果
 
@@ -47,6 +49,10 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 - DOCX 为连续写作画布，最大 820 px、居中、外围工作区背景；无 page/page count 语义。
 - 工具栏按历史、字符、段落、字符外观、列表、对齐分组；`ResizeObserver` 在 700 px 阈值切换“更多格式”，不撑出编辑区横向滚动。
 - TXT 继续使用原 CodeMirror 全高布局与快捷键。
+- 当前文档 `Ctrl+F` / `Ctrl+H` 增加 App 窗口级兜底：焦点位于文件树、标签栏、工具栏等
+  非编辑器区域时，仍按活动标签分派到 TXT CodeMirror 或 DOCX current-search controller；
+  编辑器内部快捷键继续保留，并通过 `defaultPrevented` 去重。窗口入口排除 Shift/Alt 组合，
+  不抢占 `Ctrl+Shift+F` 工作区搜索；无活动文档时不打开空面板。
 - 搜索结果为“文件卡片 → 匹配”，文件名/父路径/类型/数量分层，片段优先、行列次要；对象身份与点击参数保持原结果对象。
 - 工作区搜索限制说明折叠收纳；当前 TXT/DOCX 查找、普通/当前匹配与 focus 样式语义保持。
 
@@ -74,7 +80,7 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 ### 主要修改/删除
 
 - `src/main/index.ts`：只移除默认菜单；安全 BrowserWindow 配置不变。
-- `src/renderer/App.tsx`：保留顶层生命周期编排，展示细节移至 shell/common/workspace 组件；接入 toast、sidebar width 与全局 F5/Ctrl+Shift+S。
+- `src/renderer/App.tsx`：保留顶层生命周期编排，展示细节移至 shell/common/workspace 组件；接入 toast、sidebar width、全局 F5/Ctrl+Shift+S，以及当前文档 Ctrl+F/Ctrl+H 窗口级兜底。
 - `use-file-management.ts`：增加针对稳定路径的菜单命令入口和 `relocateByDrop`；未新增协议。
 - `WorkspaceSidebar/FileTree/FileTreeNode`：完整重构侧栏与树交互；删除 `FileManagementToolbar.tsx`。
 - `TabBar/DocumentPane/DocxToolbar/SearchSidebar/SearchResults`：外壳、画布、工具栏和搜索层级。
@@ -96,6 +102,7 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 - UI primitive：7 项；shell/menu/status/resize：8 项；design/static security：4 项。
 - 文件树纯 drop/geometry：6 项；上下文/键盘/拖拽 UI：5 项；拖拽 controller：3 项。
 - DOCX toolbar width/overflow：2 项；DOCX canvas/style：新增 1 项（文件共 3 项）。
+- 当前文档快捷键补充 2 项：分别覆盖 TXT、DOCX 在活动栏按钮获得焦点、编辑器未获得焦点时，`Ctrl+F` 聚焦查找输入、`Ctrl+H` 聚焦替换输入。
 - 既有文件管理、mutationEpoch、stable tabId、DOCX 查找/定位、保存/冲突和窗口生命周期全量回归。
 - 无 `.only`、无新增无条件 `.skip`、无 timeout 扩大、无宽泛快照替代状态转移。
 
@@ -131,8 +138,8 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 | `.\scripts\npm.cmd run typecheck`    | 通过；5 个 tsconfig；退出码 0               |
 | `.\scripts\npm.cmd run lint`         | 通过；0 warning；退出码 0                   |
 | `.\scripts\npm.cmd run format:check` | 通过；退出码 0                              |
-| `.\scripts\npm.cmd test`             | 69 文件；1170 passed / 10 skipped；退出码 0 |
-| `.\scripts\npm.cmd run check`        | 69 文件；1170 passed / 10 skipped；退出码 0 |
+| `.\scripts\npm.cmd test`             | 69 文件；1172 passed / 10 skipped；退出码 0 |
+| `.\scripts\npm.cmd run check`        | 69 文件；1172 passed / 10 skipped；退出码 0 |
 | `.\scripts\npm.cmd run build`        | main/preload/renderer 全部产出；退出码 0    |
 
 10 个条件跳过均为 Task 1–10 已记录的真实 symlink/junction 权限条件：read-text 2、read-docx 2、TXT search 1、mixed search 1、resolve 1、relocate 1、trash 1、reveal 1；拒绝分支由 mock 确定覆盖。无新增跳过。三条 stderr 是既有保存/新建失败注入对临时清理失败的预期记录。

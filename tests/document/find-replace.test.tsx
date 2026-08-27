@@ -204,6 +204,25 @@ function pressModKey(key: string, shift = false): void {
 }
 
 describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
+  it('编辑器未获得焦点时，Ctrl+F / Ctrl+H 仍打开当前 TXT 的查找与替换', async () => {
+    mockDesktop({ 'a.txt': 'hello world' });
+    render(<App />);
+    await openWorkspace();
+    await openFile('a.txt');
+
+    const activityButton = screen.getByRole('button', { name: '搜索面板' });
+    activityButton.focus();
+    expect(document.activeElement).toBe(activityButton);
+
+    fireEvent.keyDown(activityButton, { key: 'f', ctrlKey: true });
+    expect(searchPanel()).not.toBeNull();
+    expect(document.activeElement).toBe(panelInput('search'));
+
+    activityButton.focus();
+    fireEvent.keyDown(activityButton, { key: 'h', ctrlKey: true });
+    expect(document.activeElement).toBe(panelInput('replace'));
+  });
+
   it('Ctrl+F 打开查找面板；Ctrl+H 打开面板并聚焦替换输入', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
     render(<App />);
