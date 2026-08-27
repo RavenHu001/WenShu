@@ -277,7 +277,7 @@ async function openWorkspace(): Promise<void> {
 /** 打开搜索侧栏并提交查询（fireEvent 通道，避免 act/user-event 焦点碰撞，与 TXT 定位测试一致）。 */
 async function submitSearch(query: string): Promise<void> {
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     fireEvent.change(screen.getByLabelText('搜索内容'), { target: { value: query } });
     fireEvent.keyDown(screen.getByLabelText('搜索内容'), { key: 'Enter' });
     fireEvent.submit(screen.getByLabelText('搜索内容').closest('form') as HTMLFormElement);

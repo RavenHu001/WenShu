@@ -275,7 +275,8 @@ describe('DOCX 保存闭环（第 8.6 节）', () => {
     });
     await act(async () => {});
     expect(dirtyTabCount()).toBe(0);
-    expect(screen.getByText('已保存（备份 b.docx.wenshu.bak）')).toBeDefined();
+    expect(screen.getByText('已保存 · 已备份')).toBeDefined();
+    expect(screen.getByTitle('备份：b.docx.wenshu.bak')).toBeDefined();
   });
 
   it('保存期间继续编辑：旧保存成功不清除新 dirty（不变量 9）', async () => {
@@ -307,7 +308,7 @@ describe('DOCX 保存闭环（第 8.6 节）', () => {
       });
     });
     await act(async () => {});
-    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(screen.getByText('磁盘冲突')).toBeDefined();
     expect(dirtyTabCount()).toBe(1);
     api.readDocx.mockResolvedValue({
       status: 'loaded',
@@ -438,7 +439,7 @@ describe('TXT 搜索结果与 DOCX 标签共存（第 8.6 节）', () => {
     await openDocx(api, 'b.docx');
     // 打开搜索侧栏并提交查询
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '搜' }));
+      fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     });
     await act(async () => {
       fireEvent.change(screen.getByLabelText('搜索内容'), { target: { value: 'hello' } });

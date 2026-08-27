@@ -8,7 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useWorkspace } from '../../src/renderer/lib/use-workspace';
 import { useDocuments } from '../../src/renderer/lib/use-documents';
@@ -156,7 +156,7 @@ function Harness({ onMutationCommitted }: { onMutationCommitted?: () => void }):
   const fm = useFileManagement({
     workspace: workspace.state.workspace,
     workspaceEpoch: workspace.epoch,
-    refreshWorkspace: workspace.refreshWorkspace,
+    refreshWorkspace: () => workspace.refreshWorkspace({ background: true }),
     openFile: documents.openFile,
     commitRelocate: documents.commitRelocateResult,
     commitTrash: documents.commitTrashResult,
@@ -177,8 +177,6 @@ function Harness({ onMutationCommitted }: { onMutationCommitted?: () => void }):
         onSelectEntry={fm.selectEntry}
         onToggleDir={fm.toggleDir}
         fileManagement={fm}
-        onSaveAsActive={() => undefined}
-        saveAsDisabled={false}
       />
       <FileManagementDialogs
         state={fm.state}
@@ -194,6 +192,7 @@ function Harness({ onMutationCommitted }: { onMutationCommitted?: () => void }):
       />
       <output data-testid="fm-status">{fm.state.status}</output>
       <output data-testid="fm-selected">{fm.state.selectedPath ?? ''}</output>
+      <output data-testid="fm-message">{fm.state.message ?? ''}</output>
     </>
   );
 }
@@ -202,11 +201,54 @@ async function openWorkspace(): Promise<void> {
   await userEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
 }
 
+async function beginCreate(label: '新建 TXT' | '新建 DOCX' | '新建文件夹'): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: '新建' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: label }));
+}
+
+async function runSelectedContextCommand(
+  label: '重命名' | '移动到…' | '删除到回收站' | '在资源管理器中显示',
+): Promise<void> {
+  const selected = document.querySelector<HTMLButtonElement>(
+    '[role="treeitem"][aria-current="true"] button',
+  );
+  if (selected === null) throw new Error('expected selected tree row');
+  fireEvent.contextMenu(selected, { clientX: 30, clientY: 30 });
+  await userEvent.click(screen.getByRole('menuitem', { name: label }));
+}
+
 afterEach(() => {
   cleanup();
 });
 
 describe('文件树选择与打开行为', () => {
+  it('文件操作后的后台刷新不插入状态行或重建文件树', async () => {
+    let resolveRefresh!: (result: { status: 'refreshed'; workspace: WorkspaceSnapshot }) => void;
+    const refresh = vi.fn(
+      () =>
+        new Promise<{ status: 'refreshed'; workspace: WorkspaceSnapshot }>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    mockDesktop({ refresh });
+    render(<Harness />);
+    await openWorkspace();
+    const tree = screen.getByRole('tree', { name: '工作区文件树' });
+
+    await beginCreate('新建 TXT');
+    fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'new.txt' } });
+    await userEvent.click(screen.getByTestId('fm-input-confirm'));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByText('正在刷新…')).toBeNull();
+    expect(screen.getByRole('tree', { name: '工作区文件树' })).toBe(tree);
+
+    await act(async () => {
+      resolveRefresh({ status: 'refreshed', workspace: snapshotOf() });
+    });
+    await waitFor(() => expect(screen.getByTestId('fm-status').textContent).toBe('succeeded'));
+  });
+
   it('TXT 单击：打开并同时成为管理选择；普通文件仅选择不打开', async () => {
     const { readText } = mockDesktop();
     render(<Harness />);
@@ -240,7 +282,7 @@ describe('新建与名称输入', () => {
     render(<Harness />);
     await openWorkspace();
 
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     const input = screen.getByTestId('fm-name-input') as HTMLInputElement;
     expect(document.activeElement).toBe(input);
     await userEvent.type(input, 'brand-new.txt{Enter}');
@@ -250,14 +292,14 @@ describe('新建与名称输入', () => {
       name: 'brand-new.txt',
     });
     expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
-    expect(screen.getByText('已创建 brand-new.txt')).toBeDefined();
+    expect(screen.getByTestId('fm-message').textContent).toBe('已创建 brand-new.txt');
   });
 
   it('非法名称：错误保留输入，可修改重试', async () => {
     const { createText } = mockDesktop();
     render(<Harness />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     const input = screen.getByTestId('fm-name-input') as HTMLInputElement;
     await userEvent.type(input, 'CON{Enter}');
     expect(screen.getByTestId('fm-status').textContent).toBe('error');
@@ -276,11 +318,11 @@ describe('新建与名称输入', () => {
     mockDesktop({ createText });
     render(<Harness />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.type(screen.getByTestId('fm-name-input'), 'x.txt{Enter}');
     expect(screen.getByTestId('fm-status').textContent).toBe('running');
     expect((screen.getByTestId('fm-input-confirm') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('fm-create-text') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '新建' }) as HTMLButtonElement).disabled).toBe(true);
     await act(async () => {
       resolveCreate({ status: 'succeeded', mutationId: 1, relativePath: 'x.txt', kind: 'text' });
     });
@@ -290,7 +332,7 @@ describe('新建与名称输入', () => {
     const { createText } = mockDesktop();
     render(<Harness />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new{Enter}');
     expect(createText).toHaveBeenCalledWith({
       mutationId: 1,
@@ -298,14 +340,14 @@ describe('新建与名称输入', () => {
       name: 'brand-new.txt',
     });
     expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
-    expect(screen.getByText('已创建 brand-new.txt')).toBeDefined();
+    expect(screen.getByTestId('fm-message').textContent).toBe('已创建 brand-new.txt');
   });
 
   it('新建 DOCX：名称无扩展名时自动补全 .docx 提交', async () => {
     const { createDocx } = mockDesktop();
     render(<Harness />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-docx'));
+    await beginCreate('新建 DOCX');
     await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new{Enter}');
     expect(createDocx).toHaveBeenCalledWith({
       mutationId: 1,
@@ -313,14 +355,14 @@ describe('新建与名称输入', () => {
       name: 'brand-new.docx',
     });
     expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
-    expect(screen.getByText('已创建 brand-new.docx')).toBeDefined();
+    expect(screen.getByTestId('fm-message').textContent).toBe('已创建 brand-new.docx');
   });
 
   it('新建 TXT：名称带其他扩展名时拒绝且不发 IPC', async () => {
     const { createText } = mockDesktop();
     render(<Harness />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new.md{Enter}');
     expect(screen.getByTestId('fm-status').textContent).toBe('error');
     expect(createText).not.toHaveBeenCalled();
@@ -336,7 +378,7 @@ describe('重命名与删除', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-rename'));
+    await runSelectedContextCommand('重命名');
     const input = screen.getByTestId('fm-name-input') as HTMLInputElement;
     expect(input.value).toBe('a.txt');
     await act(async () => {
@@ -358,7 +400,7 @@ describe('重命名与删除', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-rename'));
+    await runSelectedContextCommand('重命名');
     await act(async () => {
       fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed' } });
       fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
@@ -370,7 +412,7 @@ describe('重命名与删除', () => {
       name: 'renamed.txt',
     });
     expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
-    expect(screen.getByText('已重命名为 renamed.txt')).toBeDefined();
+    expect(screen.getByTestId('fm-message').textContent).toBe('已重命名为 renamed.txt');
   });
 
   it('重命名：改为其他扩展名时拒绝（TYPE_CHANGE_NOT_ALLOWED）且不发 IPC', async () => {
@@ -378,7 +420,7 @@ describe('重命名与删除', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-rename'));
+    await runSelectedContextCommand('重命名');
     await act(async () => {
       fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed.md' } });
       fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
@@ -395,7 +437,7 @@ describe('重命名与删除', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-note.bin'));
-    await userEvent.click(screen.getByTestId('fm-rename'));
+    await runSelectedContextCommand('重命名');
     await act(async () => {
       fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed' } });
       fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
@@ -414,7 +456,7 @@ describe('重命名与删除', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-delete'));
+    await runSelectedContextCommand('删除到回收站');
     expect(screen.getByText(/将删除 .*a\.txt.*Windows 回收站/)).toBeDefined();
     expect(screen.getByText(/没有未保存的标签/)).toBeDefined();
     await userEvent.click(screen.getByTestId('fm-trash-confirm'));
@@ -427,7 +469,7 @@ describe('重命名与删除', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-note.bin'));
-    await userEvent.click(screen.getByTestId('fm-delete'));
+    await runSelectedContextCommand('删除到回收站');
     await userEvent.click(screen.getByTestId('fm-trash-cancel'));
     expect(trash).not.toHaveBeenCalled();
     expect(screen.getByTestId('fm-status').textContent).toBe('idle');
@@ -435,14 +477,14 @@ describe('重命名与删除', () => {
 });
 
 describe('取消焦点恢复与 partial failure', () => {
-  it('取消名称输入：焦点恢复到操作栏按钮', async () => {
+  it('取消名称输入：焦点恢复到紧凑新建入口', async () => {
     mockDesktop();
     render(<Harness />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.click(screen.getByTestId('fm-input-cancel'));
     expect(screen.getByTestId('fm-status').textContent).toBe('idle');
-    expect(document.activeElement).toBe(screen.getByTestId('fm-create-text'));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '新建' }));
   });
 
   it('partial failure：强制刷新并显示部分完成对话框', async () => {
@@ -456,7 +498,7 @@ describe('取消焦点恢复与 partial failure', () => {
     render(<Harness />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-delete'));
+    await runSelectedContextCommand('删除到回收站');
     await userEvent.click(screen.getByTestId('fm-trash-confirm'));
     expect(screen.getByTestId('fm-status').textContent).toBe('partial-failure');
     expect(refresh).toHaveBeenCalled();
@@ -494,7 +536,7 @@ describe('onMutationCommitted（TASK-009 §4.11 mutationEpoch 通知）', () => 
     const { createText } = mockDesktop();
     render(<Harness onMutationCommitted={onMutationCommitted} />);
     await openWorkspace();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new.txt{Enter}');
     expect(createText).toHaveBeenCalled();
     expect(onMutationCommitted).toHaveBeenCalledTimes(1);
@@ -506,14 +548,14 @@ describe('onMutationCommitted（TASK-009 §4.11 mutationEpoch 通知）', () => 
       mutationId: 2,
       error: { code: 'WRITE_FAILED', message: '写入失败' },
     });
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.type(screen.getByTestId('fm-name-input'), 'fail.txt{Enter}');
     expect(screen.getByTestId('fm-status').textContent).toBe('error');
     expect(onMutationCommitted).not.toHaveBeenCalled();
 
     // 取消：不通知
     onMutationCommitted.mockClear();
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await beginCreate('新建 TXT');
     await userEvent.click(screen.getByTestId('fm-input-cancel'));
     expect(onMutationCommitted).not.toHaveBeenCalled();
   });
@@ -526,13 +568,13 @@ describe('onMutationCommitted（TASK-009 §4.11 mutationEpoch 通知）', () => 
 
     // reveal 成功：不通知（§4.11 reveal 不递增）
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-reveal'));
+    await runSelectedContextCommand('在资源管理器中显示');
     expect(screen.getByTestId('fm-status').textContent).toBe('succeeded');
     expect(onMutationCommitted).not.toHaveBeenCalled();
 
     // 重命名成功：通知一次
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-rename'));
+    await runSelectedContextCommand('重命名');
     await act(async () => {
       fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'renamed.txt' } });
       fireEvent.keyDown(screen.getByTestId('fm-name-input'), { key: 'Enter' });
@@ -543,7 +585,7 @@ describe('onMutationCommitted（TASK-009 §4.11 mutationEpoch 通知）', () => 
     // 删除成功：通知一次
     onMutationCommitted.mockClear();
     await userEvent.click(screen.getByTestId('ft-note.bin'));
-    await userEvent.click(screen.getByTestId('fm-delete'));
+    await runSelectedContextCommand('删除到回收站');
     await userEvent.click(screen.getByTestId('fm-trash-confirm'));
     expect(trash).toHaveBeenCalled();
     expect(onMutationCommitted).toHaveBeenCalledTimes(1);
@@ -560,7 +602,7 @@ describe('onMutationCommitted（TASK-009 §4.11 mutationEpoch 通知）', () => 
     render(<Harness onMutationCommitted={onMutationCommitted} />);
     await openWorkspace();
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-delete'));
+    await runSelectedContextCommand('删除到回收站');
     await userEvent.click(screen.getByTestId('fm-trash-confirm'));
     expect(screen.getByTestId('fm-status').textContent).toBe('partial-failure');
     expect(onMutationCommitted).toHaveBeenCalledTimes(1);

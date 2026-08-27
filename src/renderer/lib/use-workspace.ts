@@ -47,8 +47,16 @@ export interface WorkspaceController {
   readonly notifyMutationCommitted: () => void;
   /** 打开文件夹：取消 / 失败保留原工作区；成功切换时递增 epoch。 */
   readonly openWorkspace: () => Promise<void>;
-  /** 刷新当前工作区：未打开或无变更时安全无操作；返回是否成功替换了工作区快照。 */
-  readonly refreshWorkspace: () => Promise<boolean>;
+  /**
+   * 刷新当前工作区：未打开或无变更时安全无操作；返回是否成功替换了工作区快照。
+   * 文件管理成功后的对账刷新使用 `background`，保留 loaded 布局，避免短暂状态行引发布局跳动。
+   */
+  readonly refreshWorkspace: (options?: RefreshWorkspaceOptions) => Promise<boolean>;
+}
+
+export interface RefreshWorkspaceOptions {
+  /** true 时不切换到 refreshing 展示态；磁盘扫描和快照替换语义不变。 */
+  readonly background?: boolean;
 }
 
 export interface UseWorkspaceOptions {
@@ -72,6 +80,10 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
   const [mutationEpoch, setMutationEpoch] = useState(0);
   const stateRef = useRef(state);
   const onWorkspaceSelectedRef = useRef(options.onWorkspaceSelected);
+  /** 打开请求代次：切换工作区后，旧根目录的迟到刷新不得覆盖新快照。 */
+  const workspaceGenerationRef = useRef(0);
+  /** 同一窗口只允许一个刷新在途；手动刷新与后台对账共享结果，避免重复扫描与重复绘制。 */
+  const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -86,11 +98,17 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
   }, []);
 
   const openWorkspace = useCallback(async () => {
+    const generation = ++workspaceGenerationRef.current;
+    // 打开新工作区使旧根目录刷新失去单飞所有权；旧结果仍会完成，但会被 generation 丢弃。
+    refreshInFlightRef.current = null;
     const prevWorkspace = stateRef.current.workspace;
     setState({ status: 'loading', workspace: prevWorkspace, error: null });
 
     try {
       const result = await window.desktop.workspace.open();
+      if (generation !== workspaceGenerationRef.current) {
+        return;
+      }
 
       if (result.status === 'selected') {
         setState({ status: 'loaded', workspace: result.workspace, error: null });
@@ -111,6 +129,9 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
         });
       }
     } catch (error) {
+      if (generation !== workspaceGenerationRef.current) {
+        return;
+      }
       setState({
         status: 'error',
         workspace: prevWorkspace,
@@ -119,42 +140,68 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     }
   }, []);
 
-  const refreshWorkspace = useCallback(async (): Promise<boolean> => {
-    if (!stateRef.current.workspace) {
-      return false;
-    }
-    setState((prev) => ({ ...prev, status: 'refreshing' }));
-
-    try {
-      const result = await window.desktop.workspace.refresh();
-
-      if (result.status === 'refreshed') {
-        setState({ status: 'loaded', workspace: result.workspace, error: null });
-        return true;
-      } else if (result.status === 'error') {
-        setState((prev) => ({
-          status: 'error',
-          workspace: prev.workspace,
-          error: result.error,
-        }));
-        return false;
-      } else {
-        setState((prev) => ({
-          status: 'loaded',
-          workspace: prev.workspace,
-          error: null,
-        }));
-        return true;
+  const refreshWorkspace = useCallback(
+    (refreshOptions: RefreshWorkspaceOptions = {}): Promise<boolean> => {
+      if (!stateRef.current.workspace) {
+        return Promise.resolve(false);
       }
-    } catch (error) {
-      setState((prev) => ({
-        status: 'error',
-        workspace: prev.workspace,
-        error: toWorkspaceEntryError(error),
-      }));
-      return false;
-    }
-  }, []);
+      const existing = refreshInFlightRef.current;
+      if (existing !== null) {
+        return existing;
+      }
+      const generation = workspaceGenerationRef.current;
+
+      // 通过微任务启动，使 ref 先绑定 operation；即使 preload 同步抛错，finally 也能可靠清理。
+      const operation = Promise.resolve().then(async (): Promise<boolean> => {
+        if (refreshOptions.background !== true) {
+          setState((prev) => ({ ...prev, status: 'refreshing' }));
+        }
+
+        try {
+          const result = await window.desktop.workspace.refresh();
+          if (generation !== workspaceGenerationRef.current) {
+            return false;
+          }
+
+          if (result.status === 'refreshed') {
+            setState({ status: 'loaded', workspace: result.workspace, error: null });
+            return true;
+          } else if (result.status === 'error') {
+            setState((prev) => ({
+              status: 'error',
+              workspace: prev.workspace,
+              error: result.error,
+            }));
+            return false;
+          } else {
+            setState((prev) => ({
+              status: 'loaded',
+              workspace: prev.workspace,
+              error: null,
+            }));
+            return true;
+          }
+        } catch (error) {
+          if (generation !== workspaceGenerationRef.current) {
+            return false;
+          }
+          setState((prev) => ({
+            status: 'error',
+            workspace: prev.workspace,
+            error: toWorkspaceEntryError(error),
+          }));
+          return false;
+        } finally {
+          if (refreshInFlightRef.current === operation) {
+            refreshInFlightRef.current = null;
+          }
+        }
+      });
+      refreshInFlightRef.current = operation;
+      return operation;
+    },
+    [],
+  );
 
   return { state, epoch, mutationEpoch, notifyMutationCommitted, openWorkspace, refreshWorkspace };
 }

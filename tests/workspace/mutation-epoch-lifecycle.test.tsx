@@ -203,7 +203,7 @@ async function openWorkspace(): Promise<void> {
 
 async function submitSearch(query: string): Promise<void> {
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: '搜' }));
+  await user.click(screen.getByRole('button', { name: '搜索面板' }));
   await user.type(screen.getByLabelText('搜索内容'), query);
   await user.keyboard('{Enter}');
 }
@@ -225,11 +225,22 @@ async function resolveCompleted(api: DesktopMock, requestId: number): Promise<vo
   });
 }
 
+async function runSelectedContextCommand(
+  label: '删除到回收站' | '在资源管理器中显示',
+): Promise<void> {
+  const selected = document.querySelector<HTMLButtonElement>(
+    '[role="treeitem"][aria-current="true"] button',
+  );
+  if (selected === null) throw new Error('expected selected tree row');
+  fireEvent.contextMenu(selected, { clientX: 30, clientY: 30 });
+  await userEvent.click(screen.getByRole('menuitem', { name: label }));
+}
+
 /** 切换到文件栏并确认删除 a.txt（trash 已由 mock 决定成功/失败）。 */
 async function deleteSelectedFile(): Promise<void> {
-  await userEvent.click(screen.getByRole('button', { name: '文' }));
+  await userEvent.click(screen.getByRole('button', { name: '文件面板' }));
   await userEvent.click(screen.getByTestId('ft-a.txt'));
-  await userEvent.click(screen.getByTestId('fm-delete'));
+  await runSelectedContextCommand('删除到回收站');
   await userEvent.click(screen.getByTestId('fm-trash-confirm'));
 }
 
@@ -245,7 +256,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
     await deleteSelectedFile();
     expect(api.trash).toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText('输入查询后按 Enter 或点击搜索。')).toBeDefined();
     expect(screen.queryByText(/共 1 处匹配/)).toBeNull();
   });
@@ -260,7 +271,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
     await deleteSelectedFile();
     expect(api.cancelTextWorkspace).toHaveBeenCalledWith({ requestId: 1 });
 
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText('输入查询后按 Enter 或点击搜索。')).toBeDefined();
     expect(screen.queryByText('正在搜索…')).toBeNull();
   });
@@ -280,7 +291,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
 
     await deleteSelectedFile();
 
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText(/共 1 处匹配/)).toBeDefined();
     expect(screen.queryByText('输入查询后按 Enter 或点击搜索。')).toBeNull();
   });
@@ -292,13 +303,13 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
     await submitSearch('hello');
     await resolveCompleted(api, 1);
 
-    await userEvent.click(screen.getByRole('button', { name: '文' }));
+    await userEvent.click(screen.getByRole('button', { name: '文件面板' }));
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-delete'));
+    await runSelectedContextCommand('删除到回收站');
     await userEvent.click(screen.getByTestId('fm-trash-cancel'));
     expect(api.trash).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText(/共 1 处匹配/)).toBeDefined();
   });
 
@@ -309,12 +320,12 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
     await submitSearch('hello');
     await resolveCompleted(api, 1);
 
-    await userEvent.click(screen.getByRole('button', { name: '文' }));
+    await userEvent.click(screen.getByRole('button', { name: '文件面板' }));
     await userEvent.click(screen.getByTestId('ft-a.txt'));
-    await userEvent.click(screen.getByTestId('fm-reveal'));
+    await runSelectedContextCommand('在资源管理器中显示');
     expect(api.reveal).toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText(/共 1 处匹配/)).toBeDefined();
   });
 
@@ -326,16 +337,18 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
     await resolveCompleted(api, 1);
     expect(screen.getByText(/共 1 处匹配/)).toBeDefined();
 
-    await userEvent.click(screen.getByRole('button', { name: '文' }));
-    await userEvent.click(screen.getByTestId('fm-create-text'));
+    await userEvent.click(screen.getByRole('button', { name: '文件面板' }));
+    await userEvent.click(screen.getByRole('button', { name: '新建' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: '新建 TXT' }));
     await userEvent.type(screen.getByTestId('fm-name-input'), 'brand-new{Enter}');
     expect(api.createText).toHaveBeenCalledWith({
       mutationId: 1,
       parentRelativePath: '',
       name: 'brand-new.txt',
     });
+    expect(await screen.findByText('已创建 brand-new.txt')).toBeDefined();
 
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText('输入查询后按 Enter 或点击搜索。')).toBeDefined();
   });
 
@@ -352,15 +365,17 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
       status: 'error',
       error: { code: 'SCAN_FAILED', message: '扫描失败' },
     });
-    await userEvent.click(screen.getByRole('button', { name: '文' }));
+    await userEvent.click(screen.getByRole('button', { name: '文件面板' }));
     await userEvent.click(screen.getByText('刷新'));
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText(/共 1 处匹配/)).toBeDefined();
 
     // 刷新成功：替换快照 → 作废搜索结果
-    await userEvent.click(screen.getByRole('button', { name: '文' }));
-    await userEvent.click(screen.getByText('刷新'));
-    await userEvent.click(screen.getByRole('button', { name: '搜' }));
+    await userEvent.click(screen.getByRole('button', { name: '文件面板' }));
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5' }));
+    });
+    await userEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(screen.getByText('输入查询后按 Enter 或点击搜索。')).toBeDefined();
     expect(screen.queryByText(/共 1 处匹配/)).toBeNull();
   });

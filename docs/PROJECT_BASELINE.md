@@ -306,6 +306,21 @@ Task 10 已完成（见 [TASK-010 完成报告](./TASK_010_COMPLETION_REPORT.md)
 - DOCX 兼容状态；
 - 未来 AI 服务状态。
 
+### 6.5 Task 11 桌面外壳与信息架构实现基线
+
+Task 11 已完成产品代码与自动验收（见 [TASK-011 完成报告](./TASK_011_COMPLETION_REPORT.md)），并冻结以下界面实现边界：
+
+- Electron 默认应用菜单已移除；renderer 内只保留一套中文、可测试、命令真实的应用菜单，不新增 menu IPC；
+- 活动栏只展示已实现的文件与搜索入口，使用项目内 SVG、tooltip、`aria-pressed` 和明确无障碍名称；未实现设置不作为可用入口；
+- 侧栏宽度 180–420 px，可通过指针或键盘调整、折叠并恢复；文件树是主要滚动区，支持长路径、深层目录与超长名称；
+- 文件管理从底部按钮区迁移到根/文件/文件夹上下文菜单和键盘命令；同工作区内部拖拽只表达移动并调用既有 `relocate`，不实现复制、覆盖、跨盘或外部拖入/拖出；
+- renderer 即时拒绝 no-op、自身/后代、快照同名、saving、非法目标和过期工作区；主进程继续最终裁决逐段链接、realpath、目标竞态、伴随备份与 partial failure；
+- DOCX 为连续、居中、最大 820 px 的阅读/写作列，不承诺 Word 分页；工具栏通过真实宽度观察在分组命令和“更多格式”间切换；TXT 维持全高编辑器；
+- 成功 mutation 使用限时可关闭 toast；错误、冲突与部分完成保持可追溯；状态栏不再长期显示 Electron 版本，运行时信息位于“关于”；
+- 样式按 tokens/common/shell/workspace/document/search 分层，并提供 `forced-colors` 与 `prefers-reduced-motion` 入口。
+
+上述界面重构未增加 `DesktopApi`、preload 或 IPC 能力，Task 9 的 stable tabId、mutationEpoch、DOCX `.wenshu.bak`、回收站与写入安全，及 Task 10 的当前 DOCX 查找替换生命周期保持为回归基线。Windows 物理 100%/125%/150% 显示缩放仍按 Task 11 完成报告中的人工步骤执行最终确认。
+
 ## 7. 总体技术架构
 
 项目采用单机桌面应用架构，初期划分为以下模块：

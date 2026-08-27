@@ -210,7 +210,7 @@ async function clickMatch(index: number): Promise<void> {
  */
 async function submitSearch(query: string): Promise<void> {
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     fireEvent.change(screen.getByLabelText('搜索内容'), { target: { value: query } });
     fireEvent.keyDown(screen.getByLabelText('搜索内容'), { key: 'Enter' });
     fireEvent.submit(screen.getByLabelText('搜索内容').closest('form') as HTMLFormElement);
@@ -502,13 +502,13 @@ describe('定位过期校验（第 4.9.3 - 4.9.5 节）', () => {
         });
       }
     });
-    const saveButton = screen.getByText('保存') as HTMLButtonElement;
+    const saveButton = screen.getByText('保存').closest('button') as HTMLButtonElement;
     expect(saveButton.disabled).toBe(false); // dirty
 
     // 再次点击结果：dirty 但范围一致 → 定位成功且不清除 dirty
     await clickMatch(0);
     expect(selectionRange()).toEqual([0, 5]);
-    expect((screen.getByText('保存') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByText('保存').closest('button') as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByText(/搜索结果已过期/)).toBeNull();
   });
 
@@ -551,7 +551,7 @@ describe('定位过期校验（第 4.9.3 - 4.9.5 节）', () => {
     expect(selectionRange()).toEqual([0, 5]);
     // 定位只改变选区：不产生可撤销的历史步骤、不制造 dirty、不触发保存
     expect(undo(view as EditorView)).toBe(false);
-    expect((screen.getByText('保存') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('保存').closest('button') as HTMLButtonElement).disabled).toBe(true);
     expect(api.readText).toHaveBeenCalledTimes(1);
   });
 });

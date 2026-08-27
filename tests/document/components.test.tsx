@@ -1374,7 +1374,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     await insertAtEnd('+a');
     await clickSaveButton();
 
-    expect(screen.getByText('保存失败')).toBeDefined();
+    expect(screen.getByText('写入错误')).toBeDefined();
     expect(screen.getByText('保存失败：写入文件失败')).toBeDefined();
     expect(screen.getByLabelText('未保存')).toBeDefined();
     expect(editorDoc()).toBe('内容:a.txt+a');
@@ -1410,7 +1410,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     await insertAtEnd('+a');
     await clickSaveButton();
 
-    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(screen.getByText('磁盘冲突')).toBeDefined();
     expect(screen.getByText('保存失败：文件已被外部修改，保存被拒绝')).toBeDefined();
     expect(screen.getByRole('button', { name: '重新读取' })).toBeDefined();
     expect(screen.getByLabelText('未保存')).toBeDefined();
@@ -1520,7 +1520,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     await userEvent.click(screen.getByRole('button', { name: '取消' }));
 
     expect(saveText).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('保存失败')).toBeDefined();
+    expect(screen.getByText('写入错误')).toBeDefined();
     expect(editorDoc()).toBe('original+edit');
     expect(screen.getByLabelText('未保存')).toBeDefined();
   });
@@ -1548,7 +1548,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     await openTextFile('a.txt');
     await insertAtEnd('+local');
     await clickSaveButton();
-    expect(screen.getByText('外部冲突')).toBeDefined();
+    expect(screen.getByText('磁盘冲突')).toBeDefined();
 
     await userEvent.click(screen.getByRole('button', { name: '重新读取' }));
     expect(screen.getByRole('dialog')).toBeDefined();
@@ -1564,7 +1564,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
     await clickTab('a.txt');
     expect(editorDoc()).toBe('磁盘新版本');
     expect(screen.queryByLabelText('未保存')).toBeNull();
-    expect(screen.queryByText('外部冲突')).toBeNull();
+    expect(screen.queryByText('磁盘冲突')).toBeNull();
     expect(screen.getByText('已保存')).toBeDefined();
   });
 

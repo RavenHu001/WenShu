@@ -560,7 +560,8 @@ describe('DOCX 保存与冲突提示（第 8.6 节）', () => {
     expect(request.model.blocks[0]).toBeDefined();
     // 保存完成：dirty 清除
     expect(dirtyMarkers()).toBe(0);
-    expect(screen.getByText('已保存（备份 b.docx.wenshu.bak）')).toBeDefined();
+    expect(screen.getByText('已保存 · 已备份')).toBeDefined();
+    expect(screen.getByTitle('备份：b.docx.wenshu.bak')).toBeDefined();
     // 编辑器内容保留（保存回写基线不重置历史）：仍可撤销
     const undoBtn = screen.getByRole('button', { name: '撤销' });
     await userEvent.setup().click(undoBtn);
@@ -593,7 +594,7 @@ describe('DOCX 保存与冲突提示（第 8.6 节）', () => {
     await act(async () => {});
     await userEvent.setup().click(screen.getByRole('button', { name: '保存' }));
     await act(async () => {});
-    expect(screen.getByText(/外部冲突/)).toBeDefined();
+    expect(screen.getByText(/文件已被外部修改/)).toBeDefined();
     expect(dirtyMarkers()).toBe(1);
     // 重新读取：弹确认对话框，确认后重读磁盘
     api.readDocx.mockResolvedValue({

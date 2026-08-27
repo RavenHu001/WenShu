@@ -8,6 +8,7 @@
  */
 
 import type { DocumentTabState } from '../../lib/document-tabs';
+import { Icon } from '../common/Icon';
 
 export function TabBar({
   tabs,
@@ -24,23 +25,51 @@ export function TabBar({
     <div className="editor-tabs" role="tablist" aria-label="打开的文档">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
+        const hasError =
+          tab.status === 'save-error' || tab.status === 'conflict' || tab.status === 'read-error';
+        const stateLabel = tab.saving
+          ? '，正在保存'
+          : hasError
+            ? tab.status === 'conflict'
+              ? '，外部冲突'
+              : '，发生错误'
+            : tab.dirty
+              ? '，未保存'
+              : '';
         return (
-          <div className={isActive ? 'tab active' : 'tab'} key={tab.id} role="presentation">
+          <div
+            className={[
+              'tab',
+              isActive ? 'active' : '',
+              tab.dirty ? 'is-dirty' : '',
+              tab.saving ? 'is-saving' : '',
+              hasError ? 'is-error' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            key={tab.id}
+            role="presentation"
+          >
             <button
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={`${tab.relativePath}${tab.dirty ? '，未保存' : ''}`}
+              aria-label={`${tab.relativePath}${stateLabel}`}
               className="tab-label"
               title={tab.relativePath}
               onClick={() => onActivate(tab.id)}
             >
               <span className="tab-name">{tab.name}</span>
-              {tab.dirty && (
-                <span className="tab-dirty" aria-label="未保存">
-                  ●
+              {tab.dirty && <span className="tab-dirty" aria-label="未保存" />}
+              {tab.saving ? (
+                <span className="tab-state-icon" aria-label="正在保存">
+                  <Icon name="spinner" size={13} />
                 </span>
-              )}
+              ) : hasError ? (
+                <span className="tab-state-icon" aria-hidden="true">
+                  <Icon name="error" size={13} />
+                </span>
+              ) : null}
             </button>
             <button
               type="button"
@@ -48,7 +77,7 @@ export function TabBar({
               aria-label={`关闭 ${tab.relativePath}`}
               onClick={() => onCloseRequest(tab.id)}
             >
-              ×
+              <Icon name="close" size={14} />
             </button>
           </div>
         );

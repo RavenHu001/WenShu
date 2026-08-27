@@ -7,6 +7,9 @@
  * - `cancelLabel` 可选：不传时只显示单个确认按钮（如"saving 标签等待保存完成"
  *   的提示对话框，TASK-005 WP5）。
  */
+import { useRef } from 'react';
+import { ModalDialog } from './ModalDialog';
+
 export interface ConfirmDialogProps {
   readonly title: string;
   readonly message: string;
@@ -24,22 +27,30 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): React.JSX.Element {
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
   return (
-    <div className="confirm-overlay">
-      <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="confirm-title">{title}</div>
-        <div className="confirm-message">{message}</div>
-        <div className="confirm-actions">
-          {cancelLabel !== undefined && (
-            <button className="ws-btn" type="button" onClick={onCancel}>
-              {cancelLabel}
-            </button>
-          )}
-          <button className="ws-btn ws-btn-primary" type="button" onClick={onConfirm}>
-            {confirmLabel}
+    <ModalDialog
+      title={title}
+      initialFocusRef={confirmRef}
+      {...(cancelLabel === undefined ? {} : { onCancel })}
+    >
+      <div className="confirm-title">{title}</div>
+      <div className="confirm-message">{message}</div>
+      <div className="confirm-actions">
+        {cancelLabel !== undefined && (
+          <button className="ws-btn" type="button" onClick={onCancel}>
+            {cancelLabel}
           </button>
-        </div>
+        )}
+        <button
+          ref={confirmRef}
+          className="ws-btn ws-btn-primary"
+          type="button"
+          onClick={onConfirm}
+        >
+          {confirmLabel}
+        </button>
       </div>
-    </div>
+    </ModalDialog>
   );
 }

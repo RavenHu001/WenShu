@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import type { WorkspaceEntry, WorkspaceSnapshot } from '../../../shared/workspace';
 import type { FileManagementMode, FileManagementUiState } from '../../lib/use-file-management';
+import { ModalDialog } from '../common/ModalDialog';
 
 function collectDirectories(
   entries: readonly WorkspaceEntry[],
@@ -43,7 +44,9 @@ function modeTitle(mode: FileManagementMode | null): string {
 }
 
 function restoreFocusToToolbar(): void {
-  const button = document.querySelector<HTMLButtonElement>('[data-testid="fm-create-text"]');
+  const button = document.querySelector<HTMLButtonElement>(
+    '[role="treeitem"][aria-current="true"] button, button[aria-label="新建"]',
+  );
   button?.focus();
 }
 
@@ -99,61 +102,54 @@ export function FileManagementDialogs({
           ? ''
           : `目标文件夹：${state.parentRelativePath === '' ? '（工作区根）' : state.parentRelativePath}`;
     return (
-      <div className="confirm-overlay">
-        <div
-          className="confirm-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={modeTitle(state.mode)}
-        >
-          <div className="confirm-title">{modeTitle(state.mode)}</div>
-          {hint !== '' && <div className="confirm-message">{hint}</div>}
-          {state.error !== null && (
-            <div className="fm-error-banner" role="alert">
-              <span>{state.error.message}</span>
-            </div>
-          )}
-          <input
-            ref={inputRef}
-            className="fm-name-input"
-            data-testid="fm-name-input"
-            value={state.inputName}
-            onChange={(event) => onSetInputName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                onSubmitInput();
-              } else if (event.key === 'Escape') {
-                event.preventDefault();
-                onCancel();
-              }
-            }}
-            aria-label="名称"
-          />
-          <div className="confirm-actions">
-            <button
-              type="button"
-              className="ws-btn"
-              data-testid="fm-input-cancel"
-              onClick={() => {
-                onCancel();
-                restoreFocusToToolbar();
-              }}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="ws-btn ws-btn-primary"
-              data-testid="fm-input-confirm"
-              disabled={state.status === 'running'}
-              onClick={onSubmitInput}
-            >
-              确定
-            </button>
+      <ModalDialog title={modeTitle(state.mode)} onCancel={onCancel} initialFocusRef={inputRef}>
+        <div className="confirm-title">{modeTitle(state.mode)}</div>
+        {hint !== '' && <div className="confirm-message">{hint}</div>}
+        {state.error !== null && (
+          <div className="fm-error-banner" role="alert">
+            <span>{state.error.message}</span>
           </div>
+        )}
+        <input
+          ref={inputRef}
+          className="fm-name-input"
+          data-testid="fm-name-input"
+          value={state.inputName}
+          onChange={(event) => onSetInputName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              onSubmitInput();
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+          aria-label="名称"
+        />
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="ws-btn"
+            data-testid="fm-input-cancel"
+            onClick={() => {
+              onCancel();
+              restoreFocusToToolbar();
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="ws-btn ws-btn-primary"
+            data-testid="fm-input-confirm"
+            disabled={state.status === 'running'}
+            onClick={onSubmitInput}
+          >
+            确定
+          </button>
         </div>
-      </div>
+      </ModalDialog>
     );
   }
 
@@ -164,67 +160,63 @@ export function FileManagementDialogs({
     }
     const title = state.mode === 'save-as' ? '选择另存为的目标文件夹' : '选择移动的目标文件夹';
     return (
-      <div className="confirm-overlay">
-        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label={title}>
-          <div className="confirm-title">{title}</div>
-          <div className="fm-target-list" role="listbox" aria-label="工作区文件夹">
+      <ModalDialog title={title} onCancel={onCancel}>
+        <div className="confirm-title">{title}</div>
+        <div className="fm-target-list" role="listbox" aria-label="工作区文件夹">
+          <button
+            type="button"
+            role="option"
+            aria-selected={state.parentRelativePath === ''}
+            className={
+              state.parentRelativePath === '' ? 'fm-target-row fm-target-selected' : 'fm-target-row'
+            }
+            data-testid="fm-target-root"
+            onClick={() => onPickTarget('')}
+          >
+            （工作区根）
+          </button>
+          {directories.map((dir) => (
             <button
               type="button"
               role="option"
-              aria-selected={state.parentRelativePath === ''}
+              aria-selected={state.parentRelativePath === dir.relativePath}
               className={
-                state.parentRelativePath === ''
+                state.parentRelativePath === dir.relativePath
                   ? 'fm-target-row fm-target-selected'
                   : 'fm-target-row'
               }
-              data-testid="fm-target-root"
-              onClick={() => onPickTarget('')}
+              key={dir.relativePath}
+              data-testid={`fm-target-${dir.relativePath}`}
+              style={{ paddingLeft: 8 + (dir.depth - 1) * 16 }}
+              onClick={() => onPickTarget(dir.relativePath)}
             >
-              （工作区根）
+              {dir.relativePath}
             </button>
-            {directories.map((dir) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={state.parentRelativePath === dir.relativePath}
-                className={
-                  state.parentRelativePath === dir.relativePath
-                    ? 'fm-target-row fm-target-selected'
-                    : 'fm-target-row'
-                }
-                key={dir.relativePath}
-                data-testid={`fm-target-${dir.relativePath}`}
-                style={{ paddingLeft: 8 + (dir.depth - 1) * 16 }}
-                onClick={() => onPickTarget(dir.relativePath)}
-              >
-                {dir.relativePath}
-              </button>
-            ))}
-          </div>
-          <div className="confirm-actions">
-            <button
-              type="button"
-              className="ws-btn"
-              data-testid="fm-target-cancel"
-              onClick={() => {
-                onCancel();
-                restoreFocusToToolbar();
-              }}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="ws-btn ws-btn-primary"
-              data-testid="fm-target-confirm"
-              disabled={state.status === 'running'}
-              onClick={onConfirmTarget}
-            >
-              确定
-            </button>
-          </div>
+          ))}
         </div>
-      </div>
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="ws-btn"
+            data-testid="fm-target-cancel"
+            onClick={() => {
+              onCancel();
+              restoreFocusToToolbar();
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="ws-btn ws-btn-primary"
+            data-testid="fm-target-confirm"
+            disabled={state.status === 'running'}
+            onClick={onConfirmTarget}
+          >
+            确定
+          </button>
+        </div>
+      </ModalDialog>
     );
   }
 
@@ -235,41 +227,39 @@ export function FileManagementDialogs({
         ? pending.target.name
         : `${pending.target.parentRelativePath}/${pending.target.name}`;
     return (
-      <div className="confirm-overlay">
-        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="确认覆盖另存为">
-          <div className="confirm-title">确认覆盖另存为</div>
-          <div className="confirm-message">
-            目标 `{targetPath}` 已存在（revision {pending.targetRevision.slice(0, 8)}…）。
-            覆盖将替换该文件，且确认只对当前版本有效；若文件在确认前再次变化，需要重新确认。
-          </div>
-          {state.error !== null && (
-            <div className="fm-error-banner" role="alert">
-              <span>{state.error.message}</span>
-            </div>
-          )}
-          <div className="confirm-actions">
-            <button
-              type="button"
-              className="ws-btn"
-              data-testid="fm-overwrite-cancel"
-              onClick={() => {
-                onCancel();
-                restoreFocusToToolbar();
-              }}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="ws-btn ws-btn-primary"
-              data-testid="fm-overwrite-confirm"
-              onClick={onConfirmOverwrite}
-            >
-              确认覆盖
-            </button>
-          </div>
+      <ModalDialog title="确认覆盖另存为" onCancel={onCancel}>
+        <div className="confirm-title">确认覆盖另存为</div>
+        <div className="confirm-message">
+          目标 `{targetPath}` 已存在（revision {pending.targetRevision.slice(0, 8)}…）。
+          覆盖将替换该文件，且确认只对当前版本有效；若文件在确认前再次变化，需要重新确认。
         </div>
-      </div>
+        {state.error !== null && (
+          <div className="fm-error-banner" role="alert">
+            <span>{state.error.message}</span>
+          </div>
+        )}
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="ws-btn"
+            data-testid="fm-overwrite-cancel"
+            onClick={() => {
+              onCancel();
+              restoreFocusToToolbar();
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="ws-btn ws-btn-primary"
+            data-testid="fm-overwrite-confirm"
+            onClick={onConfirmOverwrite}
+          >
+            确认覆盖
+          </button>
+        </div>
+      </ModalDialog>
     );
   }
 
@@ -282,62 +272,58 @@ export function FileManagementDialogs({
           ? '有 1 个未保存标签将被放弃。'
           : `有 ${pending.dirtyCount} 个未保存标签将被放弃。`;
     return (
-      <div className="confirm-overlay">
-        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="确认删除">
-          <div className="confirm-title">确认删除到回收站</div>
-          <div className="confirm-message">
-            将删除 {pending.kindLabel} `{pending.relativePath}` 到 Windows 回收站。{dirtyText}
-            删除后可通过回收站恢复，但标签将关闭。
-          </div>
-          <div className="confirm-actions">
-            <button
-              type="button"
-              className="ws-btn"
-              data-testid="fm-trash-cancel"
-              onClick={() => {
-                onCancel();
-                restoreFocusToToolbar();
-              }}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="ws-btn ws-btn-primary"
-              data-testid="fm-trash-confirm"
-              onClick={onConfirmTrash}
-            >
-              删除
-            </button>
-          </div>
+      <ModalDialog title="确认删除" onCancel={onCancel}>
+        <div className="confirm-title">确认删除到回收站</div>
+        <div className="confirm-message">
+          将删除 {pending.kindLabel} `{pending.relativePath}` 到 Windows 回收站。{dirtyText}
+          删除后可通过回收站恢复，但标签将关闭。
         </div>
-      </div>
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="ws-btn"
+            data-testid="fm-trash-cancel"
+            onClick={() => {
+              onCancel();
+              restoreFocusToToolbar();
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="ws-btn ws-btn-danger"
+            data-testid="fm-trash-confirm"
+            onClick={onConfirmTrash}
+          >
+            删除
+          </button>
+        </div>
+      </ModalDialog>
     );
   }
 
   if (state.status === 'partial-failure') {
     return (
-      <div className="confirm-overlay">
-        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="操作部分完成">
-          <div className="confirm-title">操作部分完成</div>
-          <div className="confirm-message">
-            {state.message ?? '操作部分完成，工作区已强制刷新；请核对实际文件状态后重试。'}
-          </div>
-          <div className="confirm-actions">
-            <button
-              type="button"
-              className="ws-btn ws-btn-primary"
-              data-testid="fm-partial-dismiss"
-              onClick={() => {
-                onDismissMessage();
-                restoreFocusToToolbar();
-              }}
-            >
-              知道了
-            </button>
-          </div>
+      <ModalDialog title="操作部分完成" onCancel={onDismissMessage}>
+        <div className="confirm-title">操作部分完成</div>
+        <div className="confirm-message">
+          {state.message ?? '操作部分完成，工作区已强制刷新；请核对实际文件状态后重试。'}
         </div>
-      </div>
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="ws-btn ws-btn-primary"
+            data-testid="fm-partial-dismiss"
+            onClick={() => {
+              onDismissMessage();
+              restoreFocusToToolbar();
+            }}
+          >
+            知道了
+          </button>
+        </div>
+      </ModalDialog>
     );
   }
 

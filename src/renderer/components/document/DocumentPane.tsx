@@ -34,6 +34,7 @@ import type { TextDocumentTabState } from '../../lib/text-document-tabs';
 import { DocxEditorSessionHost } from './DocxEditorSessionHost';
 import { DocxToolbar } from './DocxToolbar';
 import { DocxCompatibilityNotice } from './DocxCompatibilityNotice';
+import { Icon } from '../common/Icon';
 
 export function DocumentPane({
   tabs,
@@ -153,13 +154,9 @@ export function DocumentPane({
             disabled={!activeTab.dirty || activeTab.saving}
             onClick={() => onSave(activeTab.id)}
           >
-            保存
+            <Icon name="save" size={15} />
+            <span>保存</span>
           </button>
-          {saveStatusLabel(activeTab) !== '' && (
-            <span className={`doc-save-status${activeTab.saving ? ' is-saving' : ''}`}>
-              {saveStatusLabel(activeTab)}
-            </span>
-          )}
         </div>
       )}
       {activeTab !== null && isDocxTab(activeTab) && (
@@ -249,28 +246,6 @@ function isEditable(tab: DocumentTabState): boolean {
     return tab.document !== null;
   }
   return false;
-}
-
-function saveStatusLabel(tab: DocumentTabState): string {
-  switch (tab.status) {
-    case 'loaded-clean':
-      // 备份提示：DOCX 保存成功后展示本次滚动备份文件名
-      return isDocxTab(tab) && tab.lastBackupRelativePath !== null
-        ? `已保存（备份 ${tab.lastBackupRelativePath}）`
-        : '已保存';
-    case 'loaded-dirty':
-      return '未保存';
-    case 'saving':
-      return '正在保存…';
-    case 'save-error':
-      return '保存失败';
-    case 'conflict':
-      return '外部冲突';
-    case 'read-only':
-      return '只读';
-    default:
-      return '';
-  }
 }
 
 /** 与主进程 mixed 换行规范化规则一致：CR 系占优或平局时使用 CRLF。 */

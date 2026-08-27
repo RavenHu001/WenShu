@@ -180,7 +180,9 @@ function panelInput(name: string): HTMLInputElement {
 }
 
 function saveButton(): HTMLButtonElement {
-  return screen.getByText('保存') as HTMLButtonElement;
+  const button = screen.getByText('保存').closest('button');
+  if (!(button instanceof HTMLButtonElement)) throw new Error('expected save button');
+  return button;
 }
 
 function setQuery(query: string): void {
@@ -202,6 +204,25 @@ function pressModKey(key: string, shift = false): void {
 }
 
 describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
+  it('编辑器未获得焦点时，Ctrl+F / Ctrl+H 仍打开当前 TXT 的查找与替换', async () => {
+    mockDesktop({ 'a.txt': 'hello world' });
+    render(<App />);
+    await openWorkspace();
+    await openFile('a.txt');
+
+    const activityButton = screen.getByRole('button', { name: '搜索面板' });
+    activityButton.focus();
+    expect(document.activeElement).toBe(activityButton);
+
+    fireEvent.keyDown(activityButton, { key: 'f', ctrlKey: true });
+    expect(searchPanel()).not.toBeNull();
+    expect(document.activeElement).toBe(panelInput('search'));
+
+    activityButton.focus();
+    fireEvent.keyDown(activityButton, { key: 'h', ctrlKey: true });
+    expect(document.activeElement).toBe(panelInput('replace'));
+  });
+
   it('Ctrl+F 打开查找面板；Ctrl+H 打开面板并聚焦替换输入', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
     render(<App />);
@@ -211,7 +232,9 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
     pressModKey('f');
     expect(searchPanel()).not.toBeNull();
     expect(screen.getByLabelText('当前文档查找与替换').contains(searchPanel())).toBe(true);
-    expect(screen.getByRole('button', { name: '搜' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: '搜索面板' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     expect(screen.getByRole('tab', { name: '查找与替换' }).getAttribute('aria-selected')).toBe(
       'true',
     );
@@ -228,7 +251,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
     await openWorkspace();
     await openFile('a.txt');
 
-    fireEvent.click(screen.getByRole('button', { name: '搜' }));
+    fireEvent.click(screen.getByRole('button', { name: '搜索面板' }));
     expect(document.getElementById('document-search-panel')?.hidden).toBe(true);
     fireEvent.click(screen.getByRole('tab', { name: '查找与替换' }));
     expect(document.getElementById('workspace-search-panel')?.hidden).toBe(true);
@@ -433,7 +456,7 @@ describe('查找会话隔离与清理（第 4.2 节）', () => {
     expect(screen.queryByText('关闭 a.txt')).toBeNull();
 
     // 重新打开：新会话，查找面板不复现
-    fireEvent.click(screen.getByRole('button', { name: '文' }));
+    fireEvent.click(screen.getByRole('button', { name: '文件面板' }));
     await openFile('a.txt');
     expect(searchPanel()).toBeNull();
     expect(editorDoc()).toBe('hello world\nhello again');

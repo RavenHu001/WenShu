@@ -1,0 +1,81 @@
+:root {
+  color-scheme: light;
+  --color-canvas: #f5f6f8;
+  --color-workspace: #eef0f3;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f8f9fb;
+  --color-surface-raised: #ffffff;
+  --color-border: #d8dce3;
+  --color-border-strong: #bec5d0;
+  --color-text: #252932;
+  --color-text-secondary: #606775;
+  --color-text-muted: #838a98;
+  --color-primary: #3e5f9f;
+  --color-primary-hover: #34548f;
+  --color-primary-active: #2d497e;
+  --color-primary-soft: #e7edf8;
+  --color-success: #257557;
+  --color-success-soft: #e6f4ee;
+  --color-warning: #9a640a;
+  --color-warning-soft: #fff3d9;
+  --color-danger: #ad3838;
+  --color-danger-hover: #932f2f;
+  --color-danger-soft: #fbeaea;
+  --color-info: #356b9a;
+  --color-info-soft: #e8f2fa;
+  --color-hover: rgb(42 53 72 / 7%);
+  --color-active: rgb(42 53 72 / 12%);
+  --color-selected: #e2e9f5;
+  --color-focus: #2f67c7;
+  --color-disabled: #a5abb5;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 15px;
+  --font-size-title: 18px;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --shadow-menu: 0 10px 30px rgb(23 30 43 / 18%), 0 2px 8px rgb(23 30 43 / 10%);
+  --shadow-dialog: 0 24px 60px rgb(23 30 43 / 22%);
+  --z-menu: 600;
+  --z-toast: 800;
+  --z-dialog: 1000;
+  --duration-fast: 100ms;
+  --duration-normal: 180ms;
+  --sidebar-min: 180px;
+  --sidebar-max: 420px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --color-border: CanvasText;
+    --color-focus: Highlight;
+    --color-selected: Highlight;
+  }
+}

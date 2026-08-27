@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const appCss = readFileSync(resolve('src/renderer/styles/app.css'), 'utf8');
+const appCss = ['tokens.css', 'common.css', 'app.css', 'shell.css', 'document.css']
+  .map((file) => readFileSync(resolve('src/renderer/styles', file), 'utf8'))
+  .join('\n');
 
 function installApplicationStyles(): HTMLStyleElement {
   const style = document.createElement('style');
@@ -44,5 +46,21 @@ describe('DOCX editor visual isolation and CJK italic rendering', () => {
     );
     expect(getComputedStyle(proseMirror).getPropertyValue('font-synthesis')).toBe('style');
     expect(getComputedStyle(proseMirror.querySelector('em')!).fontStyle).toBe('italic');
+  });
+
+  it('uses a centered finite-width writing canvas without page-count semantics', () => {
+    installApplicationStyles();
+    const editor = document.createElement('div');
+    editor.className = 'docx-editor';
+    const proseMirror = document.createElement('div');
+    proseMirror.className = 'ProseMirror';
+    editor.append(proseMirror);
+    document.body.append(editor);
+
+    const style = getComputedStyle(proseMirror);
+    expect(appCss).toContain('width: min(820px, 100%);');
+    expect(style.marginLeft).toBe('auto');
+    expect(style.marginRight).toBe('auto');
+    expect(proseMirror.getAttribute('aria-label')).toBeNull();
   });
 });

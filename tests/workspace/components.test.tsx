@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WorkspaceSidebar } from '../../src/renderer/components/workspace/WorkspaceSidebar';
 import { useWorkspace, type WorkspaceController } from '../../src/renderer/lib/use-workspace';
@@ -17,6 +17,8 @@ import type {
   WorkspaceEntry,
   WorkspaceSnapshot,
 } from '../../src/shared/workspace';
+
+let capturedController: WorkspaceController | null = null;
 
 function mockDesktop(
   openFn: () => Promise<OpenWorkspaceResult>,
@@ -54,7 +56,10 @@ function snapshot(overrides: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot
 
 function openBtn(): HTMLButtonElement {
   const buttons = screen.getAllByText('打开文件夹');
-  return (buttons[0] ?? buttons[buttons.length - 1]) as HTMLButtonElement;
+  const candidate = buttons[0] ?? buttons[buttons.length - 1];
+  const button = candidate?.closest('button');
+  if (!(button instanceof HTMLButtonElement)) throw new Error('expected open-folder button');
+  return button;
 }
 
 /** 与 App 相同的接线：useWorkspace controller + 纯展示 WorkspaceSidebar。 */
@@ -84,6 +89,7 @@ function ControllerHarness({
   onWorkspaceSelected: () => void;
 }): React.JSX.Element {
   const workspace = useWorkspace({ onWorkspaceSelected });
+  capturedController = workspace;
   return <WorkspaceSidebarView controller={workspace} />;
 }
 
@@ -114,6 +120,7 @@ describe('useWorkspace 工作区状态所有权（第 4.10 节）', () => {
 
   afterEach(() => {
     cleanup();
+    capturedController = null;
     delete (window as unknown as Record<string, unknown>).desktop;
   });
 
@@ -195,6 +202,75 @@ describe('useWorkspace 工作区状态所有权（第 4.10 节）', () => {
     expect(screen.getByText('new.txt')).toBeDefined();
     expect(screen.getByTestId('epoch').textContent).toBe('1');
     expect(onSelected).toHaveBeenCalledTimes(1);
+  });
+
+  it('手动刷新在扫描期间仍显示刷新状态', async () => {
+    let resolveRefresh!: (result: RefreshWorkspaceResult) => void;
+    mockDesktop(
+      vi
+        .fn()
+        .mockResolvedValue({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult),
+      vi.fn(
+        () =>
+          new Promise<RefreshWorkspaceResult>((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      ),
+    );
+    render(<ControllerHarness onWorkspaceSelected={vi.fn()} />);
+
+    await userEvent.click(openBtn());
+    await userEvent.click(screen.getByText('刷新'));
+    expect(screen.getByTestId('ws-status').textContent).toBe('refreshing');
+    expect(screen.getByText('正在刷新…')).toBeDefined();
+
+    await act(async () => {
+      resolveRefresh({ status: 'refreshed', workspace: snapshot() });
+    });
+    expect(screen.getByTestId('ws-status').textContent).toBe('loaded');
+  });
+
+  it('切换工作区后丢弃旧根目录的迟到后台刷新', async () => {
+    let resolveRefresh!: (result: RefreshWorkspaceResult) => void;
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ rootName: 'old-root' }),
+      } as OpenWorkspaceResult)
+      .mockResolvedValueOnce({
+        status: 'selected',
+        workspace: snapshot({ rootName: 'new-root' }),
+      } as OpenWorkspaceResult);
+    mockDesktop(
+      open,
+      vi.fn(
+        () =>
+          new Promise<RefreshWorkspaceResult>((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      ),
+    );
+    render(<ControllerHarness onWorkspaceSelected={vi.fn()} />);
+    await userEvent.click(openBtn());
+
+    let oldRefresh!: Promise<boolean>;
+    await act(async () => {
+      oldRefresh = capturedController!.refreshWorkspace({ background: true });
+      await Promise.resolve();
+    });
+    await userEvent.click(openBtn());
+    expect(screen.getByText('new-root')).toBeDefined();
+
+    await act(async () => {
+      resolveRefresh({
+        status: 'refreshed',
+        workspace: snapshot({ rootName: 'stale-old-root' }),
+      });
+      await oldRefresh;
+    });
+    expect(screen.getByText('new-root')).toBeDefined();
+    expect(screen.queryByText('stale-old-root')).toBeNull();
   });
 });
 
@@ -288,7 +364,7 @@ describe('WorkspaceSidebar 纯展示', () => {
     expect(screen.getByText('current.txt')).toBeDefined();
     expect(screen.getByText('正在读取新工作区…')).toBeDefined();
     expect(openBtn().disabled).toBe(true);
-    expect((screen.getByText('刷新') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('刷新').closest('button') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('shows a recoverable error when opening rejects unexpectedly', async () => {
