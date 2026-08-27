@@ -2,7 +2,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Pre-alpha / Task 11 实现与自动验收完成。** Task 1 至 Task 10 的工作区、TXT/DOCX 编辑、安全保存、搜索、查找替换与文件管理语义全部保留。Task 11 已把工程原型界面重构为单一中文应用菜单、SVG 活动栏、可调整/折叠侧栏、可访问文件树上下文菜单、键盘等价入口与同工作区内部拖拽移动；移除了侧栏底部按钮墙。DOCX 现在使用居中有限宽的连续写作画布和分组/溢出工具栏，工作区搜索与当前查找共享控件语言，成功操作通过限时 toast 反馈，错误与部分完成状态持续可追溯。renderer 仍只调用既有窄 controller/IPC，稳定 `tabId`、`mutationEpoch`、saving/dirty/conflict、DOCX 伴随备份和回收站删除语义不变。自动保存、文件系统监听、会话恢复、工作区替换与正则/模糊搜索仍未提供。Windows 物理 100%/125%/150% 显示缩放的最终人工确认按 [Task 11 完成报告](./docs/TASK_011_COMPLETION_REPORT.md) 执行。
+> **当前阶段：Pre-alpha / Task 11 已完成。** Task 1 至 Task 10 的工作区、TXT/DOCX 编辑、安全保存、搜索、查找替换与文件管理语义全部保留。Task 11 已把工程原型界面重构为单一中文应用菜单、SVG 活动栏、可调整/折叠侧栏、可访问文件树上下文菜单、键盘等价入口与同工作区内部拖拽移动；移除了侧栏底部按钮墙。DOCX 现在使用居中有限宽的连续写作画布和分组/溢出工具栏，工作区搜索与当前查找共享控件语言，成功操作通过限时 toast 反馈，错误与部分完成状态持续可追溯。renderer 仍只调用既有窄 controller/IPC，稳定 `tabId`、`mutationEpoch`、saving/dirty/conflict、DOCX 伴随备份和回收站删除语义不变。自动保存、文件系统监听、会话恢复、工作区替换与正则/模糊搜索仍未提供。代码实现、自动质量门禁与 Windows 物理 100%/125%/150% 显示缩放等最终人工验收均已通过，证据见 [Task 11 完成报告](./docs/TASK_011_COMPLETION_REPORT.md)。
 
 ## 当前能力
 
@@ -167,7 +167,7 @@
 - [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)）。
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
-- [ ] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（实现与自动验收已完成；Windows 物理显示缩放人工终验待项目所有者确认，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
+- [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 

@@ -308,7 +308,7 @@ Task 10 已完成（见 [TASK-010 完成报告](./TASK_010_COMPLETION_REPORT.md)
 
 ### 6.5 Task 11 桌面外壳与信息架构实现基线
 
-Task 11 已完成产品代码与自动验收（见 [TASK-011 完成报告](./TASK_011_COMPLETION_REPORT.md)），并冻结以下界面实现边界：
+Task 11 已完成产品代码、自动质量门禁与 Windows 人工终验（见 [TASK-011 完成报告](./TASK_011_COMPLETION_REPORT.md)），并冻结以下界面实现边界：
 
 - Electron 默认应用菜单已移除；renderer 内只保留一套中文、可测试、命令真实的应用菜单，不新增 menu IPC；
 - 活动栏只展示已实现的文件与搜索入口，使用项目内 SVG、tooltip、`aria-pressed` 和明确无障碍名称；未实现设置不作为可用入口；
@@ -319,7 +319,7 @@ Task 11 已完成产品代码与自动验收（见 [TASK-011 完成报告](./TAS
 - 成功 mutation 使用限时可关闭 toast；错误、冲突与部分完成保持可追溯；状态栏不再长期显示 Electron 版本，运行时信息位于“关于”；
 - 样式按 tokens/common/shell/workspace/document/search 分层，并提供 `forced-colors` 与 `prefers-reduced-motion` 入口。
 
-上述界面重构未增加 `DesktopApi`、preload 或 IPC 能力，Task 9 的 stable tabId、mutationEpoch、DOCX `.wenshu.bak`、回收站与写入安全，及 Task 10 的当前 DOCX 查找替换生命周期保持为回归基线。Windows 物理 100%/125%/150% 显示缩放仍按 Task 11 完成报告中的人工步骤执行最终确认。
+上述界面重构未增加 `DesktopApi`、preload 或 IPC 能力，Task 9 的 stable tabId、mutationEpoch、DOCX `.wenshu.bak`、回收站与写入安全，及 Task 10 的当前 DOCX 查找替换生命周期保持为回归基线。项目所有者已于 2026-08-27 完成 Windows 物理 100%/125%/150% 显示缩放、200% 文本缩放、高对比度、减少动画与屏幕阅读器等人工终验，未发现问题。
 
 ## 7. 总体技术架构
 
