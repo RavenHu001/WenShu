@@ -80,6 +80,11 @@ export const App = (): React.JSX.Element => {
   // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）；
   // mutationEpoch 由文件管理操作确认成功后递增（TASK-009 §4.11）
   const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
+  /** 文件管理成功后的对账扫描不插入临时状态行，避免文件树上下跳动造成窗口闪烁。 */
+  const refreshWorkspaceAfterMutation = useCallback(
+    () => workspace.refreshWorkspace({ background: true }),
+    [workspace.refreshWorkspace],
+  );
   const search = useWorkspaceSearch({
     workspaceAvailable: workspace.state.workspace !== null,
     workspaceEpoch: workspace.epoch,
@@ -89,7 +94,7 @@ export const App = (): React.JSX.Element => {
   const fileManagement = useFileManagement({
     workspace: workspace.state.workspace,
     workspaceEpoch: workspace.epoch,
-    refreshWorkspace: workspace.refreshWorkspace,
+    refreshWorkspace: refreshWorkspaceAfterMutation,
     openFile,
     commitRelocate: commitRelocateResult,
     commitTrash: commitTrashResult,

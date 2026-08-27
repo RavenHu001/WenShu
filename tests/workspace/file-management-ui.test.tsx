@@ -8,7 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useWorkspace } from '../../src/renderer/lib/use-workspace';
 import { useDocuments } from '../../src/renderer/lib/use-documents';
@@ -156,7 +156,7 @@ function Harness({ onMutationCommitted }: { onMutationCommitted?: () => void }):
   const fm = useFileManagement({
     workspace: workspace.state.workspace,
     workspaceEpoch: workspace.epoch,
-    refreshWorkspace: workspace.refreshWorkspace,
+    refreshWorkspace: () => workspace.refreshWorkspace({ background: true }),
     openFile: documents.openFile,
     commitRelocate: documents.commitRelocateResult,
     commitTrash: documents.commitTrashResult,
@@ -222,6 +222,33 @@ afterEach(() => {
 });
 
 describe('文件树选择与打开行为', () => {
+  it('文件操作后的后台刷新不插入状态行或重建文件树', async () => {
+    let resolveRefresh!: (result: { status: 'refreshed'; workspace: WorkspaceSnapshot }) => void;
+    const refresh = vi.fn(
+      () =>
+        new Promise<{ status: 'refreshed'; workspace: WorkspaceSnapshot }>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    mockDesktop({ refresh });
+    render(<Harness />);
+    await openWorkspace();
+    const tree = screen.getByRole('tree', { name: '工作区文件树' });
+
+    await beginCreate('新建 TXT');
+    fireEvent.change(screen.getByTestId('fm-name-input'), { target: { value: 'new.txt' } });
+    await userEvent.click(screen.getByTestId('fm-input-confirm'));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByText('正在刷新…')).toBeNull();
+    expect(screen.getByRole('tree', { name: '工作区文件树' })).toBe(tree);
+
+    await act(async () => {
+      resolveRefresh({ status: 'refreshed', workspace: snapshotOf() });
+    });
+    await waitFor(() => expect(screen.getByTestId('fm-status').textContent).toBe('succeeded'));
+  });
+
   it('TXT 单击：打开并同时成为管理选择；普通文件仅选择不打开', async () => {
     const { readText } = mockDesktop();
     render(<Harness />);

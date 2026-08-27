@@ -6,6 +6,11 @@
 > 修改会话级系统设置，当前自动化会话未擅自切换，保留项目所有者最终确认项。
 > 2026-08-27 补充：修复 `Ctrl+F` / `Ctrl+H` 仅在编辑器获得焦点后生效的问题；项目
 > 所有者已确认实际交互有效，自动回归与完整质量门禁通过，详见 WP4、第 5 节和第 8 节。
+> 同日补充：修复增删、移动和拖拽成功后的短暂界面闪烁；文件管理对账改为静默后台刷新，
+> 手动刷新反馈保留，并增加刷新单飞及跨工作区迟到结果防护。完整门禁更新为
+> 1175 passed / 10 skipped。
+> 项目所有者随后完成最终人工测试，确认功能交互、显示缩放、无障碍检查及文件操作界面
+> 稳定性均未发现问题；Task 11 的自动与人工验收至此全部完成。
 
 ## 1. 实际完成结果
 
@@ -43,6 +48,10 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 - F2、Delete、Shift+F10/菜单键、F5、Ctrl+Shift+S 与 Escape 等价入口全部复用既有门禁。
 - 同工作区内部拖拽只调用 `workspace.relocate`：目录/根高亮，no-op、自身/后代、同名、saving、非法目标、过期 epoch 拒绝；pending 防重；Escape/dragend/卸载/工作区切换清理。
 - 成功仍执行 commitRelocate → stable tabId 路径迁移 → 刷新 → mutationEpoch；主进程失败不乐观迁移；partial failure 强制刷新。
+- 文件管理成功后的工作区对账扫描保留当前 loaded 布局，不再临时插入“正在刷新…”并挤压
+  文件树；手动 F5 仍显示刷新状态。手动刷新与后台对账共享单飞 Promise，避免重复扫描；
+  切换工作区会作废旧根目录的迟到刷新；另存为成功路径中原有的嵌套重复刷新已清理，
+  主进程快照仍是文件树事实来源。
 
 ### WP4：编辑区与搜索
 
@@ -103,6 +112,7 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 - 文件树纯 drop/geometry：6 项；上下文/键盘/拖拽 UI：5 项；拖拽 controller：3 项。
 - DOCX toolbar width/overflow：2 项；DOCX canvas/style：新增 1 项（文件共 3 项）。
 - 当前文档快捷键补充 2 项：分别覆盖 TXT、DOCX 在活动栏按钮获得焦点、编辑器未获得焦点时，`Ctrl+F` 聚焦查找输入、`Ctrl+H` 聚焦替换输入。
+- 工作区刷新补充 3 项：后台对账挂起期间不出现临时状态行、文件树 DOM 不重建；手动刷新挂起期间仍展示明确刷新状态；切换工作区后旧根目录的迟到刷新不覆盖新快照。
 - 既有文件管理、mutationEpoch、stable tabId、DOCX 查找/定位、保存/冲突和窗口生命周期全量回归。
 - 无 `.only`、无新增无条件 `.skip`、无 timeout 扩大、无宽泛快照替代状态转移。
 
@@ -124,12 +134,12 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 
 执行 Agent 已用本地图片查看器逐张检查。正常 1280×820、900×600、搜索和关于无裁切/遮挡；125%/150% device-scale 代理稳定。第一次 200% zoom 检查发现欢迎页出现横向滚动，随后增加 ≤600 px 的 padding、字号、折行与 `overflow-x` 修复，重新 build/capture 后横向滚动消失。forced-high-contrast 图片为 Chromium 启动开关代理，不能冒充物理 Windows 高对比度会话确认。
 
-自动行为证据覆盖菜单/对话框焦点、可访问名称、toast live region、侧栏 separator 值、键盘命令、drag target 状态和 reduced-motion/forced-colors 入口。真实屏幕阅读器朗读与 Windows 会话级 DPI 切换仍属于人工终验。
+自动行为证据覆盖菜单/对话框焦点、可访问名称、toast live region、侧栏 separator 值、键盘命令、drag target 状态和 reduced-motion/forced-colors 入口。项目所有者已完成实际环境下的显示缩放、高对比度、减少动画与屏幕阅读器人工检查，未发现问题。
 
 ## 7. 依赖与包体积
 
 - `package.json` / lockfile 无依赖变化。
-- renderer 新增代码为项目 TypeScript/CSS/SVG；最终产物：main 154.95 kB、preload 4.10 kB、renderer CSS 53.24 kB、renderer JS 2,262.13 kB。
+- renderer 新增代码为项目 TypeScript/CSS/SVG；最终产物：main 154.95 kB、preload 4.10 kB、renderer CSS 53.24 kB、renderer JS 2,263.67 kB。
 
 ## 8. 自动质量命令
 
@@ -138,8 +148,8 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 | `.\scripts\npm.cmd run typecheck`    | 通过；5 个 tsconfig；退出码 0               |
 | `.\scripts\npm.cmd run lint`         | 通过；0 warning；退出码 0                   |
 | `.\scripts\npm.cmd run format:check` | 通过；退出码 0                              |
-| `.\scripts\npm.cmd test`             | 69 文件；1172 passed / 10 skipped；退出码 0 |
-| `.\scripts\npm.cmd run check`        | 69 文件；1172 passed / 10 skipped；退出码 0 |
+| `.\scripts\npm.cmd test`             | 69 文件；1175 passed / 10 skipped；退出码 0 |
+| `.\scripts\npm.cmd run check`        | 69 文件；1175 passed / 10 skipped；退出码 0 |
 | `.\scripts\npm.cmd run build`        | main/preload/renderer 全部产出；退出码 0    |
 
 10 个条件跳过均为 Task 1–10 已记录的真实 symlink/junction 权限条件：read-text 2、read-docx 2、TXT search 1、mixed search 1、resolve 1、relocate 1、trash 1、reveal 1；拒绝分支由 mock 确定覆盖。无新增跳过。三条 stderr 是既有保存/新建失败注入对临时清理失败的预期记录。
@@ -156,8 +166,8 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 
 ## 10. 已知限制与后续建议
 
-1. Windows 物理 100%/125%/150% DPI 与 200% 系统文本缩放需要切换会话级系统设置；当前自动化会话不擅自修改，项目所有者需按 TESTING 3.9 确认。
-2. 自动截图覆盖空工作区、搜索空态与关于；包含真实长树、dirty/saving/conflict、read-only/degraded、DOCX 大量结果的截图需使用隐私安全的人工夹具补录。
+1. Windows 物理显示缩放、系统文本缩放与无障碍环境无法由自动截图完全替代；项目所有者已按人工清单测试并确认未发现问题。
+2. 自动截图覆盖空工作区、搜索空态与关于；真实长树及完整状态矩阵已纳入人工功能测试并通过，后续如需留存视觉档案，可再使用隐私安全的人工夹具补录截图。
 3. HTML5 drag 只支持文枢树内移动；Windows 资源管理器拖入/拖出、复制、覆盖、跨工作区/跨盘仍明确不支持。
 4. DOCX 画布是连续阅读列，不是分页/打印预览；复杂 Word 内容范围不变。
 5. 建议后续任务：文件系统监听与外部变化提示；基础设置/主题/会话恢复；安装包与签名。
@@ -165,6 +175,6 @@ Task 11 的产品代码与自动化验收已完成：应用从“双菜单 + 固
 ## 11. 是否满足 Task 11 全部验收标准
 
 - 产品代码、协议安全、自动测试、构建、固定尺寸真实 Electron 截图与启动冒烟均已完成，可确认“实现与自动验收标准满足”。
-- Task 11 明确列为“必须人工核对”的 Windows 物理 DPI/文本缩放、真实长树和完整状态矩阵尚需项目所有者在实际显示设备上确认；在得到该证据前，不把 Task 11 描述为全部人工验收完成。
+- 项目所有者已完成实际 GUI 人工终验，确认功能交互、显示缩放、无障碍环境、真实文件操作及修复后的增删/移动/拖拽稳定性均未发现问题。
 
-**当前结论：代码与自动验收完成；Task 11 全部（含物理显示环境人工终验）尚未完全满足。**
+**当前结论：Task 11 的代码实现、自动质量门禁与人工终验均已完成，全部验收标准满足。**

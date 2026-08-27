@@ -725,7 +725,6 @@ export function useFileManagement({
             void applySuccess(`已另存为 ${finalName}`, () => {
               // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
               onMutationCommittedRef.current?.();
-              void refreshWorkspace();
             });
           } else if (result.status === 'target-exists') {
             update({
@@ -854,7 +853,6 @@ export function useFileManagement({
           void applySuccess(`已覆盖另存为 ${pending.target.name}`, () => {
             // 磁盘操作确认成功：通知递增 mutationEpoch（§4.11）
             onMutationCommittedRef.current?.();
-            void refreshWorkspace();
           });
         } else if (result.status === 'target-exists') {
           // 目标在确认后又变化：回到确认（重新绑定新 revision）
