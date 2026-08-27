@@ -168,6 +168,7 @@
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
+- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（待实施）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
@@ -199,6 +200,8 @@
 - [TASK-011：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)
 - [TASK-011 WP0 报告](./docs/TASK_011_WP0_REPORT.md)
 - [TASK-011 完成报告](./docs/TASK_011_COMPLETION_REPORT.md)
+- [TASK-012：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)
+- [TASK-012 开发执行提示词](./docs/TASK_012_DEVELOPMENT_PROMPT.md)
 - [未来 UI 优化计划](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)
 
 ## 项目结构
