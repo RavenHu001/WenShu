@@ -1,12 +1,15 @@
 import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { appMetadataDefines } from './app-metadata.config';
 
 export default defineConfig({
   main: {
+    define: appMetadataDefines,
     plugins: [externalizeDepsPlugin()],
   },
   preload: {
+    define: appMetadataDefines,
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
@@ -19,6 +22,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    define: appMetadataDefines,
     root: resolve('src/renderer'),
     plugins: [react()],
   },

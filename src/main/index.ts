@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, session } from 'electron';
 import { join } from 'node:path';
+import { appIdentity } from '../shared/app-metadata';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
 import { registerDocxIpc } from './docx/docx-ipc';
@@ -10,7 +11,7 @@ import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/
 
 const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
-    title: '文枢',
+    title: appIdentity.productName,
     width: 1280,
     height: 820,
     minWidth: 900,
@@ -44,6 +45,8 @@ const createMainWindow = (): BrowserWindow => {
 
   return window;
 };
+
+app.setAppUserModelId(appIdentity.appId);
 
 void app.whenReady().then(() => {
   // 文枢使用 renderer 内可测试、可访问的中文菜单；移除 Electron 默认英文菜单，避免双菜单。

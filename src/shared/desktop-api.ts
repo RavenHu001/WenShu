@@ -5,6 +5,8 @@
 export interface DesktopRuntimeInfo {
   readonly platform: string;
   readonly electronVersion: string;
+  /** 从 package.json 构建时注入的产品版本；不接受 renderer 或环境变量输入。 */
+  readonly appVersion: string;
 }
 
 import type { OpenWorkspaceResult, RefreshWorkspaceResult } from './workspace';
