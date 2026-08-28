@@ -87,15 +87,15 @@ Storage、Network、Preferences、Local State 与 Shared Dictionary。它属于 
 - [Electron 发布计划与 EOL](https://releases.electronjs.org/schedule)：当前受支持稳定线为
   44（EOL 2027-03-02）、43（EOL 2027-01-05）、42（EOL 2026-10-20）；41 已于 2026-08-25 EOL。
 - [Electron 稳定发布记录](https://releases.electronjs.org/release?channel=stable) 与
-  [43.4.0 GitHub release](https://github.com/electron/electron/releases/tag/v43.4.0)：中间受支持线的
-  最新已发布补丁为 `43.4.0`，故 **WP1 迁移目标锁定为 `electron@43.4.0`**。
+  [43.4.1 GitHub release](https://github.com/electron/electron/releases/tag/v43.4.1)：中间受支持线的
+  最新已发布补丁为 `43.4.1`，故 **WP1 迁移目标锁定为 `electron@43.4.1`**。
 - [Electron 43 发布说明与 breaking changes](https://www.electronjs.org/blog/electron-43-0/)：需要复核的
   变化是下载默认打开 Downloads、带 profile 的 nativeImage 像素归一为 sRGB、Linux 无边框窗口圆角及
   WCO 的 Linux 原生标题栏布局、Linux `dialog.showHiddenFiles` 移除。当前代码没有下载、nativeImage、
   无边框/WCO 或该 Linux dialog 选项，且发布目标为 Windows x64；仍必须在 WP1 实测安全窗口、原生
   对话框、回收站、TXT/DOCX 生命周期。
 
-Electron 43 同时带 Chromium 150、Node 24.17、V8 15 的运行时升级；应用构建 Node 仍由项目本地
+Electron 43.4.1 实测带 Chromium 150.0.7871.224、Node 24.18.1、V8 15.0.245.28 的运行时升级；应用构建 Node 仍由项目本地
 `22.15.0` 提供，二者不是同一个运行时。不得以 `^43` 或 `latest` 替代锁定版本。
 
 ### 4.2 electron-builder、NSIS、ASAR、fuses 与签名
@@ -188,7 +188,7 @@ Authenticode 身份，完成 SHA-256、时间戳与验签后才有资格发布**
 
 ## 7. 后续验证计划
 
-- **WP1**：仅迁移到 `electron@43.4.0`，再运行 typecheck、lint、format:check、全量 Vitest、check、
+- **WP1**：仅迁移到 `electron@43.4.1`，再运行 typecheck、lint、format:check、全量 Vitest、check、
   build、开发/生产 Electron 烟测，以及 Windows 原生、TXT/DOCX、备份、冲突、回收站和关闭保护回归。
 - **WP2**：在所有者确认名称/图标权利后实现唯一版本源、appId、图标与 About 一致性测试。
 - **WP3**：精确安装 `electron-builder@26.15.3`，建立目录白名单，先出 unpacked 再出 portable/NSIS，
@@ -199,7 +199,7 @@ Authenticode 身份，完成 SHA-256、时间戳与验签后才有资格发布**
 ## 8. WP0 结论
 
 **技术调查、基线实测与运行时锁定：通过。** 当前 Task 1–11 自动门禁、构建、开发/生产启动和安全
-边界都有可复核的基线；Electron 43.4.0 是当日规则要求的中间受支持精确版本。
+边界都有可复核的基线；Electron 43.4.1 是当日规则要求的中间受支持精确版本。
 
 **Task 12 的正式 WP0 发布门禁：未通过，暂不可进入 WP1。** 原因不是代码回归，而是第 6 节的项目
 所有者决策（至少许可证、品牌/图标与对外身份、公开签名身份/授权）尚未确认，且当前 `out/` 已发现
