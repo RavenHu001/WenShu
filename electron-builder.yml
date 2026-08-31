@@ -1,0 +1,44 @@
+appId: io.github.ravenhu001.wenshu
+productName: 文枢
+executableName: WenShu
+asar: true
+# `electron@43.4.1` 的 postinstall 已下载同一 Windows x64 runtime；复用它可使干净 npm ci
+# 后的打包不再额外下载一份 Electron，并避免环境镜像差异。
+electronDist: node_modules/electron/dist
+
+directories:
+  buildResources: build
+  output: release
+
+# 白名单：应用包只能含构建产物、应用元数据和 electron-builder 按 production dependencies
+# 递归解析的主进程运行时依赖；不从仓库根默认收集文件。
+files:
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
+  - package.json
+
+win:
+  icon: build/icon.ico
+  # 本 WP 不接入签名；保留资源编辑，以使 EXE 获得产品名称、版本和 ICO。
+  signExecutable: false
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+
+portable:
+  artifactName: WenShu-${version}-portable-${arch}.${ext}
+
+nsis:
+  artifactName: WenShu-${version}-setup-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  packElevateHelper: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  runAfterFinish: false

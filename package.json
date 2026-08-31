@@ -14,6 +14,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "package:dir": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir && npm run package:verify -- --mode=dir",
+    "package:win": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 && npm run package:verify -- --mode=win",
+    "package:verify": "node scripts/verify-package.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.config.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
@@ -26,6 +29,12 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
+    "docx": "^9.7.1",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.7.1",
@@ -38,14 +47,6 @@
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
-    "docx": "^9.7.1",
-    "jszip": "^3.10.1",
-    "mammoth": "^1.12.1",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.32.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.15.0",
@@ -53,11 +54,14 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.6.0",
     "electron": "43.4.1",
+    "electron-builder": "26.15.3",
     "electron-vite": "^4.0.0",
     "eslint": "^9.32.0",
     "globals": "^16.3.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.6.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^7.0.0",

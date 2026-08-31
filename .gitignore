@@ -2,6 +2,7 @@ node_modules/
 .tools/
 out/
 dist/
+release/
 coverage/
 .vite/
 *.log
