@@ -34,8 +34,10 @@ describe('WP3 打包配置', () => {
     expect(config).toContain('signExecutable: false');
     expect(packageManifest.scripts['package:dir']).toContain('run-electron-builder.mjs');
     expect(packageManifest.scripts['package:dir']).toContain('--dir');
+    expect(packageManifest.scripts['package:dir']).toContain('--publish never');
     expect(packageManifest.scripts['package:win']).toContain('run-electron-builder.mjs');
     expect(packageManifest.scripts['package:win']).toContain('--win');
+    expect(packageManifest.scripts['package:win']).toContain('--publish never');
     expect(packageManifest.scripts['package:verify']).toContain('verify-package.mjs');
   });
 });

@@ -14,8 +14,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
-    "package:dir": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir && npm run package:verify -- --mode=dir",
-    "package:win": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 && npm run package:verify -- --mode=win",
+    "package:dir": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never && npm run package:verify -- --mode=dir",
+    "package:win": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --publish never && npm run package:verify -- --mode=win",
     "package:verify": "node scripts/verify-package.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.config.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint . --max-warnings=0",

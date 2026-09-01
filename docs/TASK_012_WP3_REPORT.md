@@ -1,8 +1,8 @@
 # TASK-012 WP3 报告：electron-builder、产物白名单与依赖收敛
 
-> 记录日期：2026-08-31；前序恢复点：`7179e2e`（WP2：发布包 ICO 图标）。
+> 记录日期：2026-09-01；前序恢复点：`7179e2e`（WP2：发布包 ICO 图标）。
 >
-> 本报告记录 WP3 的实际构建结果。portable 和 NSIS 尚未生成，因此本 WP 的发布门禁未通过；没有进入 WP4。
+> 本报告记录 WP3 的实际构建结果。所有 WP3 打包与启动门禁均已完成；没有进入 WP4。
 
 ## 完成内容
 
@@ -20,6 +20,9 @@
   已锁定 `electron@43.4.1` 的 postinstall runtime，避免 builder 再下载另一份 Electron。干净 `npm ci` 时官方源不可达，
   按所有者此前授权临时设置 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 运行官方 Electron 安装脚本；npm
   包与锁文件没有切换来源，安装脚本完成而未报告 checksum 错误。
+- 两个打包脚本均显式传递 `--publish never`，不上传任何 artifact。electron-builder 仍在本地 `release/` 生成
+  `latest.yml` 与 NSIS blockmap；它们是未上传的更新描述元数据，不表示接入自动更新或 publish，且整个 `release/`
+  目录均被忽略。
 - 新增可重复的 `scripts/verify-package.mjs` 与配置测试，检查 package metadata、ASAR 主入口、三项直接运行依赖、
   renderer 依赖不重复进入包、白名单禁止项、x64 PE 机器类型、产物尺寸和最终 artifact 名称。完整文件清单写入被忽略的
   `release/package-audit.json`，便于本地复核而不将产物数据提交到仓库。
@@ -35,23 +38,24 @@
 | `build`                     | 退出码 0；main 155.17 kB、preload 4.30 kB、renderer CSS 53.24 kB、renderer JS 2,264.13 kB。                                                                                                                   |
 | clean-install `package:dir` | 成功；自动 `package:verify -- --mode=dir` 通过。                                                                                                                                                              |
 | unpacked 无源码依赖烟测     | 精确移动 `node_modules` 到项目内临时 stash 后启动 `release/win-unpacked/WenShu.exe`，源依赖目录确已隐藏，8 秒后启动器存活且有 4 个匹配应用进程；随后仅停止这些进程、恢复目录、清理经路径校验的临时 userData。 |
+| `package:win`               | 使用所有者授权的 `https://npmmirror.com/mirrors/electron-builder-binaries/` 下载并校验 `nsis-resources-3.4.1` 后成功；自动及单独执行的 `package:verify -- --mode=win` 均通过。                                |
+| portable 烟测               | 在隔离临时 userData 下启动 `WenShu-0.1.0-alpha.1-portable-x64.exe`，启动器存活且有 4 个匹配应用进程；随后只终止该批进程并清理临时 userData。                                                                  |
+| NSIS 启动烟测               | 不传安装参数启动 `WenShu-0.1.0-alpha.1-setup-x64.exe`，6 秒后安装器进程仍存活（1 个精确匹配进程）；未点击安装，随后关闭该进程。                                                                               |
 
-unpacked 审计的实际尺寸为：`win-unpacked` 387,495,662 B、`resources/app.asar` 12,440,474 B、
-`app.asar.unpacked` 748,156 B。ASAR 的 `node_modules` 清单为 `docx`、`jszip`、`mammoth` 及其间接依赖；
+最后一次 `package:dir` 审计的实际尺寸为：`win-unpacked` 387,495,662 B、`resources/app.asar` 12,440,474 B、
+`app.asar.unpacked` 748,156 B。`package:win` 审计时的 `win-unpacked` 为 387,603,274 B；ASAR 与 unpacked
+模块尺寸相同。最终 portable 为 94,254,976 B，NSIS setup 为 94,554,175 B，NSIS blockmap 为 101,102 B。ASAR 的
+`node_modules` 清单为 `docx`、`jszip`、`mammoth` 及其间接依赖；
 `jszip` 的需要解包文件物理位于 `app.asar.unpacked`，审计报告明确标为 ASAR 索引的 unpacked 模块，未计为额外
 应用依赖副本。检查到的主进程直接外部 import 恰为 `docx`、`jszip`、`mammoth`，PE machine 为 `0x8664`。
 
-## portable/NSIS 阻塞
+## portable/NSIS 下载恢复
 
-`package:win` 已成功完成 clean build、unpacked 阶段和 portable 的 7-Zip 输入压缩（中间
-`wenshu-desktop-0.1.0-alpha.1-x64.nsis.7z` 为 93,824,316 B），但压缩结束后没有启动 `makensis`，也没有产生
-portable 或 NSIS `.exe`。当时只剩本项目的三个 Node builder 进程处于无网络连接的等待状态，已在核对完整命令行后
-精确停止，未触及其他进程。
-
-根因进一步缩小为项目缓存缺少 `nsis-resources-3.4.1` 插件资源：缓存中的 NSIS `makensis.exe` 与 7-Zip 均可
-独立输出版本，然而 builder 在压缩后请求该缺失官方资源时无输出等待。没有将中间 `.nsis.7z` 当成产物，也没有使用
-未经授权的 electron-builder 二进制镜像或手工伪造缓存。因而以下项均没有完成：portable/NSIS 产物、`package:verify
--- --mode=win`、portable 启动烟测、安装包启动/安装后烟测。
+此前阻塞源于缺失的 `nsis-resources-3.4.1` 插件资源。项目所有者在 2026-09-01 明确授权使用大陆镜像后，临时设置
+`ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/` 重新执行 `package:win`。
+精确资源 URL 返回 HTTP 200，下载文件为 730,800 B；electron-builder 26.15.3 使用其内置 SHA-256
+`593a9a92ef958321293ac6a2ee61e64bf1bd543142a5bd6b3d310709cc924103` 完成校验和解压，随后生成两个 `.exe`。
+镜像变量只用于本次构建工具资源下载，未写入项目配置、package manifest 或 lock，也未手工伪造缓存。
 
 ## 产物安全结论与门禁
 
@@ -66,6 +70,5 @@ IPC、文件管理、保存、备份、回收站或关闭语义代码，现有�
 [Windows targets](https://www.electron.build/docs/win/) 和
 [NSIS/portable 指南](https://www.electron.build/nsis/)。
 
-**WP3 门禁：未通过。** unpacked 产物、白名单、依赖收敛、自动审计和无源码依赖启动均有实测证据；但可分发的
-portable/NSIS、Windows 完整产物审计和三类产物启动烟测仍缺失。需先在允许取得 `nsis-resources-3.4.1` 官方工具资源的
-环境中完成 `npm run package:win`、`npm run package:verify -- --mode=win` 及两类剩余烟测，才可进入 WP4。
+**WP3 门禁：通过。** unpacked、portable、NSIS 的打包、内容审计和启动烟测均有实测证据；白名单与外部依赖已收敛，
+没有将源码、测试或用户数据纳入应用包，且打包脚本不上传产物。仍未进入 WP4。
