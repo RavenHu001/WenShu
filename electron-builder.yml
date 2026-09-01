@@ -6,6 +6,10 @@ asar: true
 # 后的打包不再额外下载一份 Electron，并避免环境镜像差异。
 electronDist: node_modules/electron/dist
 
+# electron-builder 26.15.3 尚不接受 electronFuses schema；使用官方 @electron/fuses
+# afterPack 路径且只在此处翻转一次。应用仍以 loadFile()/file:// 加载 renderer。
+afterPack: scripts/after-pack-fuses.cjs
+
 directories:
   buildResources: build
   output: release

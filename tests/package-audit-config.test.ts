@@ -32,6 +32,7 @@ describe('WP3 打包配置', () => {
     expect(config).toContain('packElevateHelper: false');
     expect(config).toContain('build/icon.ico');
     expect(config).toContain('signExecutable: false');
+    expect(config).toContain('afterPack: scripts/after-pack-fuses.cjs');
     expect(packageManifest.scripts['package:dir']).toContain('run-electron-builder.mjs');
     expect(packageManifest.scripts['package:dir']).toContain('--dir');
     expect(packageManifest.scripts['package:dir']).toContain('--publish never');
