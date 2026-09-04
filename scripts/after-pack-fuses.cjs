@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* global exports, require */
+
 const { join } = require('node:path');
 const { flipFuses, FuseV1Options, FuseVersion } = require('@electron/fuses');
 
