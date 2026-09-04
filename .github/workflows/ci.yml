@@ -1,0 +1,39 @@
+name: Continuous integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Check, build, and Electron E2E
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      # actions/checkout@v5.0.0 (GitHub; repository checkout)
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      # actions/setup-node@v6.4.0 (GitHub; exact Node and npm download cache)
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Quality gate
+        run: npm run check
+
+      - name: Production build
+        run: npm run build
+
+      - name: Electron E2E
+        run: npx vitest run tests/e2e/electron-smoke.test.ts
