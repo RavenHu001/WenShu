@@ -33,6 +33,17 @@
 仍使用隔离的 fork pool，但上限从 4 调为 2，降低争抢。工作流 guardrail test 同时断言 build 必须
 先于 check。该并发控制使用 Vitest 支持的 fork worker 配置，而非放宽质量阈值。
 
+## 1.2 2026-09-06：Draft 发布 job 的仓库定位修复
+
+真实 tag workflow 中，`Rebuild and verify release artifacts`、artifact 下载和 SHA-256 复验均已
+成功；`draft-release` 在第一条 `gh release view` 失败，错误为 `not a git repository`。该 job 有意
+不 checkout 源码，GitHub CLI 因而无法从工作目录推断默认仓库。
+
+修复为对 `gh release view` 与 `gh release create` 显式传入
+`--repo $env:GITHUB_REPOSITORY`，因此不必扩大 job 内容或检出源码；同时加入 `--verify-tag`，禁止
+GitHub CLI 在 tag 缺失时从默认分支创建一个新 tag。guardrail test 覆盖这两个参数。修复后仍须重新
+运行 release workflow；此前失败运行没有创建 Release。
+
 ## 2. 权限、缓存与 Action 来源
 
 全局 release 默认 `permissions: {}`；显式权限未列出即为 none，符合 GitHub 的

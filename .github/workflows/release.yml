@@ -156,9 +156,10 @@ jobs:
       - name: Create Draft pre-release only
         shell: pwsh
         run: |
-          gh release view $env:RELEASE_TAG 2>$null
+          # This job deliberately does not check out source; select the repository explicitly.
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY 2>$null
           if ($LASTEXITCODE -eq 0) { throw "Release $env:RELEASE_TAG already exists; refusing to modify it." }
-          gh release create $env:RELEASE_TAG `
+          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag `
             "release/$env:PORTABLE_ARTIFACT" `
             "release/$env:SETUP_ARTIFACT" `
             "release/$env:SETUP_ARTIFACT.blockmap" `

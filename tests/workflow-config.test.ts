@@ -52,6 +52,8 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     expect(workflow).toContain('contents: write');
     expect(workflow.match(/contents:\s*write/g)).toHaveLength(1);
     expect(workflow).toContain('--draft --prerelease');
+    expect(workflow).toContain('--repo $env:GITHUB_REPOSITORY');
+    expect(workflow).toContain('--verify-tag');
     expect(workflow).toContain('SHA256SUMS.txt');
     expect(workflow).toContain('vars.ENABLE_ARTIFACT_ATTESTATION');
     expect(workflow).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
