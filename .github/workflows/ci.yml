@@ -29,11 +29,12 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Quality gate
-        run: npm run check
-
       - name: Production build
         run: npm run build
+
+      # `npm run check` includes the Electron E2E suite, which launches the production entrypoint in out/.
+      - name: Quality gate
+        run: npm run check
 
       - name: Electron E2E
         run: npx vitest run tests/e2e/electron-smoke.test.ts

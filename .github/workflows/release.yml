@@ -61,8 +61,9 @@ jobs:
           "setup=$setup" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "commit=$commit" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: Check, build, package, and audit
+      - name: Build, check, package, and audit
         run: |
+          npm run build
           npm run check
           npx vitest run tests/e2e/electron-smoke.test.ts
           npm run package:win
@@ -84,7 +85,6 @@ jobs:
             $parts = $line -split ' \*', 2
             $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path 'release' $parts[1])).Hash.ToLowerInvariant()
             if ($parts[0] -ne $actual) { throw "SHA-256 verification failed for $($parts[1])" }
-          }
           }
 
       # actions/attest@v4.1.1 (GitHub; optional provenance when the repository plan supports it)
@@ -135,6 +135,7 @@ jobs:
             $parts = $line -split ' \*', 2
             $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path 'release' $parts[1])).Hash.ToLowerInvariant()
             if ($parts[0] -ne $actual) { throw "SHA-256 verification failed for $($parts[1])" }
+          }
 
       - name: Derive release artifact names from the validated tag
         shell: pwsh

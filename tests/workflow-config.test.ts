@@ -26,6 +26,7 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     expect(workflow).toContain('npm run check');
     expect(workflow).toContain('npm run build');
     expect(workflow).toContain('tests/e2e/electron-smoke.test.ts');
+    expect(workflow.indexOf('npm run build')).toBeLessThan(workflow.indexOf('npm run check'));
   });
 
   it('only permits release writes after an approved environment and a clean tagged rebuild', async () => {
@@ -39,6 +40,7 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     expect(workflow).toContain('release-commit: ${{ steps.release-metadata.outputs.commit }}');
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npm run check');
+    expect(workflow).toContain('npm run build');
     expect(workflow).toContain('npm run package:win');
     expect(workflow).toContain('environment: alpha-release');
     expect(workflow).toContain('contents: write');
@@ -54,6 +56,7 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     );
     expect(buildJob).toContain('contents: read');
     expect(buildJob).not.toMatch(/contents:\s*write/);
+    expect(buildJob.indexOf('npm run build')).toBeLessThan(buildJob.indexOf('npm run check'));
   });
 
   it('pins every workflow action to a full immutable commit SHA', async () => {

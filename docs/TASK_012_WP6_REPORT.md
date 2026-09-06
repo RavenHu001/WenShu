@@ -6,8 +6,8 @@
 ## 1. 本包变更
 
 - 新增 `.github/workflows/ci.yml`：Windows `windows-2025` 上从 `.node-version` 读取精确
-  Node `22.15.0`，运行 `npm ci`、`npm run check`、`npm run build` 与既有的 Playwright
-  Electron E2E。
+  Node `22.15.0`，运行 `npm ci`、`npm run build`、`npm run check` 与既有的 Playwright
+  Electron E2E。构建须先于完整 check：后者包含 E2E，E2E 需要 `out/` 的生产入口。
 - 新增 `.github/workflows/release.yml`：仅接受 `v*` push tag 或带必填 tag 输入的
   `workflow_dispatch`。它检出指定 tag 后以实际 `package.json.version` 严格校验
   `v<version>`，记录被构建 commit，并重新执行干净安装、check、E2E、打包、包审计和
@@ -18,6 +18,20 @@
   WP7 如获签名授权，应在该受保护 job 内、上传前接入签名服务。
 - 新增 `tests/workflow-config.test.ts`，防止 CI 写权限、非 npm 缓存、未锁定 Action、标签/
   版本校验、Draft 语义或发布前哈希校验被意外移除。
+
+## 1.1 2026-09-05：首次 GitHub CI 失败与修复
+
+首次远程 CI 结果有两类失败，均未显示产品功能断言错误：
+
+- `npm run check` 在 `npm run build` 之前执行。`check` 包含完整 Vitest，进而启动
+  Electron E2E；干净 GitHub runner 尚无 `out/main/index.js` 等 production entrypoint，故四个
+  E2E 都在 `electron.launch()` 阶段以“系统找不到指定路径”退出。
+- 2000 项 DOCX 全部替换测试在 GitHub Windows 的四个 fork 与 jsdom/Electron 工作负载竞争时超过
+  默认 5 秒；该测试在本机及 CI 模拟下并非逻辑失败。
+
+修复不延长任何测试超时，也不跳过 E2E：CI/release 均改为先 build 后 check；`CI=true` 时 Vitest
+仍使用隔离的 fork pool，但上限从 4 调为 2，降低争抢。工作流 guardrail test 同时断言 build 必须
+先于 check。该并发控制使用 Vitest 支持的 fork worker 配置，而非放宽质量阈值。
 
 ## 2. 权限、缓存与 Action 来源
 
@@ -72,6 +86,7 @@ GitHub Environment 的 reviewer、tag protection、仓库可见性和账户/计�
 | `npm run build`                                | 通过；main 155.17 kB、preload 4.30 kB、renderer JS 2,264.13 kB。                                                                                                                                    |
 | `npm run package:win`                          | 通过：electron-builder 26.15.3、Electron 43.4.1、portable 和 per-user NSIS x64 均生成，随后 package audit 通过。                                                                                    |
 | release SHA 演练                               | 通过；实际生成并复验 `SHA256SUMS.txt`。portable 为 `64f61d0de5022a699cfa968626f9aac455820a147c3b0828214f80e83db2139d`，NSIS 为 `49f61ad5485a4ac63972f838717277169ca89047fa8e42238e8346da139109f1`。 |
+| 修复后的 CI 等价序列（`CI=true`）              | `npm run build` → `npm run check`：74 个测试文件通过，1188 passed、10 skipped；随后独立 Electron E2E 4/4 通过。2000 项 DOCX 全部替换定向测试通过（约 0.65 s），没有修改其 5 s 超时。                |
 
 本次 package audit 读取到 x64（PE machine `0x8664`）；unpacked 387,603,274 B、`app.asar`
 12,440,474 B、`app.asar.unpacked` 748,156 B；portable 94,238,793 B、NSIS 94,537,990 B。
@@ -79,14 +94,15 @@ GitHub Environment 的 reviewer、tag protection、仓库可见性和账户/计�
 
 ## 5. 未执行项与 WP6 门禁结论
 
-未获得外部操作授权，故没有真实远程 CI、tag workflow、Environment 人工审批、artifact upload/
-attestation、Draft Release 或下载后哈希复验的证据。这些是远程验收项，不是本地配置可以替代的事实。
+已有一次远程 CI 失败证据，并已据此完成上述最小修复；修复版本尚未重新触发远程 CI。没有 tag workflow、
+Environment 人工审批、artifact upload/attestation、Draft Release 或下载后哈希复验的成功证据。这些是
+远程验收项，不是本地配置可以替代的事实。
 
 **WP6 的本地实现与可重复构建门禁通过。** PR/push CI 的最小权限、精确 Node、干净安装、仅 npm
 下载缓存、Action SHA 锁定、release tag/version/commit 校验、重建/包审计、哈希和仅 Draft 的语义均有
 自动或本地实际证据。
 
-**WP6 的远程执行门禁待所有者授权后完成。** 需要在精确仓库中确认 `alpha-release` 的人工审批与 tag
-保护，推送 `v0.1.0-alpha.1` 指向的 commit 或以相同 tag 输入手动触发，核对 Draft 是未签名内部 Alpha，
-并下载 artifact/Release 文件复验 SHA-256；如计划允许，再启用并验证 attestation。未完成前，不得声称
-已创建 Draft Release 或已获得来源证明，也不进入 WP7。
+**WP6 的远程执行门禁待重新验收。** 先将本次修复提交到默认分支，重新触发 CI 并确认绿色；之后才在
+精确仓库中确认 `alpha-release` 的人工审批与 tag 保护，推送 `v0.1.0-alpha.1` 指向的 commit 或以相同
+tag 输入手动触发，核对 Draft 是未签名内部 Alpha，并下载 artifact/Release 文件复验 SHA-256；如计划允许，
+再启用并验证 attestation。未完成前，不得声称已创建 Draft Release 或已获得来源证明，也不进入 WP7。
