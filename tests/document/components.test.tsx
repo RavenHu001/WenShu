@@ -75,7 +75,7 @@ function mockDesktop(
   }),
 ) {
   (window as unknown as Record<string, unknown>).desktop = {
-    runtime: { platform: 'win32', electronVersion: '99.9.9' },
+    runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
     workspace: {
       open: open ?? vi.fn(),
       refresh: refresh ?? vi.fn(),
@@ -2055,7 +2055,7 @@ describe('controller 竞态防御（WP5，第 8.6 节）', () => {
         }),
     );
     (window as unknown as Record<string, unknown>).desktop = {
-      runtime: { platform: 'win32', electronVersion: '99.9.9' },
+      runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
       workspace: { open: vi.fn(), refresh: vi.fn() },
       document: {
         readText: vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
@@ -2088,7 +2088,7 @@ describe('controller 竞态防御（WP5，第 8.6 节）', () => {
   it('controller 纵深门禁拒绝未确认的 mixed 换行保存', async () => {
     const saveText = vi.fn<SaveTextFn>();
     (window as unknown as Record<string, unknown>).desktop = {
-      runtime: { platform: 'win32', electronVersion: '99.9.9' },
+      runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
       workspace: { open: vi.fn(), refresh: vi.fn() },
       document: {
         readText: vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', '一\r\n二\n三', 'mixed')),

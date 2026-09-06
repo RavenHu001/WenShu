@@ -127,7 +127,7 @@ function makeDesktopMock(): {
   const open = vi.fn(async (): Promise<OpenWorkspaceResult> => ({ status: 'cancelled' }));
   const refresh = vi.fn(async (): Promise<RefreshWorkspaceResult> => ({ status: 'not-open' }));
   (window as unknown as Record<string, unknown>).desktop = {
-    runtime: { platform: 'win32', electronVersion: '99.9.9' },
+    runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
     workspace: { open, refresh },
     document: {
       readText: vi.fn(async (): Promise<ReadTextDocumentResult> => ({

@@ -49,7 +49,7 @@ function mockDesktop(overrides: {
     }));
   const readText = overrides.readText ?? vi.fn(async () => loadedText());
   (window as unknown as { desktop: DesktopApi }).desktop = {
-    runtime: { platform: 'win32', electronVersion: '37.0.0' },
+    runtime: { platform: 'win32', electronVersion: '37.0.0', appVersion: '0.1.0-alpha.1' },
     workspace: {
       open: vi.fn(),
       refresh: vi.fn(),

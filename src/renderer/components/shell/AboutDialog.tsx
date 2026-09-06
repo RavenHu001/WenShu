@@ -1,4 +1,5 @@
 import type { DesktopRuntimeInfo } from '../../../shared/desktop-api';
+import { appIdentity } from '../../../shared/app-metadata';
 import { ModalDialog } from '../common/ModalDialog';
 import { Icon } from '../common/Icon';
 
@@ -16,11 +17,15 @@ export function AboutDialog({
           <Icon name="files" size={24} />
         </span>
         <div>
-          <div className="confirm-title">文枢</div>
-          <div className="about-subtitle">本地多文档写作工作台 · Pre-alpha</div>
+          <div className="confirm-title">{appIdentity.productName}</div>
+          <div className="about-subtitle">Alpha · 版本 {runtime.appVersion}</div>
         </div>
       </div>
       <div className="about-details">
+        <div>
+          <span>产品版本</span>
+          <strong>{runtime.appVersion}</strong>
+        </div>
         <div>
           <span>平台</span>
           <strong>{runtime.platform === 'win32' ? 'Windows' : runtime.platform}</strong>

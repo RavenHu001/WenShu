@@ -1,7 +1,9 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { appMetadataDefines } from './app-metadata.config';
 
 export default defineConfig({
+  define: appMetadataDefines,
   plugins: [react()],
   test: {
     // 默认使用 node 环境：文件系统/契约测试不需要 DOM，避免每个 worker 都加载 jsdom，

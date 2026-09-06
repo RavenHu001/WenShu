@@ -369,7 +369,7 @@ describe('WP6：泄漏观察（第 8.8 节；重复订阅 / 装饰清理 / 控�
 
 function mockDesktopApp(): void {
   (window as unknown as Record<string, unknown>).desktop = {
-    runtime: { platform: 'win32', electronVersion: '99.9.9' },
+    runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
     workspace: {
       open: vi.fn(async () => ({
         status: 'selected',

@@ -49,6 +49,16 @@ describe('preload 窄接口契约', () => {
     ]);
   });
 
+  it('runtime 只暴露构建时固定的版本、平台和 Electron 版本', () => {
+    expect(Object.keys(desktop.runtime).sort()).toEqual([
+      'appVersion',
+      'electronVersion',
+      'platform',
+    ]);
+    expect(desktop.runtime.appVersion).toBe('0.1.0-alpha.1');
+    expect(JSON.stringify(desktop.runtime)).not.toContain('process');
+  });
+
   it('document 命名空间只暴露 readText、saveText、readDocx、saveDocx、saveTextAs、saveDocxAs 六个固定函数', () => {
     expect(Object.keys(desktop.document).sort()).toEqual([
       'readDocx',
@@ -403,6 +413,7 @@ describe('preload 窄接口契约', () => {
 
   it('desktop 与各命名空间均为冻结对象', () => {
     expect(Object.isFrozen(desktop)).toBe(true);
+    expect(Object.isFrozen(desktop.runtime)).toBe(true);
     expect(Object.isFrozen(desktop.document)).toBe(true);
     expect(Object.isFrozen(desktop.workspace)).toBe(true);
     expect(Object.isFrozen(desktop.search)).toBe(true);
