@@ -1,7 +1,7 @@
 # TASK-012 WP6 报告：Windows CI、发布工作流与来源证据
 
-> 记录日期：2026-09-04；分支：`TASK-12`；范围仅为 WP6。没有 push、创建 tag、触发远程
-> workflow、创建 GitHub Release 或进入 WP7。
+> 记录日期：2026-09-06；分支：`TASK-12`；范围仅为 WP6。远程 CI、tag workflow、Draft
+> Pre-release 与下载后 SHA-256 已实际验收；没有进入 WP7。
 
 ## 1. 本包变更
 
@@ -14,8 +14,7 @@
   SHA-256 校验；不复用未知来源的上传文件。
 - release 的 build job 只读且仅在仓库变量 `ENABLE_ARTIFACT_ATTESTATION == 'true'` 时使用
   GitHub attestation。`draft-release` job 是唯一的 `contents: write` job，位于
-  `alpha-release` Environment；该 Environment 必须由仓库所有者配置 required reviewer。
-  WP7 如获签名授权，应在该受保护 job 内、上传前接入签名服务。
+  `alpha-release` Environment。WP7 如获签名授权，应在该受保护 job 内、上传前接入签名服务。
 - 新增 `tests/workflow-config.test.ts`，防止 CI 写权限、非 npm 缓存、未锁定 Action、标签/
   版本校验、Draft 语义或发布前哈希校验被意外移除。
 
@@ -43,6 +42,19 @@
 `--repo $env:GITHUB_REPOSITORY`，因此不必扩大 job 内容或检出源码；同时加入 `--verify-tag`，禁止
 GitHub CLI 在 tag 缺失时从默认分支创建一个新 tag。guardrail test 覆盖这两个参数。修复后仍须重新
 运行 release workflow；此前失败运行没有创建 Release。
+
+## 1.3 2026-09-06：远程发布演练成功与 Environment 例外
+
+修复后的 `Build internal Alpha draft #3` 以 `workflow_dispatch` 成功运行：`Rebuild and verify
+release artifacts` 和 `Upload approved Draft pre-release` 都完成，workflow 上传了一个内部 artifact。
+GitHub Release 页面确认 `文枢 v0.1.0-alpha.1` 为 **Draft**，包含 `SHA256SUMS.txt`、portable EXE、
+NSIS EXE 与 blockmap；Release note 标明未签名内部 Alpha 和对应 source commit。项目所有者已下载
+EXE 并确认 SHA-256 与 `SHA256SUMS.txt` 一致。
+
+项目所有者在 `alpha-release` Environment 页面确认当前账户/仓库没有 `Required reviewers` 配置项，
+并明确决定 WP6 不以改变仓库可见性、购买/迁移计划或伪造审批作为前提。此项被记录为外部账户能力例外：
+Draft 仍不公开，且 workflow 的最小权限与仅 Draft 行为不变；它不能被描述为已进行 GitHub 人工
+Environment 审批。
 
 ## 2. 权限、缓存与 Action 来源
 
@@ -79,9 +91,9 @@ v0.1.0-alpha.1 -> package.json 0.1.0-alpha.1
 Release 会失败而非覆盖；工作流没有把 Draft 改为公开的命令。Draft 说明会标记“未签名内部 Alpha”、
 写入 source commit 并提示校验哈希。
 
-GitHub Environment 的 reviewer、tag protection、仓库可见性和账户/计划尚未在本包远程核实。
-因此 attestation 默认关闭：只有所有者确认仓库具备资格并显式设置仓库变量后才执行。没有证据表明
-当前仓库可生成或验证 attestation，不能把配置当作成功证明。
+当前账户/仓库未提供 `alpha-release` 的 Required reviewers，项目所有者已接受第 1.3 节的外部例外。
+tag protection 的远程配置状态未在本报告的证据中确认。attestation 保持默认关闭：只有所有者确认仓库
+具备资格并显式设置仓库变量后才执行。没有 attestation 生成或验证证据，不能把配置当作成功证明。
 
 ## 4. 本地实际验证
 
@@ -105,15 +117,15 @@ GitHub Environment 的 reviewer、tag protection、仓库可见性和账户/计�
 
 ## 5. 未执行项与 WP6 门禁结论
 
-已有一次远程 CI 失败证据，并已据此完成上述最小修复；修复版本尚未重新触发远程 CI。没有 tag workflow、
-Environment 人工审批、artifact upload/attestation、Draft Release 或下载后哈希复验的成功证据。这些是
-远程验收项，不是本地配置可以替代的事实。
+首次远程 CI 的失败已完成最小修复；修复后的 CI、tag workflow、artifact upload、Draft Release 和
+下载后 SHA-256 均有真实成功证据。没有 GitHub Environment 人工审批或 artifact attestation 成功证据：
+前者适用项目所有者接受的账户能力例外，后者未启用且资格未知。
 
 **WP6 的本地实现与可重复构建门禁通过。** PR/push CI 的最小权限、精确 Node、干净安装、仅 npm
 下载缓存、Action SHA 锁定、release tag/version/commit 校验、重建/包审计、哈希和仅 Draft 的语义均有
 自动或本地实际证据。
 
-**WP6 的远程执行门禁待重新验收。** 先将本次修复提交到默认分支，重新触发 CI 并确认绿色；之后才在
-精确仓库中确认 `alpha-release` 的人工审批与 tag 保护，推送 `v0.1.0-alpha.1` 指向的 commit 或以相同
-tag 输入手动触发，核对 Draft 是未签名内部 Alpha，并下载 artifact/Release 文件复验 SHA-256；如计划允许，
-再启用并验证 attestation。未完成前，不得声称已创建 Draft Release 或已获得来源证明，也不进入 WP7。
+**WP6 的可用远程执行门禁通过，并保留明确限制。** 远程 CI、tag/version/commit 重建、包审计、
+SHA-256、Draft 和下载复验均通过；Release 未公开。`alpha-release` 的 Required reviewers 因当前账户/
+仓库能力不可用而按项目所有者决定跳过，不能宣称发生过独立 GitHub 审批。tag protection 仍应由所有者在
+GitHub Settings 中确认；attestation 只有在资格确认后才可作为额外来源证据启用。本包不进入 WP7。
