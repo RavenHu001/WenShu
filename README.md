@@ -92,6 +92,20 @@
 
 ## 快速开始
 
+### 自动测试（与 CI 一致）
+
+在 Windows 项目根目录依次执行，任一步失败后先修复再继续：
+
+```powershell
+npm ci
+npx install-electron --no
+npm run build
+npm run check
+npm run test:e2e
+```
+
+Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`npm test` 和 `npm run check` 只运行普通测试；`npm run test:e2e` 单独运行 Electron 冒烟测试，需要已安装的 Electron 和最新的 `out/` 构建产物。
+
 ### 环境要求
 
 - Windows 10 或 Windows 11

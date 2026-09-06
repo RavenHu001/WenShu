@@ -1,10 +1,26 @@
 import { Document, Packer, Paragraph } from 'docx';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import JSZip from 'jszip';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+const projectRoot = resolve(import.meta.dirname, '../..');
+const executablePath = resolve(projectRoot, 'node_modules/electron/dist/electron.exe');
+
+beforeAll(async () => {
+  for (const [path, command] of [
+    [executablePath, 'npx install-electron --no'],
+    [resolve(projectRoot, 'out/main/index.js'), 'npm run build'],
+  ] as const) {
+    try {
+      await access(path);
+    } catch (cause) {
+      throw new Error(`Electron E2E prerequisite unavailable: ${path}. Run: ${command}`, { cause });
+    }
+  }
+});
 
 const temporaryRoots: string[] = [];
 const applications: ElectronApplication[] = [];
@@ -46,7 +62,8 @@ async function launchWithWorkspace(
   const userData = await mkdtemp(resolve(tmpdir(), 'wenshu-e2e-user-data-'));
   temporaryRoots.push(userData);
   const application = await electron.launch({
-    executablePath: resolve('node_modules', 'electron', 'dist', 'electron.exe'),
+    executablePath,
+    cwd: projectRoot,
     // 自动化会话无稳定 GPU 合成环境；仅测试进程禁用 GPU，不改变产品配置或 fuses。
     args: ['.', `--user-data-dir=${userData}`, '--disable-gpu', '--no-sandbox'],
     env: Object.fromEntries(

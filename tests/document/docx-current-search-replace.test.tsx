@@ -41,7 +41,12 @@ beforeAll(() => {
   }
 });
 
+const editors: Editor[] = [];
+const controllers: DocxCurrentSearchController[] = [];
+
 afterEach(() => {
+  for (const controller of controllers.splice(0)) controller.destroy();
+  for (const editor of editors.splice(0)) editor.destroy();
   document.body.innerHTML = '';
 });
 
@@ -72,7 +77,7 @@ function createSearchEditor(
 ): Editor {
   const container = document.createElement('div');
   document.body.appendChild(container);
-  return new Editor({
+  const editor = new Editor({
     element: container,
     extensions: [
       ...DOCX_EDITOR_EXTENSIONS,
@@ -86,6 +91,8 @@ function createSearchEditor(
     content: docxModelToTiptapJson(model) as unknown as Content,
     editable,
   });
+  editors.push(editor);
+  return editor;
 }
 
 function flush(): Promise<void> {
@@ -120,6 +127,7 @@ async function hostWithQuery(
   const hooks: CurrentSearchPluginHooks = { onStateChange: null, onRecompute };
   const editor = createSearchEditor(model, hooks, options.editable ?? true);
   const controller = new DocxCurrentSearchController('tab-1', editor, hooks);
+  controllers.push(controller);
   controller.setReplaceEnabled(options.replaceEnabled ?? true);
   let updates = 0;
   editor.on('update', () => {
@@ -356,7 +364,8 @@ describe('WP4：全部替换（第 8.5 节）', () => {
     expect(currentMessage(over.controller)).toBe('匹配超过 2000 处，全部替换已被禁用');
     expect(over.updates()).toBe(beforeOver);
     expect(over.editor.view.state.doc.textContent).toBe('a'.repeat(4000));
-  });
+    // Bulk editing in jsdom is a behavioral check, not a 5 s performance budget.
+  }, 15_000);
 
   it('快速重复点击不重复应用：第二次无匹配 → 无操作', async () => {
     const { editor, controller, updates } = await hostWithQuery(modelOf([paragraph('aaa')]), 'a');

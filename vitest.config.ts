@@ -18,9 +18,8 @@ export default defineConfig({
     poolOptions: {
       forks: {
         minForks: 1,
-        // GitHub-hosted Windows runners execute the full jsdom/DOCX suite and Electron E2E
-        // concurrently. Two forks retain process isolation without starving the 5 s behavioral
-        // regression tests; local development remains capped at four.
+        // Limit resource contention in the full jsdom/DOCX suite on CI.
+        // Electron E2E runs in a separate step; local development remains capped at four.
         maxForks: process.env.CI === 'true' ? 2 : 4,
       },
     },

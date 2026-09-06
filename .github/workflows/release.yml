@@ -44,6 +44,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Install Electron binary
+        run: npx install-electron --no
+
       - name: Validate tag, version, and artifact names
         id: release-metadata
         shell: pwsh
@@ -61,12 +64,17 @@ jobs:
           "setup=$setup" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "commit=$commit" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: Build, check, package, and audit
-        run: |
-          npm run build
-          npm run check
-          npx vitest run tests/e2e/electron-smoke.test.ts
-          npm run package:win
+      - name: Production build
+        run: npm run build
+
+      - name: Quality gate
+        run: npm run check
+
+      - name: Electron E2E
+        run: npm run test:e2e
+
+      - name: Package and audit
+        run: npm run package:win
 
       - name: Generate and verify SHA-256 manifest
         shell: pwsh

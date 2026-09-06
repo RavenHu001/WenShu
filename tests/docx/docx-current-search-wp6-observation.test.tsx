@@ -47,8 +47,9 @@ beforeAll(() => {
 });
 
 afterEach(() => {
-  document.body.innerHTML = '';
   cleanup();
+  document.body.innerHTML = '';
+  vi.restoreAllMocks();
   delete (window as unknown as Record<string, unknown>).desktop;
 });
 
@@ -361,8 +362,8 @@ describe('WP6：泄漏观察（第 8.8 节；重复订阅 / 装饰清理 / 控�
         'MB (GC 噪声，仅观察)',
     );
     expect(errorSpy).not.toHaveBeenCalled();
-    errorSpy.mockRestore();
-  });
+    // Repeated full-app rendering in jsdom needs headroom on CI.
+  }, 15_000);
 });
 
 /* ======================= App 冒烟小夹具 ======================= */

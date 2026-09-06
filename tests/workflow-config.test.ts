@@ -25,7 +25,13 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npm run check');
     expect(workflow).toContain('npm run build');
-    expect(workflow).toContain('tests/e2e/electron-smoke.test.ts');
+    expect(workflow).toContain('npm run test:e2e');
+    expect(workflow).toContain('npx install-electron --no');
+    expect(workflow.indexOf('npm ci')).toBeLessThan(workflow.indexOf('npx install-electron --no'));
+    expect(workflow.indexOf('npx install-electron --no')).toBeLessThan(
+      workflow.indexOf('npm run check'),
+    );
+    expect(workflow.indexOf('npm run check')).toBeLessThan(workflow.indexOf('npm run test:e2e'));
     expect(workflow.indexOf('npm run build')).toBeLessThan(workflow.indexOf('npm run check'));
   });
 
@@ -56,6 +62,15 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     );
     expect(buildJob).toContain('contents: read');
     expect(buildJob).not.toMatch(/contents:\s*write/);
+    expect(buildJob).toContain('npx install-electron --no');
+    expect(buildJob).toContain('npm run test:e2e');
+    expect(buildJob.indexOf('npx install-electron --no')).toBeLessThan(
+      buildJob.indexOf('npm run check'),
+    );
+    expect(buildJob.indexOf('npm run check')).toBeLessThan(buildJob.indexOf('npm run test:e2e'));
+    expect(buildJob.indexOf('npm run test:e2e')).toBeLessThan(
+      buildJob.indexOf('npm run package:win'),
+    );
     expect(buildJob.indexOf('npm run build')).toBeLessThan(buildJob.indexOf('npm run check'));
   });
 
