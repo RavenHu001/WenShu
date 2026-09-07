@@ -14,7 +14,7 @@ and their bundled components and must remain with every unpacked, portable, and 
 
 This file is a reproducible engineering aid, not legal advice. Package metadata can be
 incomplete or inaccurate; downstream distributors must review the original licenses and notices.
-The WenShu project license is intentionally not stated here because the owner has not selected it.
+The WenShu project is licensed under the MIT License; see the packaged LICENSE file.
 
 Packaged runtime
 ----------------

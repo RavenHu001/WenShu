@@ -29,6 +29,7 @@ const bundledRendererRoots = [
 
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const normalizePath = (path) => path.split(sep).join('/');
+const normalizeLineEndings = (text) => text.replace(/\r\n?/g, '\n');
 
 const resolvePackageManifest = async (name, fromDirectory) => {
   let current = fromDirectory;
@@ -76,7 +77,10 @@ while (queue.length > 0) {
     .sort((left, right) => left.localeCompare(right));
   const legalTexts = [];
   for (const name of legalFiles) {
-    legalTexts.push({ name, text: (await readFile(resolve(directory, name), 'utf8')).trim() });
+    legalTexts.push({
+      name,
+      text: normalizeLineEndings(await readFile(resolve(directory, name), 'utf8')).trim(),
+    });
   }
 
   packages.set(manifestPath, {
@@ -131,7 +135,7 @@ const lines = [
   '',
   'This file is a reproducible engineering aid, not legal advice. Package metadata can be',
   'incomplete or inaccurate; downstream distributors must review the original licenses and notices.',
-  'The WenShu project license is intentionally not stated here because the owner has not selected it.',
+  'The WenShu project is licensed under the MIT License; see the packaged LICENSE file.',
   '',
   'Packaged runtime',
   '----------------',
@@ -180,7 +184,10 @@ for (const entry of sortedPackages) {
   }
 }
 
-const output = `${lines.join('\n')}\n`;
+// Third-party archives may contain CRLF or legacy CR license files. Normalize at the final
+// generation boundary as well as on input so a Git clean checkout produces identical bytes on
+// Windows, macOS, and Linux.
+const output = normalizeLineEndings(`${lines.join('\n')}\n`);
 if (process.argv.includes('--check')) {
   const existing = await readFile(outputPath, 'utf8').catch(() => '');
   if (existing !== output) {

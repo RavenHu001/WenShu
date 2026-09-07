@@ -14,6 +14,7 @@ describe('WP3 打包配置', () => {
 
   it('提供独立白名单配置与可重复 package 命令', async () => {
     const config = await readFile(resolve('electron-builder.yml'), 'utf8');
+    const thirdPartyNotices = await readFile(resolve('THIRD_PARTY_NOTICES.txt'), 'utf8');
 
     expect(config).toContain('buildResources: build');
     expect(config).toContain('output: release');
@@ -46,5 +47,9 @@ describe('WP3 打包配置', () => {
     expect(packageManifest.scripts['package:win']).toContain('--win');
     expect(packageManifest.scripts['package:win']).toContain('--publish never');
     expect(packageManifest.scripts['package:verify']).toContain('verify-package.mjs');
+    expect(thirdPartyNotices).toContain(
+      'The WenShu project is licensed under the MIT License; see the packaged LICENSE file.',
+    );
+    expect(thirdPartyNotices).not.toContain('\r');
   });
 });
