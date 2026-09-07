@@ -8,14 +8,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const projectDirectory = resolve(scriptDirectory, '..');
 const cacheDirectory = resolve(projectDirectory, '.tools', 'electron-builder-cache');
-const cliPath = resolve(
-  projectDirectory,
-  'node_modules',
-  'electron-builder',
-  'out',
-  'cli',
-  'cli.js',
-);
+const cliPath = resolve(projectDirectory, 'node_modules', 'electron-builder', 'cli.js');
 
 await mkdir(cacheDirectory, { recursive: true });
 

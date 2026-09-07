@@ -76,24 +76,17 @@ jobs:
       - name: Package and audit
         run: npm run package:win
 
-      - name: Generate and verify SHA-256 manifest
+      # The owner has not selected a trusted signing backend. Keep this workflow honest and
+      # fail if credentials unexpectedly cause signing; WP7 must replace win.sign:false with
+      # one reviewed v27 backend before switching this gate to Trusted.
+      - name: Verify unsigned internal artifacts, then generate final SHA-256
+        run: npm run release:verify -- -SignatureLevel Unsigned -GenerateManifest
+
+      - name: Stage release documentation
         shell: pwsh
         run: |
-          $files = @(
-            (Join-Path 'release' $env:PORTABLE_ARTIFACT),
-            (Join-Path 'release' $env:SETUP_ARTIFACT)
-          )
-          $lines = foreach ($file in $files) {
-            if (-not (Test-Path -LiteralPath $file)) { throw "Missing artifact: $file" }
-            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant()
-            "$hash *$([IO.Path]::GetFileName($file))"
-          }
-          Set-Content -LiteralPath 'release/SHA256SUMS.txt' -Value $lines -Encoding ascii
-          foreach ($line in Get-Content -LiteralPath 'release/SHA256SUMS.txt') {
-            $parts = $line -split ' \*', 2
-            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path 'release' $parts[1])).Hash.ToLowerInvariant()
-            if ($parts[0] -ne $actual) { throw "SHA-256 verification failed for $($parts[1])" }
-          }
+          Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.txt' -Destination 'release/THIRD_PARTY_NOTICES.txt'
+          Copy-Item -LiteralPath 'docs/releases/v0.1.0-alpha.1.md' -Destination 'release/ALPHA_RELEASE_NOTES.md'
 
       # actions/attest@v4.1.1 (GitHub; optional provenance when the repository plan supports it)
       - name: Attest release artifacts when enabled
@@ -114,6 +107,8 @@ jobs:
             release/${{ steps.release-metadata.outputs.setup }}
             release/${{ steps.release-metadata.outputs.setup }}.blockmap
             release/SHA256SUMS.txt
+            release/THIRD_PARTY_NOTICES.txt
+            release/ALPHA_RELEASE_NOTES.md
           if-no-files-found: error
           retention-days: 14
 
@@ -164,5 +159,6 @@ jobs:
             "release/$env:SETUP_ARTIFACT" `
             "release/$env:SETUP_ARTIFACT.blockmap" `
             'release/SHA256SUMS.txt' `
+            'release/THIRD_PARTY_NOTICES.txt' `
             --draft --prerelease --title "文枢 $env:RELEASE_TAG" `
-            --notes "未签名内部 Alpha。源提交：$env:RELEASE_COMMIT。请先校验 SHA256SUMS.txt；本工作流不会自动公开发布。"
+            --notes-file 'release/ALPHA_RELEASE_NOTES.md'

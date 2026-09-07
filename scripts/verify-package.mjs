@@ -103,6 +103,7 @@ assert(
 await stat(appAsarPath);
 const asarFiles = (await listPackage(appAsarPath)).map(normalizeAsarPath).sort();
 const packageJsonBuffer = extractAsarFile('package.json');
+const thirdPartyNoticesBuffer = extractAsarFile('THIRD_PARTY_NOTICES.txt');
 const packagedManifest = JSON.parse(packageJsonBuffer.toString('utf8'));
 const packagedMain = extractAsarFile('out/main/index.js').toString('utf8');
 const externalImports = [...packagedMain.matchAll(/\bfrom\s+["']([^"']+)["']/g)]
@@ -139,6 +140,10 @@ assert(
 );
 assert(packagedManifest.productName === '文枢', 'packaged package.json productName differs');
 assert(
+  thirdPartyNoticesBuffer.toString('utf8').startsWith('WenShu THIRD-PARTY SOFTWARE NOTICES'),
+  'packaged THIRD_PARTY_NOTICES.txt is missing or malformed',
+);
+assert(
   JSON.stringify(Object.keys(packagedManifest.dependencies ?? {}).sort()) ===
     JSON.stringify(expectedExternalDependencies),
   'packaged production dependencies differ from the audited main-process allowlist',
@@ -160,6 +165,8 @@ assert(
 );
 
 const executablePath = resolve(unpackedDirectory, 'WenShu.exe');
+await stat(resolve(unpackedDirectory, 'LICENSE.electron.txt'));
+await stat(resolve(unpackedDirectory, 'LICENSES.chromium.html'));
 const unpackedStat = await stat(unpackedDirectory);
 assert(unpackedStat.isDirectory(), 'win-unpacked directory is missing');
 const executableMachine = await peMachine(executablePath);
