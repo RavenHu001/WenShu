@@ -5,13 +5,15 @@
 
 ## 1. 结论与真实发布级别
 
-**当前发布级别仍是未签名内部 Alpha / Draft，不能公开。WP7 正式门禁未通过。**
+**当前批准范围是 GitHub 上的 MIT 源码公开；portable/NSIS 保持未签名内部 Alpha / Draft。WP7 已满足
+这一修订后的所有者门禁，但不批准公开二进制。**
 
 安全的本地工程、第三方 NOTICE、变更记录、安全策略、Alpha Release Notes、v27 配置迁移、未签名
-验签/最终哈希和 Draft workflow 加固已经完成。所有者现已选择 Microsoft Artifact Signing + GitHub
-OIDC，以及 MIT License（Copyright 2026 Jinxi Hu）；根目录许可证和项目元数据已经落地。Azure 身份
-验证和签名资源尚未建立，因此没有写入伪造的 publisher、PFX、Azure 配置值或凭据，也没有把现有
-Draft 转为公开 Pre-release。
+验签/最终哈希和 Draft workflow 加固已经完成。所有者选择 MIT License（Copyright 2026 Jinxi Hu）
+并只公开 GitHub 源码；根目录许可证和项目元数据已经落地。二进制只供内部 Draft 测试，因此当前
+`win.sign: false` 是有意且真实的配置。Artifact Signing + GitHub OIDC 被记录为未来公开二进制时的
+可选工作，不是当前阻塞项。没有写入 publisher、PFX、Azure 配置值或凭据，也没有把现有 Draft 转为
+公开 Pre-release。
 
 远程 `Build internal Alpha draft` action 和 Draft 的成功证据来自 WP6 报告及本次所有者说明。本会话
 未安装 GitHub CLI，未修改远程 Release。现有 `v0.1.0-alpha.1` 指向
@@ -45,9 +47,9 @@ WP7 文件和 v27 产物。不能移动既有标签或把当前 HEAD 产物冒�
 固定调用内部模式，因此意外混入签名文件会失败。选定真实后端后，必须把 `win.sign` 替换为 v27 的
 单一 discriminated union，并把 workflow 门禁改为 `Trusted`；不能只改发布文案。
 
-已选 Artifact Signing + GitHub OIDC，因为私钥不落地。落地真实签名前仍需 Azure 付费账户、Public
-Trust 身份验证、endpoint、account/profile 名、publisher subject 和最小
-`Artifact Signing Certificate Profile Signer` 角色。当前没有读取或打印任何凭据。
+当前不接入受信任签名。若以后批准公开二进制，首选的可选方案是 Artifact Signing + GitHub OIDC，
+因为私钥不落地；届时再建立 Azure 账户、Public Trust 身份、account/profile、publisher subject 和
+最小 `Artifact Signing Certificate Profile Signer` 角色。当前没有读取或打印任何凭据。
 
 ## 3. 固定构建顺序与产物证据
 
@@ -95,7 +97,8 @@ LICENSE/NOTICE/COPYING 文本。每次 `check` 都以 `--check` 阻止清单过�
   本地文档语义、无自动更新/无遥测、反馈隐私和不碰工作区的降级方式；
 - release workflow 会携带 NOTICE 和 Release Notes，并用 `--notes-file` 创建 Draft；当前不会公开，
   也不会把未签名产物误标为可信签名。
-- 预期分发渠道只有 GitHub 源码仓库和 GitHub Releases；不计划 Microsoft Store 上架，也无自动更新。
+- 当前只公开 GitHub 源码；GitHub Releases 二进制保持内部 Draft。不计划 Microsoft Store 上架，也无
+  自动更新。Artifact Signing + GitHub OIDC 保留为未来公开二进制的可选工作。
 
 ## 6. 实际命令与结果
 
@@ -122,14 +125,14 @@ LICENSE/NOTICE/COPYING 文本。每次 `check` 都以 `--check` 阻止清单过�
 
 ## 8. 阻塞与门禁
 
-1. Authenticode 方案已经选定，但 Azure Public Trust 身份验证、Artifact Signing 资源和精确 publisher
-   subject 尚未完成；实际签名级别仍为无签名，不能运行可信验签/时间戳测试。
-2. MIT 项目许可证已经落地；三个 npm 包缺失独立许可文本的上游证据仍应在公开前补齐。
+1. 当前没有公开二进制授权，实际签名级别按设计为无签名；可信验签、时间戳和 publisher 测试只在
+   未来批准公开二进制并启用 Artifact Signing 后成为门禁。
+2. MIT 项目许可证已经落地；三个 npm 包缺失独立许可文本的上游证据应在未来公开二进制前补齐。
 3. 现有 Alpha 标签早于 WP7，本地最终产物没有与可上传的新精确标签绑定；未获授权创建/推送新标签，
    也不应移动已用标签。
 4. WP5 的 Windows 11 x64 矩阵仍是前序阻塞；WP7 不伪造补齐。
 5. v27 当前是 alpha 预发布；虽然本地门禁通过，公开候选仍应在 WP8 决策时评估是锁定该精确预发布、
    等待稳定 v27，还是由所有者明确接受风险。
 
-因此，**许可门禁已满足，签名门禁尚未满足；状态必须保持“内部 Alpha/Draft，公开发布阻塞”**。
-下一步是完成 Azure/OIDC 外部条件并运行可信签名验证；本包不进入 WP8。
+因此，**MIT 源码公开范围的 WP7 门禁已满足；二进制必须保持“未签名内部 Alpha/Draft，不公开”**。
+Azure/OIDC 不再是当前阻塞项，而是未来公开二进制的显式可选工作。本包不进入 WP8。

@@ -6,10 +6,10 @@ yet made a public binary release.
 ## [Unreleased]
 
 - Selected the MIT License, copyright 2026 Jinxi Hu.
-- Selected Microsoft Artifact Signing with GitHub OIDC for future GitHub Releases distribution;
-  trusted Authenticode signing remains blocked on Azure identity validation and signing resource
-  configuration.
-- Distribution is planned through GitHub Releases only. No Microsoft Store submission is planned.
+- Public distribution is source-only through GitHub under MIT. Binary artifacts remain in an
+  unsigned internal Draft; no Microsoft Store submission is planned.
+- Deferred Microsoft Artifact Signing with GitHub OIDC as an optional future task if public
+  portable/NSIS distribution is later approved.
 
 ## [0.1.0-alpha.1] - 2026-09-06
 

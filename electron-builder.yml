@@ -28,9 +28,9 @@ files:
 
 win:
   icon: build/icon.ico
-  # The owner selected Artifact Signing + GitHub OIDC, but Azure identity validation,
-  # the certificate profile, and its exact publisher subject do not exist yet. Keep
-  # local/internal packaging explicitly unsigned until those external inputs are ready.
+  # Public binary distribution is not in the current release scope. Keep internal
+  # portable/NSIS packages explicitly unsigned. Artifact Signing + GitHub OIDC is a
+  # future opt-in task if the owner later approves public binary distribution.
   sign: false
   target:
     - target: portable

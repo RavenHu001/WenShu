@@ -76,9 +76,9 @@ jobs:
       - name: Package and audit
         run: npm run package:win
 
-      # Artifact Signing + GitHub OIDC is selected, but the Azure identity/profile inputs are
-      # not provisioned yet. Keep this workflow honest and fail if signing appears unexpectedly;
-      # the reviewed v27 Azure backend must be enabled before switching this gate to Trusted.
+      # Public binaries are outside the current release scope. Keep internal packages explicitly
+      # unsigned and fail if signing appears unexpectedly. Artifact Signing + GitHub OIDC may be
+      # added later as a separate, owner-approved public-binary task.
       - name: Verify unsigned internal artifacts, then generate final SHA-256
         shell: pwsh
         run: >-
