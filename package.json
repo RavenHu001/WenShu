@@ -2,6 +2,7 @@
   "name": "wenshu-desktop",
   "version": "0.1.0-alpha.1",
   "private": true,
+  "license": "MIT",
   "description": "A local-first multi-document desktop workspace.",
   "productName": "文枢",
   "wenshu": {
@@ -17,7 +18,8 @@
     "package:dir": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never && npm run package:verify -- --mode=dir",
     "package:win": "npm run build && node scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --publish never && npm run package:verify -- --mode=win",
     "package:verify": "node scripts/verify-package.mjs",
-    "release:verify": "pwsh.exe -NoLogo -NoProfile -File scripts/verify-windows-release.ps1",
+    "release:verify:unsigned": "pwsh.exe -NoLogo -NoProfile -File scripts/verify-windows-release.ps1 -SignatureLevel Unsigned",
+    "release:manifest:unsigned": "pwsh.exe -NoLogo -NoProfile -File scripts/verify-windows-release.ps1 -SignatureLevel Unsigned -GenerateManifest",
     "notices:generate": "node scripts/generate-third-party-notices.mjs",
     "notices:check": "node scripts/generate-third-party-notices.mjs --check",
     "typecheck": "tsc --noEmit -p tsconfig.config.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.test.json",

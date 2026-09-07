@@ -23,7 +23,9 @@ describe('WP3 打包配置', () => {
     expect(config).toContain('out/preload/**');
     expect(config).toContain('out/renderer/**');
     expect(config).toContain('package.json');
+    expect(config).toContain('  - LICENSE');
     expect(config).toContain('THIRD_PARTY_NOTICES.txt');
+    expect(packageManifest.license).toBe('MIT');
     expect(config).not.toContain('**/*');
     expect(config).toContain('target: portable');
     expect(config).toContain('target: nsis');

@@ -76,15 +76,20 @@ jobs:
       - name: Package and audit
         run: npm run package:win
 
-      # The owner has not selected a trusted signing backend. Keep this workflow honest and
-      # fail if credentials unexpectedly cause signing; WP7 must replace win.sign:false with
-      # one reviewed v27 backend before switching this gate to Trusted.
+      # Artifact Signing + GitHub OIDC is selected, but the Azure identity/profile inputs are
+      # not provisioned yet. Keep this workflow honest and fail if signing appears unexpectedly;
+      # the reviewed v27 Azure backend must be enabled before switching this gate to Trusted.
       - name: Verify unsigned internal artifacts, then generate final SHA-256
-        run: npm run release:verify -- -SignatureLevel Unsigned -GenerateManifest
+        shell: pwsh
+        run: >-
+          ./scripts/verify-windows-release.ps1
+          -SignatureLevel Unsigned
+          -GenerateManifest
 
       - name: Stage release documentation
         shell: pwsh
         run: |
+          Copy-Item -LiteralPath 'LICENSE' -Destination 'release/LICENSE'
           Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.txt' -Destination 'release/THIRD_PARTY_NOTICES.txt'
           Copy-Item -LiteralPath 'docs/releases/v0.1.0-alpha.1.md' -Destination 'release/ALPHA_RELEASE_NOTES.md'
 
@@ -107,6 +112,7 @@ jobs:
             release/${{ steps.release-metadata.outputs.setup }}
             release/${{ steps.release-metadata.outputs.setup }}.blockmap
             release/SHA256SUMS.txt
+            release/LICENSE
             release/THIRD_PARTY_NOTICES.txt
             release/ALPHA_RELEASE_NOTES.md
           if-no-files-found: error
@@ -159,6 +165,7 @@ jobs:
             "release/$env:SETUP_ARTIFACT" `
             "release/$env:SETUP_ARTIFACT.blockmap" `
             'release/SHA256SUMS.txt' `
+            'release/LICENSE' `
             'release/THIRD_PARTY_NOTICES.txt' `
             --draft --prerelease --title "文枢 $env:RELEASE_TAG" `
             --notes-file 'release/ALPHA_RELEASE_NOTES.md'

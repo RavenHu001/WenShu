@@ -55,9 +55,12 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     expect(workflow).toContain('--repo $env:GITHUB_REPOSITORY');
     expect(workflow).toContain('--verify-tag');
     expect(workflow).toContain('SHA256SUMS.txt');
+    expect(workflow).toContain('release/LICENSE');
     expect(workflow).toContain('THIRD_PARTY_NOTICES.txt');
     expect(workflow).toContain('ALPHA_RELEASE_NOTES.md');
-    expect(workflow).toContain('npm run release:verify -- -SignatureLevel Unsigned');
+    expect(workflow).toContain('./scripts/verify-windows-release.ps1');
+    expect(workflow).toContain('-SignatureLevel Unsigned');
+    expect(workflow).toContain('-GenerateManifest');
     expect(workflow).toContain("--notes-file 'release/ALPHA_RELEASE_NOTES.md'");
     expect(workflow).toContain('vars.ENABLE_ARTIFACT_ATTESTATION');
     expect(workflow).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
@@ -78,7 +81,7 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
       buildJob.indexOf('npm run package:win'),
     );
     expect(buildJob.indexOf('npm run package:win')).toBeLessThan(
-      buildJob.indexOf('npm run release:verify'),
+      buildJob.indexOf('./scripts/verify-windows-release.ps1'),
     );
     expect(buildJob.indexOf('npm run build')).toBeLessThan(buildJob.indexOf('npm run check'));
   });

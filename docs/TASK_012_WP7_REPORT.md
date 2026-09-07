@@ -8,9 +8,10 @@
 **当前发布级别仍是未签名内部 Alpha / Draft，不能公开。WP7 正式门禁未通过。**
 
 安全的本地工程、第三方 NOTICE、变更记录、安全策略、Alpha Release Notes、v27 配置迁移、未签名
-验签/最终哈希和 Draft workflow 加固已经完成；但所有者尚未选择受信任 Authenticode 后端和项目自身
-许可证。因此没有写入伪造的 publisher、LICENSE、PFX、Azure 配置值或凭据，也没有把现有 Draft
-转为公开 Pre-release。
+验签/最终哈希和 Draft workflow 加固已经完成。所有者现已选择 Microsoft Artifact Signing + GitHub
+OIDC，以及 MIT License（Copyright 2026 Jinxi Hu）；根目录许可证和项目元数据已经落地。Azure 身份
+验证和签名资源尚未建立，因此没有写入伪造的 publisher、PFX、Azure 配置值或凭据，也没有把现有
+Draft 转为公开 Pre-release。
 
 远程 `Build internal Alpha draft` action 和 Draft 的成功证据来自 WP6 报告及本次所有者说明。本会话
 未安装 GitHub CLI，未修改远程 Release。现有 `v0.1.0-alpha.1` 指向
@@ -44,9 +45,9 @@ WP7 文件和 v27 产物。不能移动既有标签或把当前 HEAD 产物冒�
 固定调用内部模式，因此意外混入签名文件会失败。选定真实后端后，必须把 `win.sign` 替换为 v27 的
 单一 discriminated union，并把 workflow 门禁改为 `Trusted`；不能只改发布文案。
 
-推荐 Artifact Signing + GitHub OIDC，因为私钥不落地；但该选择需要所有者确认 Azure 付费账户、
-身份验证、endpoint、account/profile 名、publisher subject 和最小 `Certificate Profile Signer`
-角色。当前没有读取或打印任何凭据。
+已选 Artifact Signing + GitHub OIDC，因为私钥不落地。落地真实签名前仍需 Azure 付费账户、Public
+Trust 身份验证、endpoint、account/profile 名、publisher subject 和最小
+`Artifact Signing Certificate Profile Signer` 角色。当前没有读取或打印任何凭据。
 
 ## 3. 固定构建顺序与产物证据
 
@@ -55,10 +56,10 @@ SHA-256 → 本地黑盒运行。EXE 在最终哈希后只被读取/执行，没
 
 | 项目       | 字节        | Authenticode | 时间戳 | 最终 SHA-256                                                       |
 | ---------- | ----------- | ------------ | ------ | ------------------------------------------------------------------ |
-| portable   | 103,535,202 | `NotSigned`  | 无     | `d7443051fc264e06ba56b1e4224e5a34a2de2dec3e5b8950c2124d576831f026` |
-| NSIS setup | 103,842,004 | `NotSigned`  | 无     | `9d11e6241a7970ef2cc19715ca566f3a2f8f0f10565fe6d2e6de78054a561673` |
+| portable   | 103,523,141 | `NotSigned`  | 无     | `9844ee5110918928575999c274161d906a32748fbc10fc5f29f0c1492b847dc3` |
+| NSIS setup | 103,829,941 | `NotSigned`  | 无     | `8ad601192eff646a377c1c39962438d933da9df3cef6f636c9689e76969dc088` |
 
-包审计读取 x64 PE machine `0x8664`；unpacked 387,690,563 B、`app.asar` 12,602,003 B、
+包审计读取 x64 PE machine `0x8664`；unpacked 387,691,896 B、`app.asar` 12,603,336 B、
 `app.asar.unpacked` 748,156 B。主进程外部 import 仍只有 `docx`、`jszip`、`mammoth`。
 `THIRD_PARTY_NOTICES.txt` 已进入 `app.asar`，Electron 的 `LICENSE.electron.txt` 和
 `LICENSES.chromium.html` 仍位于最终运行目录。
@@ -81,35 +82,37 @@ LICENSE/NOTICE/COPYING 文本。每次 `check` 都以 `--check` 阻止清单过�
 公开分发前须从对应上游 tag/commit 确认版权与精确文本。Electron/Chromium 的嵌套第三方声明由最终
 运行目录中的两个官方许可文件携带。本审计是工程清单，不是完整法律意见。
 
-项目自身许可证仍未选择，因此没有新增 `LICENSE` 或擅自写权利保留声明。所有者可在
-`TASK_012_WP7_SIGNING_AND_LICENSE_DECISIONS.md` 比较 MIT、Apache-2.0、GPL-3.0 与保留全部权利；
-在决定前 Draft 不公开。
+项目自身现采用 MIT License，版权人为 Jinxi Hu，年份为 2026。MIT 文本与 `package.json` SPDX 标识
+一致；这不改变第三方组件各自的许可证，也不把工程清单伪装成法律意见。现有标签早于许可提交，需由
+新的精确标签承载 LICENSE、NOTICE 和最终签名产物。
 
 ## 5. 文档与 workflow
 
 - `CHANGELOG.md` 记录首个 Alpha 能力和真实签名/发布状态；
+- `LICENSE` 采用标准 MIT 文本并随应用包和 Draft 附件分发；
 - `SECURITY.md` 说明私下报告、最小合成复现、日志/路径/文档隐私和手动更新边界；
 - `docs/releases/v0.1.0-alpha.1.md` 说明系统/架构、portable/NSIS、SHA-256、核心能力、限制、
   本地文档语义、无自动更新/无遥测、反馈隐私和不碰工作区的降级方式；
 - release workflow 会携带 NOTICE 和 Release Notes，并用 `--notes-file` 创建 Draft；当前不会公开，
   也不会把未签名产物误标为可信签名。
+- 预期分发渠道只有 GitHub 源码仓库和 GitHub Releases；不计划 Microsoft Store 上架，也无自动更新。
 
 ## 6. 实际命令与结果
 
-| 命令 / 检查                                                            | 结果                                                                                                                                              |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm install --save-dev --save-exact electron-builder@27.0.0-alpha.8`  | 成功；lock 由 npm 更新。                                                                                                                          |
-| `electron-builder migrate-schema -c electron-builder.yml --dry-run`    | 配置已是 v27，无需迁移。                                                                                                                          |
-| `npm ci`                                                               | 成功；clean 安装 559 个包。                                                                                                                       |
-| clean 后首次 `npm run check`                                           | 71 文件/1174 tests 已通过；2 个套件因 Electron 二进制未安装在收集阶段失败。按 workflow 运行 `npx install-electron --no` 后重跑。                  |
-| 最终 `npm run check`                                                   | 73 文件通过；1184 passed、10 skipped、0 failed。10 个均为既有 symlink/junction 权限条件跳过。typecheck、lint、Prettier、NOTICE freshness 全通过。 |
-| `npm run build`                                                        | 通过；main 155.17 kB、preload 4.30 kB、renderer HTML 0.57 kB、CSS 53.24 kB、JS 2,264.13 kB。                                                      |
-| `npm run test:e2e`                                                     | 1 文件、4/4 通过：启动/About、TXT 字节保存、DOCX/备份、dirty 关闭。                                                                               |
-| `npm run package:dir`                                                  | v27 成功；ASAR、NOTICE、x64、依赖和包内容审计通过。                                                                                               |
-| `npm run package:win`                                                  | clean 依赖树最终成功；portable/NSIS 均生成。受限网络首次无法下载 v27 工具集，获准从官方源下载校验后缓存复跑成功。                                 |
-| `npm run package:verify -- --mode=win`                                 | 通过；禁止路径/凭据/userData、运行依赖、x64、ASAR 与 notices 均通过。                                                                             |
-| `npm run release:verify -- -SignatureLevel Unsigned -GenerateManifest` | 两个 EXE 均 `NotSigned`、无时间戳；生成并复验最终 SHA-256。                                                                                       |
-| 最终 portable/NSIS 黑盒启动 + 哈希复验                                 | 通过；进程清理后哈希仍与 manifest 一致。                                                                                                          |
+| 命令 / 检查                                                           | 结果                                                                                                                                              |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm install --save-dev --save-exact electron-builder@27.0.0-alpha.8` | 成功；lock 由 npm 更新。                                                                                                                          |
+| `electron-builder migrate-schema -c electron-builder.yml --dry-run`   | 配置已是 v27，无需迁移。                                                                                                                          |
+| `npm ci`                                                              | 成功；clean 安装 559 个包。                                                                                                                       |
+| clean 后首次 `npm run check`                                          | 71 文件/1174 tests 已通过；2 个套件因 Electron 二进制未安装在收集阶段失败。按 workflow 运行 `npx install-electron --no` 后重跑。                  |
+| 最终 `npm run check`                                                  | 73 文件通过；1184 passed、10 skipped、0 failed。10 个均为既有 symlink/junction 权限条件跳过。typecheck、lint、Prettier、NOTICE freshness 全通过。 |
+| `npm run build`                                                       | 通过；main 155.17 kB、preload 4.30 kB、renderer HTML 0.57 kB、CSS 53.24 kB、JS 2,264.13 kB。                                                      |
+| `npm run test:e2e`                                                    | 1 文件、4/4 通过：启动/About、TXT 字节保存、DOCX/备份、dirty 关闭。                                                                               |
+| `npm run package:dir`                                                 | v27 成功；ASAR、NOTICE、x64、依赖和包内容审计通过。                                                                                               |
+| `npm run package:win`                                                 | clean 依赖树最终成功；portable/NSIS 均生成。受限网络首次无法下载 v27 工具集，获准从官方源下载校验后缓存复跑成功。                                 |
+| `npm run package:verify -- --mode=win`                                | 通过；禁止路径/凭据/userData、运行依赖、x64、ASAR 与 notices 均通过。                                                                             |
+| `npm run release:manifest:unsigned`                                   | 两个 EXE 均 `NotSigned`、无时间戳；生成并复验最终 SHA-256。                                                                                       |
+| 最终 portable/NSIS 黑盒启动 + 哈希复验                                | 通过；进程清理后哈希仍与 manifest 一致。                                                                                                          |
 
 ## 7. 凭据、路径与隐私审查
 
@@ -119,15 +122,14 @@ LICENSE/NOTICE/COPYING 文本。每次 `check` 都以 `--check` 阻止清单过�
 
 ## 8. 阻塞与门禁
 
-1. 所有者尚未选择 Authenticode 方案、完成发布者身份验证或提供可验证 publisher subject；实际签名
-   级别为无签名，不能运行可信验签/时间戳/签名前后字节差异测试。
-2. 所有者尚未选择项目许可证和权利人/年份；不能生成项目 LICENSE/rights 文件，三个 npm 包的缺失
-   许可文本也应在公开前补齐上游证据。
+1. Authenticode 方案已经选定，但 Azure Public Trust 身份验证、Artifact Signing 资源和精确 publisher
+   subject 尚未完成；实际签名级别仍为无签名，不能运行可信验签/时间戳测试。
+2. MIT 项目许可证已经落地；三个 npm 包缺失独立许可文本的上游证据仍应在公开前补齐。
 3. 现有 Alpha 标签早于 WP7，本地最终产物没有与可上传的新精确标签绑定；未获授权创建/推送新标签，
    也不应移动已用标签。
 4. WP5 的 Windows 11 x64 矩阵仍是前序阻塞；WP7 不伪造补齐。
 5. v27 当前是 alpha 预发布；虽然本地门禁通过，公开候选仍应在 WP8 决策时评估是锁定该精确预发布、
    等待稳定 v27，还是由所有者明确接受风险。
 
-因此，**WP7 的安全本地工程子目标完成，但正式门禁未通过；状态必须保持“内部 Alpha/Draft，公开发布
-阻塞”**。下一步仍是完成上述所有者决策和外部条件；本包不进入 WP8。
+因此，**许可门禁已满足，签名门禁尚未满足；状态必须保持“内部 Alpha/Draft，公开发布阻塞”**。
+下一步是完成 Azure/OIDC 外部条件并运行可信签名验证；本包不进入 WP8。

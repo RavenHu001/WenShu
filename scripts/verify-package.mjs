@@ -103,6 +103,7 @@ assert(
 await stat(appAsarPath);
 const asarFiles = (await listPackage(appAsarPath)).map(normalizeAsarPath).sort();
 const packageJsonBuffer = extractAsarFile('package.json');
+const projectLicenseBuffer = extractAsarFile('LICENSE');
 const thirdPartyNoticesBuffer = extractAsarFile('THIRD_PARTY_NOTICES.txt');
 const packagedManifest = JSON.parse(packageJsonBuffer.toString('utf8'));
 const packagedMain = extractAsarFile('out/main/index.js').toString('utf8');
@@ -139,6 +140,11 @@ assert(
   'packaged package.json version differs from Alpha version',
 );
 assert(packagedManifest.productName === '文枢', 'packaged package.json productName differs');
+assert(packagedManifest.license === 'MIT', 'packaged package.json license is not MIT');
+assert(
+  projectLicenseBuffer.equals(await readFile(resolve(projectDirectory, 'LICENSE'))),
+  'packaged project LICENSE differs from repository LICENSE',
+);
 assert(
   thirdPartyNoticesBuffer.toString('utf8').startsWith('WenShu THIRD-PARTY SOFTWARE NOTICES'),
   'packaged THIRD_PARTY_NOTICES.txt is missing or malformed',

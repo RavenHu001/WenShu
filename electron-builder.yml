@@ -8,8 +8,8 @@ asar: {}
 # 后的打包不再额外下载一份 Electron，并避免环境镜像差异。
 electronDist: node_modules/electron/dist
 
-# electron-builder 26.15.3 尚不接受 electronFuses schema；使用官方 @electron/fuses
-# afterPack 路径且只在此处翻转一次。应用仍以 loadFile()/file:// 加载 renderer。
+# Keep the audited official @electron/fuses afterPack hook as the single place that flips
+# fuses before any future Authenticode signing. The app still loads its renderer with loadFile().
 afterPack: scripts/after-pack-fuses.cjs
 
 directories:
@@ -23,13 +23,14 @@ files:
   - out/preload/**
   - out/renderer/**
   - package.json
+  - LICENSE
   - THIRD_PARTY_NOTICES.txt
 
 win:
   icon: build/icon.ico
-  # No trusted publisher has been selected yet. v27 requires every Windows signing
-  # backend under this discriminated `win.sign` key; false is the only honest state
-  # until the owner chooses signtool, HSM, PKCS#11, or Azure Artifact Signing.
+  # The owner selected Artifact Signing + GitHub OIDC, but Azure identity validation,
+  # the certificate profile, and its exact publisher subject do not exist yet. Keep
+  # local/internal packaging explicitly unsigned until those external inputs are ready.
   sign: false
   target:
     - target: portable

@@ -1,12 +1,15 @@
 # Changelog
 
-All notable changes to WenShu are recorded here. This project has not yet selected a project
-license and has not made a public binary release.
+All notable changes to WenShu are recorded here. The project is licensed under MIT and has not
+yet made a public binary release.
 
 ## [Unreleased]
 
-- Trusted Authenticode signing and a public Alpha remain blocked on owner decisions and identity
-  validation.
+- Selected the MIT License, copyright 2026 Jinxi Hu.
+- Selected Microsoft Artifact Signing with GitHub OIDC for future GitHub Releases distribution;
+  trusted Authenticode signing remains blocked on Azure identity validation and signing resource
+  configuration.
+- Distribution is planned through GitHub Releases only. No Microsoft Store submission is planned.
 
 ## [0.1.0-alpha.1] - 2026-09-06
 
