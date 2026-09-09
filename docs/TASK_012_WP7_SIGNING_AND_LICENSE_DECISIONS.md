@@ -8,6 +8,9 @@ PFX 密码、token、证书 base64 或 Azure secret。
 所有者确认 WenShu 当前只把 MIT 源码作为开源项目放在 GitHub；portable 和 NSIS 只保留在内部
 Draft，不作为公开下载。没有提交 Microsoft Store 或其他正式商店的计划。
 
+当前内部二进制支持证据只覆盖 Windows 10 x64。Windows 11 验收与支持声明也已移到未来可选工作，
+不会作为当前 Task 12/WP8 的阻塞或完成项。
+
 公开源码不要求 Authenticode。未来如果决定在 GitHub Releases 公开 EXE，仍可使用 Microsoft
 Artifact Signing，让 Windows 和用户验证发布者及文件是否被篡改。签名不构成商店审核、自动更新或
 SmartScreen 无警告保证。当前公开 Pre-release 未获授权，现有二进制 Release 保持内部 Draft。
@@ -67,4 +70,4 @@ MIT 不会自动授予 WenShu 名称、图标或其他品牌标识的商标权�
 4. 向该服务主体仅授予 `Artifact Signing Certificate Profile Signer`；
 5. 在 GitHub `alpha-release` Environment 配置 tenant/client/subscription ID 和签名资源名称；
 6. 用精确标签/提交构建签名 Draft，逐个验证 portable/NSIS 的签名、时间戳和发布者后再生成 SHA-256；
-7. 完成包内容和 Windows 10/11 验收，最后才由所有者决定是否公开 Pre-release。
+7. 完成包内容、Windows 10 和 Windows 11 的独立验收，最后才由所有者决定是否公开 Pre-release。

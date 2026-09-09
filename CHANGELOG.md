@@ -8,6 +8,8 @@ yet made a public binary release.
 - Selected the MIT License, copyright 2026 Jinxi Hu.
 - Public distribution is source-only through GitHub under MIT. Binary artifacts remain in an
   unsigned internal Draft; no Microsoft Store submission is planned.
+- Limited the current internal binary acceptance scope to Windows 10 x64; Windows 11 validation
+  and any support claim are deferred as optional future work.
 - Deferred Microsoft Artifact Signing with GitHub OIDC as an optional future task if public
   portable/NSIS distribution is later approved.
 

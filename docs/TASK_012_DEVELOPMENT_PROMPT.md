@@ -10,8 +10,9 @@
 
 你正在 `WenShu` 仓库中继续开发文枢 Windows 桌面应用。请完整实施 **TASK-012：Windows Alpha 发布工程**，
 但必须按 WP0 至 WP8 顺序小步执行，每个工作包经定向验证和本包门禁后才能进入下一包。
-不要只生成一个 EXE 就提前结束；最终目标是得到可重复构建、可审计包内容、可安装/便携运行、
-可验证签名/哈希/来源、并且不回退 Task 1–11 数据安全与生命周期语义的 Windows x64 Alpha 发布工程。
+不要只生成一个 EXE 就提前结束；修订后的最终目标是得到可在 GitHub 公开的 MIT 源码，以及可重复构建、
+可审计包内容、可安装/便携运行、可验证 `NotSigned` 状态/哈希/来源，并且不回退 Task 1–11 数据安全与
+生命周期语义的 Windows 10 x64 未签名内部 Alpha 工程。不得公开 Windows 二进制或声称 Windows 11 已验证。
 
 ### 1.1 开始前必须完成
 
@@ -49,7 +50,7 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 - electron-builder 当前稳定大版本、Node.js 要求、配置 schema、NSIS/portable、fuses 与 `win.sign`；
 - Playwright Electron 的支持状态、原生对话框限制和 `nodeCliInspect` 关系；
 - GitHub Actions 的当前官方 Action、最小权限、Artifact Attestations 资格；
-- Microsoft 当前 Authenticode、Artifact Signing、SmartScreen 与 Smart App Control 说明。
+- Microsoft 当前 Authenticode、SmartScreen 与 Smart App Control 说明；Artifact Signing 只在未来公开二进制工作启动时查证。
 
 只使用官方文档、官方发布页或一级源。如实施时的受支持窗口与规划文件不同，先更新 Task 12 和 WP0 决策，
 不机械安装文档中已过时的精确版本。
@@ -63,14 +64,18 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 - `appId`：`io.github.ravenhu001.wenshu`；
 - 显示名：`文枢`；
 - executable/artifact 基础名：`WenShu`；
-- 平台：Windows 10 / Windows 11；
+- 当前内部验证平台：Windows 10 x64；Windows 11 验收属于未来可选工作；
 - 架构：x64；
 - 产物：portable + per-user NSIS；
 - 当前用户安装，默认不提权；
 - 不实现自动更新、遥测、文件关联、ARM64、ia32、Store/MSIX/MSI、macOS 或 Linux；
 - 不允许使用 Electron 37 生成最终 Alpha；
 - 默认选择实施当日最新三个受支持 Electron 系列中的中间系列最新补丁；
-- 内部 Alpha 可以未签名验证，公开 Alpha 只能在受信任 Authenticode 签名和验签完成后发布。
+- 项目许可证：MIT License，`Copyright (c) 2026 Jinxi Hu`；
+- 当前公开交付只有 GitHub 源码、许可证和文档；portable/NSIS 为 `NotSigned` 的内部实验产物；
+- 不创建或公开当前 Windows 二进制 Release；Microsoft Artifact Signing + GitHub OIDC、可信发布者、
+  时间戳和公开二进制整体属于未来可选工作；
+- 现有 `v0.1.0-alpha.1` 是历史内部 Draft 标签，不移动；当前 HEAD 产物不得冒充该标签产物。
 
 ### 1.4 不可回退的 Task 1–11 基线
 
@@ -90,17 +95,20 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 
 ### 1.5 需要项目所有者权限或决策的事项
 
-不得自行推断或伪造以下事项：
+以下事项已经由项目所有者确定，不得擅自改回待决定状态：MIT License、版权人 Jinxi Hu、源码公开、
+未签名二进制仅内部使用、不公开 Windows 二进制、Windows 11 与 Artifact Signing/OIDC 延后。
 
-- 项目自身许可证（开源许可、source-available、保留全部权利或其他）；
+不得自行推断或伪造以下仍需另行授权的事项：
+
 - “文枢 / WenShu”名称、图标和对外发布者身份的最终确认；
-- Authenticode 证书、Microsoft Artifact Signing/HSM/证书存储的选择、购买、身份验证和凭据授权；
-- 实际创建/push Git 标签、push 代码、创建或发布 GitHub Release；
+- 未来 Authenticode 证书、Microsoft Artifact Signing/HSM/证书存储的购买、身份验证和凭据授权；
+- 实际创建/push 新 Git 标签、push 代码、创建或发布 GitHub Release；
 - 对外公开未签名二进制；
 - 修改 Windows 会话级缩放/安全策略或在真实主机安装/卸载可能影响现有应用的产物。
 
-可以在本地完成配置、dry-run、未签名内部 Alpha、测试凭据管线验证和 Draft Release 所需文件。
-但没有当前用户请求中的明确授权时，不得 push、tag、上传、创建/发布 Release 或使用真实签名凭据。
+可以在本地完成未签名内部 Alpha、`NotSigned` 验证、哈希和 release workflow dry-run。当前范围不配置
+真实签名凭据，也不创建、替换或公开 Windows 二进制 Release；即使一般性开发授权存在，也不能扩张这一边界。
+没有当前用户请求中的明确授权时，不得 push、tag、上传或创建 Release。
 需要凭据时不要请求用户在对话中粘贴明文私钥或密码；只能提供安全的本地/云签名配置入口。
 
 ### 1.6 工作包顺序
@@ -143,7 +151,7 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 #### WP5：Windows 安装、升级、卸载与真实文档验收
 
 - 在受控测试目录/主机验证 unpacked、portable、NSIS；
-- 覆盖 Windows 10/11 x64、普通用户、中文/空格路径、安装/升级/卸载；
+- 覆盖 Windows 10 x64、普通用户、中文/空格路径、安装/升级/卸载；Windows 11 移到未来可选工作；
 - 使用临时工作区覆盖 TXT/DOCX、备份、冲突、回收站和 WPS/Word；
 - 任何工作区数据变化都立即停止发布。
 
@@ -151,24 +159,26 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 
 - 增加最小权限 PR/push CI 和独立 release workflow；
 - 使用 `npm ci`、版本/标签校验、重新构建、SHA-256、Draft Pre-release 结构；
-- 签名和发布 job 必须最小权限和人工 Environment 批准；
+- 当前 release workflow 只生成未签名内部 Draft，且不自动公开；未来签名/公开 job 才需要 OIDC、
+  最小权限和 Environment 人工批准；
 - 没有用户当前授权时只提交 workflow 与本地验证，不 push/tag/发布。
 
-#### WP7：签名接入、许可证与 Alpha 发布文档
+#### WP7：签名边界、许可证与 Alpha 发布文档
 
-- 只接入项目所有者确认的 Authenticode 方案；
+- 落实 MIT、`NotSigned` 内部产物和源码公开边界；
 - 不接收、打印或保存明文私钥/密码；
-- 负责签名顺序、验签、时间戳、签名后 SHA-256 和下载复验；
+- 负责包内容/fuses 后的未签名状态验证、最终 SHA-256 和复验；
 - 生成所有者确认的 LICENSE/rights 文件、NOTICE、CHANGELOG、SECURITY 和 Release Notes；
-- 如外部条件不齐，保持内部 Alpha/Draft 并记录真实阻塞。
+- 不移动历史标签，不公开二进制；Artifact Signing + GitHub OIDC 仅记录为未来可选工作。
 
-#### WP8：整体验收、发布决策、文档与完成报告
+#### WP8：整体验收、范围核对、文档与完成报告
 
 - 从干净 checkout 执行最终 `check`、`build`、package、verify 和发布演练；
-- 审计包内容、fuses、签名、哈希、CI、Windows 矩阵、许可证、隐私和已知限制；
+- 审计包内容、fuses、`NotSigned`、哈希、CI、Windows 10 矩阵、许可证、隐私和已知限制；
 - 更新 README、PROJECT_BASELINE、DEVELOPMENT_ENVIRONMENT、TESTING、Roadmap；
 - 新增 `docs/TASK_012_COMPLETION_REPORT.md`；
-- 明确区分“内部 Alpha 工程完成”和“公开 Alpha 已发布”。
+- 只在证据齐全时结论为“MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成”，
+  并明确未公开 Windows 二进制；不得因 Windows 11 或 Artifact Signing/OIDC 未执行而把它们写成当前阻塞。
 
 ### 1.7 代码、脚本和配置要求
 
@@ -213,7 +223,7 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 6. 最终加固 portable/NSIS 黑盒启动、进程清理和不依赖源码环境；
 7. TXT/DOCX 读取、编辑、保存、备份、dirty 关闭与磁盘字节；
 8. NSIS/portable 产物名、架构、大小和 SHA-256；
-9. 签名后验签、时间戳、发布者和下载后哈希（只在凭据已授权时）；
+9. 当前 portable/NSIS 的 `NotSigned` 验证和最终哈希复验；未来公开二进制时才替换为可信签名、时间戳和发布者验证；
 10. Task 1–11 全量回归。
 
 不得：
@@ -223,7 +233,8 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 - 用超长 timeout 掩盖残留进程、对话框未处理、Playwright 连接失败或构建死锁；
 - 在真实用户文档目录、项目根或未清空的安装目录上执行破坏性测试；
 - 用仅存活 10 秒的进程冒烟代替真实打开/保存/安装/卸载验收；
-- 伪造无法在当前环境运行的 Windows 10/11、SmartScreen、WPS/Word、签名或 GitHub 发布成功。
+- 伪造无法在当前环境运行的 Windows 10、SmartScreen、WPS/Word、Authenticode 状态或 GitHub workflow 成功；
+- 把未执行的 Windows 11、Artifact Signing/OIDC 或公开二进制写成当前已完成或当前阻塞。
 
 ### 1.9 工作方式和每包报告
 
@@ -239,8 +250,9 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
   7. 是否真实满足本包门禁。
 - 不擅自执行破坏性 Git 操作，不 push、merge、tag 或发布，除非当前用户请求明确授权；
 - 对代码和测试能确定的普通实现问题自行调查修复；
-- 只在需要项目许可证、品牌/图标、签名身份、真实发布授权或需要影响用户/系统状态的选择时暂停请求决定；
-- 如外部账户或签名条件不具备，继续完成所有安全的本地工程、dry-run 和文档，最后准确报告阻塞；
+- MIT、版权人、源码公开和二进制内部范围已经确认；只有变更这些决定、确认品牌/图标、执行外部发布或
+  影响用户/系统状态时才暂停请求决定；
+- Azure/OIDC 或签名条件不具备不是当前阻塞；继续完成安全的本地工程、dry-run 和文档；
 - 在全部验收完成前不要以“打包成功”或“主要流程已完成”结束 Task 12。
 
 ### 1.10 最终交付
@@ -251,14 +263,14 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 2. `electron-builder.yml`、图标/构建资源、本地 package/verify 脚本；
 3. Windows x64 unpacked、portable、NSIS 产物及其大小/包内容审计；
 4. Playwright Electron E2E、最终加固产物黑盒冒烟、ASAR/fuses 验证；
-5. Windows 10/11 x64 安装、升级、卸载、中文/空格路径、回收站、WPS/Word 人工证据；
+5. Windows 10 x64 安装、升级、卸载、中文/空格路径、回收站、WPS/Word 人工证据，以及 Windows 11 未声明支持的记录；
 6. `.github/workflows/ci.yml` 和 `.github/workflows/release.yml`的权限、缓存、产物与发布语义；
-7. 签名、时间戳、发布者、SHA-256、attestation 的真实状态；
+7. `NotSigned`、无时间戳/发布者、SHA-256、attestation 的真实状态，以及未来可信签名未执行的边界；
 8. LICENSE/rights 文件、`THIRD_PARTY_NOTICES.txt`、`CHANGELOG.md`、`SECURITY.md` 和 Release Notes；
 9. `docs/TASK_012_WP0_REPORT.md` 和 `docs/TASK_012_COMPLETION_REPORT.md`；
 10. 更新后的 README、PROJECT_BASELINE、DEVELOPMENT_ENVIRONMENT、TESTING 和 Roadmap；
 11. 完整命令结果、测试数、跳过原因、已知限制和未解决问题；
-12. 明确最终结论：“内部 Alpha 工程完成”、“公开 Alpha 已发布”或“仍有阻塞”。
+12. 明确最终结论：“MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成”或“仍有阻塞”，并明确没有公开 Alpha 二进制。
 
 最终回复应先说明实际达成的发布级别，再给出关键改动、产物、测试、签名/发布证据、限制和重要文件链接。
 
@@ -276,9 +288,10 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 当前分支：[当前分支]
 上一恢复点：[提交 SHA 或“无”]
 已知用户修改：[用户修改或“无”]
-发布目标：[内部 Alpha / 公开 Alpha / 待所有者确认]
-签名条件：[受信任方案 / 仅测试签名 / 暂无]
-项目许可决策：[所有者已选择的许可或“待确认”]
+公开目标：GitHub MIT 源码
+内部目标：Windows 10 x64 未签名 portable/NSIS
+签名条件：当前 `NotSigned`；Artifact Signing + GitHub OIDC 为未来可选工作
+项目许可决策：MIT License，Copyright (c) 2026 Jinxi Hu
 
 先完整阅读 docs/TASK_012_DEVELOPMENT_PROMPT.md 的主提示词、docs/TASK_012_WINDOWS_ALPHA_RELEASE.md，以及其第 3.1 节的全部必读材料。检查全部适用 AGENTS.md 和 git status，保留用户修改。
 
@@ -288,7 +301,7 @@ Electron、electron-builder、Playwright、GitHub Actions、Windows 签名和 Sm
 
 使用 Task 12 第 3.4 节的官方一级源查证当日 Electron 支持窗口、中间受支持系列最新补丁版、breaking changes、electron-builder 当前稳定版与 Node/schema/NSIS/portable/fuses/signing、Playwright Electron 限制、GitHub Actions 和 Microsoft 签名/SmartScreen 规则。锁定精确版本，不只记录宽泛 major 或 caret 范围。
 
-核对 appId=io.github.ravenhu001.wenshu、version=0.1.0-alpha.1、Windows 10/11 x64、portable + per-user NSIS、ASCII 产物名、内部/公开 Alpha 分级。许可证、品牌图标、受信任签名身份或公开发布授权不明时，将它们列为需所有者决定的真实门禁，不自行猜测。
+核对 appId=io.github.ravenhu001.wenshu、version=0.1.0-alpha.1、Windows 10 x64、portable + per-user NSIS、ASCII 产物名、MIT 源码公开/未签名二进制内部使用分级。Windows 11、受信任签名和公开二进制不属于当前门禁；品牌图标或未来公开发布身份不明时记录为未来决策，不自行猜测。
 
 新增 docs/TASK_012_WP0_REPORT.md，记录官方链接、精确版本、基线命令、依赖/许可证、包内容风险、Windows/CI/签名决策、测试计划、已知阻塞和 WP0 是否通过。结束时审查 diff、运行文档格式检查，报告是否可进入 WP1。不要进入 WP1。
 ```
@@ -324,7 +337,7 @@ WP0 直接兼容依赖决策：[决策]
 上一恢复点：[提交 SHA]
 已知用户修改：[用户修改或“无”]
 所有者确认的图标来源/设计：[文件/生成说明/待确认]
-所有者确认的项目许可决策：[许可/待确认]
+所有者确认的项目许可决策：MIT License，Copyright (c) 2026 Jinxi Hu
 
 完整阅读主提示词、Task 12 规划、WP0 报告、WP1 变更/证据、package/lock、DesktopRuntimeInfo/preload/About 与相关测试。检查 git status 并保留用户修改。
 
@@ -395,7 +408,7 @@ WP0 锁定 Playwright 精确版本：[版本]
 当前分支：[当前分支]
 上一恢复点：[提交 SHA]
 已知用户修改：[用户修改或“无”]
-可用 Windows 验收环境：[Windows 10/11 主机或 VM]
+可用 Windows 验收环境：Windows 10 x64 主机或 VM
 可用 Office 程序：[WPS/Word 及版本]
 
 完整阅读主提示词、Task 12 规划第 8.5/8.6 节、WP0 报告、WP1–WP4 变更/证据、打包配置、包验证/E2E、Task 7/9/11 的 Windows 人工清单和完成报告。检查 git status 并保留用户修改。
@@ -406,7 +419,7 @@ WP0 锁定 Playwright 精确版本：[版本]
 
 在安装前对临时外部工作区生成字节/目录哈希清单，在安装、升级、卸载后复验。然后使用安装版和便携版分别覆盖打开工作区、TXT/DOCX 打开编辑保存、DOCX 备份、外部冲突、只读/degraded、回收站删除恢复、资源管理器显示、dirty/saving 关闭保护和 WPS/Word 双向往返。
 
-在 Windows 10 x64 和 Windows 11 x64 普通用户下重复关键矩阵。记录启动时间、安装/卸载耗时、产物大小、进程残留、Defender、SmartScreen/Smart App Control 和当前 Authenticode 的真实行为。不把单机无警告宣称为所有用户无警告。
+在 Windows 10 x64 普通用户下重复关键矩阵。记录启动时间、安装/卸载耗时、产物大小、进程残留、Defender、SmartScreen 和当前 Authenticode 的真实行为。不把单机无警告宣称为所有用户无警告。Windows 11 验收明确标为未来可选工作，不伪造、不将其作为当前 WP5 阻塞，也不作 Windows 11 支持声明。
 
 任何安装/升级/卸载修改或删除外部工作区、出现不安全提权或破坏 Task 1–11 数据语义时，立即停止发布，保留证据，先修复并重跑受影响矩阵。最后运行完整 check/build/package/verify，审查残留，报告环境、操作、结果、限制和是否满足 WP5 门禁。不要进入 WP6。
 ```
@@ -426,11 +439,11 @@ WP0 锁定 Playwright 精确版本：[版本]
 
 新增 .github/workflows/ci.yml：在锁定 Windows runner 上使用与 .node-version 一致的精确 Node，npm ci，check，build 和已定义的 Electron E2E。默认 permissions: contents: read，不获取签名凭据，不发布。npm 缓存只缓存下载，不跨提交信任 node_modules/out/打包产物。
 
-新增独立 .github/workflows/release.yml：只由 workflow_dispatch 或与 package version 严格匹配的 v* 标签触发；从标签指向的唯一 commit 重新 npm ci/check/build/package/verify；产物签名接入点和发布 job 使用独立 GitHub Environment 与人工批准；只有发布 job 获得 contents: write；生成 SHA256SUMS.txt，验证后上传 Draft Pre-release，不自动转公开。
+新增独立 .github/workflows/release.yml：只由 workflow_dispatch 或与 package version 严格匹配的 v* 标签触发；从标签指向的唯一 commit 重新 npm ci/check/build/package/verify；当前只生成并验证 `NotSigned` 的内部产物，只有 Draft 上传 job 获得 `contents: write`；生成 SHA256SUMS.txt，验证后上传 Draft Pre-release，不自动转公开。Azure/OIDC、签名 job 和公开发布权限均不在当前范围。
 
 优先使用 GitHub 官方 checkout/setup-node/upload-artifact/attest。发布工作流的第三方 Action 使用完整 commit SHA 锁定，旁边注释人类可读版本。记录每个 Action 的用途、权限、维护者和替代方案。仓库/计划支持时增加 artifact attestation；不支持时如实记录。
 
-使用未签名内部测试产物验证 workflow 的本地语义、YAML、命令、路径、权限和产物名。如当前用户未明确授权外部操作，不 push、不创建标签、不启动远程 workflow、不创建 Release；在完成报告中把远程实际执行保留为需授权的验收项。如已授权，仍先核对精确仓库、分支/标签和 Draft 性质，不直接公开发布。
+使用未签名内部测试产物验证 workflow 的本地语义、YAML、命令、路径、权限和产物名。如当前用户未明确授权外部操作，不 push、不创建标签、不启动远程 workflow、不创建 Release；在完成报告中把远程实际执行保留为需授权的验收项。如已授权，仍先核对精确仓库、分支/标签和 Draft 性质，不直接公开发布。既有标签不得移动，当前 HEAD 不得冒充旧标签产物。
 
 运行本地定向检查、完整 check/build/package/verify/E2E，检查 workflow 无明文凭据、PR 无 write/signing 权限、版本和标签校验不可绕过。结束时报告工作流结构、Action 锁定、权限、缓存、attestation 资格、本地/远程实际证据、未获授权项和是否满足 WP6 门禁。不要进入 WP7。
 ```
@@ -438,59 +451,63 @@ WP0 锁定 Playwright 精确版本：[版本]
 ### 2.8 WP7 执行提示词
 
 ```text
-你正在 WenShu 仓库执行 TASK-012 的 WP7：签名接入、许可证与 Alpha 发布文档。
+你正在 WenShu 仓库执行 TASK-012 的 WP7：签名边界、许可证与 Alpha 发布文档。
 
 当前分支：[当前分支]
 上一恢复点：[提交 SHA]
 已知用户修改：[用户修改或“无”]
-所有者确认的签名方案：[Artifact Signing / OV/EV/HSM/仅内部未签名]
-所有者确认的项目许可：[许可或 rights 文本]
-是否授权创建 Draft Release：[是/否]
-是否授权公开 Pre-release：[是/否，默认否]
+所有者确认的当前签名方案：仅内部未签名（`win.sign: false`）
+所有者确认的未来可选方案：Microsoft Artifact Signing + GitHub OIDC
+所有者确认的项目许可：MIT License，Copyright (c) 2026 Jinxi Hu
+公开交付范围：GitHub 源码、许可证和文档
+公开 Windows 二进制授权：否
 
-完整阅读主提示词、Task 12 规划第 4.5/6.5/7.4/8.7/8.8 节、WP0 报告、WP1–WP6 变更/证据、electron-builder 当前 win.sign 官方文档、Microsoft 当前 Authenticode/Artifact Signing/SmartScreen 文档、锁文件与全部 workflow/package 脚本。检查 git status，保留用户修改。
+完整阅读主提示词、Task 12 规划第 4.5/6.5/7.4/8.7/8.8 节、WP0 报告、WP1–WP6 变更/证据、electron-builder 当前 v27 配置文档、Microsoft 当前 Authenticode/SmartScreen 文档、锁文件与全部 workflow/package 脚本。Artifact Signing 文档只用于准确记录未来可选方案，不据此接入 Azure/OIDC。检查 git status，保留用户修改。
 
-不要向用户请求在对话中粘贴明文私钥、PFX 密码、Azure/GitHub token 或证书 base64。只根据所有者选定的安全存储/云签名方式接入配置名称、环境键名、GitHub Environment 和最小权限，不读出或打印凭据值。使用 electron-builder 当前 v27 win.sign 形状，不复活已删除的旧配置字段。
+不要向用户请求在对话中粘贴明文私钥、PFX 密码、Azure/GitHub token 或证书 base64。当前不接入 Azure/OIDC、GitHub Environment、publisher 或证书占位配置；保持 `win.sign: false`。使用 electron-builder 当前 v27 配置形状，不复活已删除的旧字段。
 
-实现顺序必须是：包内容固定 → fuses/ASAR integrity → Authenticode 签名 → 验签/时间戳/发布者 → 最终 SHA-256 → 上传。对 portable 和 NSIS 逐个验证，不修改已签名文件。自签名只能验证管线，不写成受信任公开签名。已签名仍可能有 SmartScreen 警告，文档不过度承诺。
+当前实现顺序必须是：包内容固定 → fuses/ASAR integrity → 对 portable/NSIS 逐个确认 `NotSigned` → 最终 SHA-256 → 复验。哈希后不修改产物。未来公开二进制时才切换为“签名 → 验签/时间戳/发布者 → 最终 SHA-256 → 上传”；自签名不能写成受信任公开签名，已签名也不保证 SmartScreen 无警告。
 
-根据所有者已确认决策增加 LICENSE 或权利保留文件；不自行为项目选择 MIT/Apache/GPL/商业许可。从 package-lock 与最终产物生成第三方依赖、版本、许可证和 NOTICE 清单，审查例外、嵌套许可和需保留声明，不把工具输出伪装成完整法律意见。
+按所有者已确认决定增加标准 MIT LICENSE，版权人写 Jinxi Hu。从 package-lock 与最终产物生成第三方依赖、版本、许可证和 NOTICE 清单，审查例外、嵌套许可和需保留声明，不把工具输出伪装成完整法律意见。
 
 新增/完成 THIRD_PARTY_NOTICES.txt、CHANGELOG.md、SECURITY.md 和 Alpha Release Notes；说明系统/架构、portable/NSIS、签名状态、SHA-256 验证、核心能力、已知限制、无自动更新/无遥测、本地文档语义、问题反馈隐私和降级方式。
 
-如当前授权允许，可从精确标签/提交创建 Draft GitHub Pre-release 并上传签名产物、SHA256SUMS.txt 和 NOTICE；没有公开授权时不将 Draft 发布为公开。如签名或许可外部条件不齐，完成安全的本地工程和文档，明确保持“内部 Alpha/Draft，公开发布阻塞”。
+现有 `v0.1.0-alpha.1` 是历史内部 Draft 标签，不移动，不用当前 HEAD 替换其附件。完成安全的本地工程和文档，明确保持“MIT 源码公开；未签名 Windows 二进制仅内部实验”。Artifact Signing/OIDC、Windows 11 和公开二进制属于未来可选工作，不写成当前阻塞。
 
-运行完整 check/build/package/verify/E2E、签名/验签/哈希检查（已授权时）和包内容复审。审查 Git 与日志无凭据、绝对用户路径或隐私。结束时报告实际签名级别、验签、哈希、许可审计、Draft/公开状态、阻塞和是否满足 WP7 门禁。不要进入 WP8。
+运行完整 check/build/package/verify/E2E、`NotSigned`/哈希检查和包内容复审。审查 Git 与日志无凭据、绝对用户路径或隐私。结束时报告实际签名级别、哈希、许可审计、历史 Draft/公开状态、未来可选项、真实阻塞和是否满足 WP7 门禁。不要进入 WP8。
 ```
 
 ### 2.9 WP8 执行提示词
 
 ```text
-你正在 WenShu 仓库执行 TASK-012 的 WP8：整体验收、发布决策、文档与完成报告。
+你正在 WenShu 仓库执行 TASK-012 的 WP8：整体验收、范围核对、文档与完成报告。
 
 当前分支：[当前分支]
 上一恢复点：[提交 SHA]
 已知用户修改：[用户修改或“无”]
-预期最终级别：[内部 Alpha 工程 / 公开 Alpha]
-是否已授权最终公开 Release：[是/否]
+预期最终级别：MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成
+公开 Windows 二进制授权：否
+未来可选工作：Windows 11；Microsoft Artifact Signing + GitHub OIDC；可信签名和公开二进制
 
 完整阅读主提示词、Task 12 规划全文、TASK_012_WP0_REPORT.md、WP1–WP7 全部变更/恢复点/测试/产物/Windows/CI/签名/许可证证据，以及当前 README、PROJECT_BASELINE、DEVELOPMENT_ENVIRONMENT、TESTING、CHANGELOG、SECURITY、LICENSE/rights、NOTICE 和 Release Notes。检查 git status，保留用户修改。
 
-本包不新增产品功能；只修复最终验收发现且属于 Task 12 范围的问题。逐项核对 Task 12 第十一节 33 项验收标准，每个勾选必须有自动测试、包审计、最终产物检查、Windows 人工证据、签名/哈希/来源证据或明确外部阻塞作为依据。不得根据配置文件看起来正确直接勾选。
+2026-09-08 的所有者范围修订优先于历史 WP 报告中的旧计划门禁：Windows 11、可信签名和公开二进制已明确移到未来可选工作。历史报告保持为当时证据，不回写伪造；WP8 在完成报告中说明哪些旧阻塞已被范围修订取代。
 
-从干净 checkout 和锁文件实际执行：typecheck、lint、format:check、全部 test、check、build、package:dir、package:win、package:verify、Electron E2E、最终加固产物黑盒冒烟、ASAR/fuse 读取、包内容审计、签名/验签/哈希（适用时）和发布 dry-run。记录每条命令退出码、测试文件/用例/跳过数、产物文件名/字节/哈希/大小和进程残留。
+本包不新增产品功能；只修复最终验收发现且属于 Task 12 范围的问题。逐项核对 Task 12 第十一节当前范围的 33 项验收标准，每个勾选必须有自动测试、包审计、最终产物检查、Windows 10 人工证据、`NotSigned`/哈希/来源证据作为依据。不得根据配置文件看起来正确直接勾选，也不得用“未来可选”替代当前证据。
 
-重跑 Windows 10/11 x64 普通用户下的 portable/NSIS 安装、覆盖安装、卸载、中文/空格路径、外部工作区哈希不变、TXT/DOCX/备份/冲突/回收站/WPS/Word 核心矩阵，以及 Defender/SmartScreen/Smart App Control/AuthentiCode 真实状态。不伪造无法在当前环境完成的平台证据。
+先确认工作树并保留用户修改；从当前精确提交和锁文件执行干净依赖安装，再实际执行：typecheck、lint、format:check、全部 test、check、build、package:dir、package:win、package:verify、Electron E2E、最终加固产物黑盒冒烟、ASAR/fuse 读取、包内容审计、portable/NSIS 的 `NotSigned` 验证、最终 SHA-256 生成/复验和 release workflow dry-run。记录每条命令退出码、测试文件/用例/跳过数、产物文件名/字节/哈希/大小和进程残留。确认远程 PR/push CI 对当前提交实际通过；无法获取远程证据时如实保留该项，不推测绿色。
+
+重跑 Windows 10 x64 普通用户下的 portable/NSIS 安装、覆盖安装、卸载、中文/空格路径、外部工作区哈希不变、TXT/DOCX/备份/冲突/回收站/WPS/Word 核心矩阵，以及 Defender/SmartScreen/Authenticode 真实状态。不伪造无法在当前环境完成的平台证据。Windows 11 明确写入未来可选项和“不作支持声明”，既不勾选为已验证，也不作为当前阻塞。
 
 审查全部发布写路径、清理路径、workflow permissions、Action SHA、缓存、包白名单、app.asar.unpacked、版本/标签、`.only`、无条件 `.skip`、timeout 放宽、弱化断言、凭据/环境文件/绝对路径/隐私泄漏和用户已有修改。
 
-更新 README 当前能力/尚未实现/安装验证/Roadmap/文档/结构，PROJECT_BASELINE 的发布基线，DEVELOPMENT_ENVIRONMENT 的构建/发布区分，TESTING 的 CI/package/E2E/Windows/签名清单，CHANGELOG、SECURITY、LICENSE/rights、NOTICE 和 Release Notes。新增 docs/TASK_012_COMPLETION_REPORT.md，记录精确运行时/工具版本、工作包、关键文件、身份/版本、包白名单/依赖、ASAR/fuses、E2E、产物/大小/哈希、Windows 矩阵、CI/权限/attestation、签名/时间戳/SmartScreen、许可证、限制和最终发布级别。
+更新 README 当前能力/尚未实现/安装验证/Roadmap/文档/结构，PROJECT_BASELINE 的源码公开与内部二进制基线，DEVELOPMENT_ENVIRONMENT 的构建/内部验证/公开发布区分，TESTING 的 CI/package/E2E/Windows 10/`NotSigned` 清单，CHANGELOG、SECURITY、LICENSE、NOTICE 和 Release Notes。新增 docs/TASK_012_COMPLETION_REPORT.md，记录精确运行时/工具版本、工作包、关键文件、身份/版本、包白名单/依赖、ASAR/fuses、E2E、产物/大小/哈希、Windows 10 矩阵、CI/权限/attestation、`NotSigned`/无时间戳/无发布者/SmartScreen、许可证、限制、未来可选项和最终发布级别。
 
-只有所有内部 Alpha 工程标准都有证据时，才能将 Task 12 记录为“内部 Alpha 工程完成”。只有受信任签名、验签、许可证、最终人工批准和实际公开 Pre-release 都完成时，才能记录“公开 Alpha 已发布”。如存在外部阻塞，保留未勾选项和 Draft/内部状态。
+只有当前 33 项标准都有证据时，才能将 Task 12 记录为“MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成”。最终报告必须同时写明“未公开 Windows 二进制；Windows 11、Artifact Signing + GitHub OIDC 和可信公开二进制为未来可选工作”。不得使用“公开 Alpha 已发布”结论。真实的当前范围阻塞必须保留未勾选项；未来可选项不伪装成阻塞或完成项。
 
-如当前用户没有明确授权 push/tag/Release，不执行这些外部动作。如已授权公开发布，仍必须先把 Draft 产物、签名、哈希、Release Notes 和人工证据提交项目所有者最终核对，不把“开发 Task 授权”解读为“自动对外发布授权”。
+本包不 push、不创建或移动标签、不创建/替换/公开 Windows 二进制 Release，不建立 Azure/OIDC 或读取真实签名凭据。现有 `v0.1.0-alpha.1` 和历史 Draft 保持不变；当前 HEAD 重建产物只用于本地最终验证。未来若所有者另行批准新二进制 Draft/Release，必须采用新的所有者批准版本和精确标签，不能复用或移动旧标签。
 
-结束时给出最终 diff、命令证据、产物链接/路径、签名/哈希、Windows/CI 证据、已知限制、外部阻塞、满足的验收项和最终发布级别。
+结束时给出最终 diff、命令证据、内部产物路径、`NotSigned`/哈希、Windows 10/CI 证据、已知限制、当前阻塞、未来可选项、满足的验收项和最终发布级别。不要进入未来 Windows 11、签名或公开发布工作。
 ```
 
 ---
@@ -500,7 +517,8 @@ WP0 锁定 Playwright 精确版本：[版本]
 - 如希望单个 Agent 从头到尾实施，使用第一节完整主提示词，但仍要求其按 WP0–WP8 分门禁报告；
 - 如逐包实施，每次使用第二节对应提示词，并填写当前分支、恢复点、用户修改和所有者决策；
 - WP0 应作为独立恢复点；WP1 的 Electron 迁移在打包前独立完成；WP3 先完成 unpacked 再生成安装器；
-- WP5 需要真实 Windows 安装/卸载和 WPS/Word 证据，不宜与 CI 配置混在同一巨大修改中；
-- WP7 前应由项目所有者明确许可证与签名方案；没有决策时不应由 Agent 自行选择；
+- WP5 当前只要求真实 Windows 10 安装/卸载和 WPS/Word 证据；Windows 11 是未来可选矩阵；
+- 项目所有者已确定 MIT、源码公开和未签名二进制内部范围；不得再次把它们写成待决定；
 - 创建 Git 标签、push、启动远程 release workflow、创建 Draft Release 和公开 Pre-release 是不同权限层级，每一层都应有当前任务的明确授权；
-- 任何时候发现包中泄漏凭据/userData、安装/卸载修改外部工作区、签名后文件被再修改或 Electron 已超出支持窗口，都应停止发布并先修复根因。
+- 当前 WP8 不执行上述外部发布动作；现有 `v0.1.0-alpha.1` 标签和历史 Draft 不得移动或替换；
+- 任何时候发现包中泄漏凭据/userData、安装/卸载修改外部工作区、最终哈希后文件被修改或 Electron 已超出支持窗口，都应停止当前完成结论并先修复根因。

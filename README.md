@@ -115,7 +115,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 
 ### 环境要求
 
-- Windows 10 或 Windows 11
+- 当前开发与内部产物验收基线为 Windows 10 x64；Windows 11 尚未纳入支持矩阵
 - Windows PowerShell 5.1 或更高版本
 - 首次初始化时能够访问 Node.js 和 npm 下载服务
 
@@ -189,7 +189,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
-- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP7：MIT 源码公开、未签名二进制仅内部 Draft）。
+- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP0–WP7 已完成；MIT 源码公开、Windows 10 x64 未签名二进制仅内部实验，WP8 待验收）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 

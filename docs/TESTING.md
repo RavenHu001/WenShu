@@ -8,6 +8,9 @@
 - Windows PowerShell 5.1 或更高版本；
 - 命令在仓库根目录执行。
 
+上述是开发测试环境范围。Task 12 当前 portable/NSIS 最终验收只要求并只声明 Windows 10 x64；
+Windows 11 矩阵已移到未来可选工作。
+
 首次使用时初始化项目本地 Node.js 和依赖：
 
 ```powershell
