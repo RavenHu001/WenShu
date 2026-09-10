@@ -63,6 +63,12 @@ describe('Task 12 GitHub Actions workflow guardrails', () => {
     expect(workflow).toContain('-GenerateManifest');
     expect(workflow).toContain("--notes-file 'release/ALPHA_RELEASE_NOTES.md'");
     expect(workflow).toContain('vars.ENABLE_ARTIFACT_ATTESTATION');
+    expect(workflow).toContain('actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f');
+    expect(workflow).toContain(
+      'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
+    );
+    expect(workflow).not.toContain('ea165f8d65b6e75b540449e92b4886f43607fa02');
+    expect(workflow).not.toContain('634f93cb2916e3fdff6788551b99b062d0335ce0');
     expect(workflow).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
 
     const buildJob = workflow.slice(

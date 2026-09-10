@@ -11,9 +11,10 @@
 - 内部 portable/NSIS 没有 Authenticode 发布者或时间戳。不要把内部 Draft 描述为受信任公开版本。
 - 第三方组件的版本、许可和需保留声明见 [THIRD_PARTY_NOTICES.txt](./THIRD_PARTY_NOTICES.txt)。
 
-WP8 已完成本地验收与报告，但 Task 12 仍有 10/33 项保留：最终工作树尚未形成固定提交，当前
-精确提交的远程 CI/attestation 状态不可取得，且最终 Electron 43.6.0 产物尚未在可证明为 Windows 10
-x64 的普通用户主机完成全矩阵复验。详情见 [TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)。
+WP8 已完成本地验收与报告，但 Task 12 仍有 7/33 项保留：最终 Electron 43.6.0 产物尚未在可证明为
+Windows 10 x64 的普通用户主机完成系统矩阵复验，artifact attestation 状态也不可取得。当前精确
+产品提交 `98b05b4` 的 main push CI 已通过。详情见
+[TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)。
 
 ## 当前能力
 
@@ -193,7 +194,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
-- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP8 已完成验收记录；23/33 项通过、10 项保留，尚未达到 Windows 10 x64 最终级别；见[完成报告](./docs/TASK_012_COMPLETION_REPORT.md)）。
+- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP8 已完成验收记录；26/33 项通过、7 项保留，尚未达到 Windows 10 x64 最终级别；见[完成报告](./docs/TASK_012_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 

@@ -33,6 +33,7 @@ Because there is no automatic updater, security fixes require manually downloadi
 portable package or installer. Installing, upgrading, uninstalling, or downgrading must never be used
 to delete or replace external workspace documents.
 
-The WP8 local artifacts are not a release candidate yet: they were built from an uncommitted working
-tree, and their final Windows 10/Office matrix plus current remote CI provenance has not been obtained.
-Do not publish or redistribute them as a supported Alpha. See `docs/TASK_012_COMPLETION_REPORT.md`.
+The WP8 local artifact inputs match exact product commit `98b05b4`, whose main-push CI passed, but the
+final Windows 10 system matrix and artifact-attestation status have not been obtained. The artifacts
+are therefore not a release candidate. Do not publish or redistribute them as a supported Alpha. See
+`docs/TASK_012_COMPLETION_REPORT.md`.

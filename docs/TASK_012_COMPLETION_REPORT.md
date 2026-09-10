@@ -7,20 +7,15 @@
 
 WP8 的代码审计、构建、打包、产物检查和文档收尾已经执行，但 Task 12 **尚未达到**预期的
 “MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成”。第十一节 33 项中
-23 项有足够证据并已勾选，10 项保留。当前没有获准或执行公开 Windows 二进制发布。
+26 项有足够证据并已勾选，7 项保留。当前没有获准或执行公开 Windows 二进制发布。
 
 真实阻塞是：
 
-1. 最终 WP8 工作树还不是一个固定 Git 提交，因而本轮产物只能追溯到基准提交加已记录工作树，
-   不能称为某个精确提交的可发布产物；
-2. 当前主机内核为 `10.0.26200.9445`。Windows 产品名兼容接口虽返回“Windows 10 Home”，
+1. 当前主机内核为 `10.0.26200.9445`。Windows 产品名兼容接口虽返回“Windows 10 Home”，
    但 build 26200 属于 Windows 11 25H2，故本轮 portable/NSIS 结果不能充当 Windows 10 证据；
-3. 没有在真实 Windows 10 x64 普通用户会话中对**最终** Electron 43.6.0 产物重跑安装、覆盖安装、
-   卸载、中文/空格路径、残留、安全产品行为和完整 TXT/DOCX 生命周期；
-4. 本机 WPS 不存在；Word 16 打开合成 DOCX 时报告只读，不能完成可编辑保存往返。当前构建的
-   WPS/Word、备份、冲突、回收站和未保存保护完整人工矩阵仍缺最终构建证据；
-5. 无法读取当前精确提交的远程 PR/push CI。GitHub REST 返回 404，本机也没有 `gh`；
-6. 当前仓库的 artifact attestation 资格/启用状态无法从远程核实，不能把“未知”写成“不支持”。
+2. 没有在真实 Windows 10 x64 普通用户会话中对**最终** Electron 43.6.0 产物重跑安装、覆盖安装、
+   卸载、中文/空格路径、残留和安全产品行为；
+3. 当前仓库的 artifact attestation 资格/启用状态无法从远程核实，不能把“未知”写成“不支持”。
 
 2026-09-08 的所有者范围修订已经替代历史报告中的三个旧门禁：Windows 11 验收、可信签名、公开
 Windows 二进制均是未来可选工作，不是上述当前阻塞。WP5 因缺 Windows 11、WP7 因缺可信签名而给出的
@@ -29,9 +24,11 @@ Windows 二进制均是未来可选工作，不是上述当前阻塞。WP5 因�
 ## 2. 范围、基线与工作树
 
 - 分支：`main`；开始时 `main...origin/main` 且工作树干净；未发现用户修改。
-- WP8 基准提交：`0a474b92e73c9d9bb0bcfcf8b4a96ce2d7a61ab5`。
-- 历史标签：`v0.1.0-alpha.1` → `c073f1fbb4b2bef3370d0e9b10d21d74de974d87`；未移动、
-  未重建、未覆盖历史 Draft。
+- WP8 开始基准：`0a474b92e73c9d9bb0bcfcf8b4a96ce2d7a61ab5`；当前精确产品提交及
+  `origin/main`：`98b05b416bd00ce21cc465cea8be66ea02a90236`。
+- 远程标签：`v0.1.0-alpha.1` → `0a474b92e73c9d9bb0bcfcf8b4a96ce2d7a61ab5`（WP8 中以
+  `git ls-remote` 只读确认）；本地未刷新的同名 ref 仍指向 `c073f1fbb4b2bef3370d0e9b10d21d74de974d87`。
+  本轮未 fetch、移动或改写标签，也未覆盖既有 Draft。
 - 当前版本：`0.1.0-alpha.1`；`appId` 为 `io.github.ravenhu001.wenshu`；产品名“文枢”；
   可执行文件名 `WenShu`。
 - 工具链：Node.js `22.15.0`、npm `10.9.2`、Electron `43.6.0`、electron-vite `4.0.1`、
@@ -39,7 +36,8 @@ Windows 二进制均是未来可选工作，不是上述当前阻塞。WP5 因�
 - Electron 43.6.0 内置运行时：Chromium `150.0.7871.250`、Node.js `24.20.0`、V8
   `15.0.245.31`（Electron 官方 release metadata；构建 Node 与内置 Node 不混用）。
 - 最终锁文件 SHA-256：`DCDDD42A75BF1FC07D6D12622559726197D5918BDCFB26399C4BA5CEED92ADE8`。
-- 本轮没有 push、tag、GitHub Release、签名、证书、OIDC 或 Windows 11 支持工作。
+- 执行助手没有 push、tag、GitHub Release、签名、证书、OIDC 或 Windows 11 支持工作；项目所有者随后
+  将 WP8 产品提交 `98b05b4` push 到 `main` 并提供成功 CI 截图。
 
 本轮验收发现并修复两个 Task 12 范围内问题：Electron 43 中线不是当日最新补丁，已精确升级
 `43.4.1 → 43.6.0`；builder 会从 Git remote 推断更新源并在包外写入 `resources/app-update.yml`，
@@ -86,7 +84,10 @@ workspace search 2、resolve 1、relocate 1、trash 1、reveal 1；相同拒绝�
 
 ## 4. 最终产物、签名与哈希
 
-这些文件来自未提交 WP8 工作树，只供本地验收，不对应历史标签或 Draft：
+这些文件来自随后形成 `98b05b416bd00ce21cc465cea8be66ea02a90236` 的 WP8 产品输入，只供本地
+验收，不对应历史标签或 Draft。提交后复核确认当前相对该提交的差异只有文档、release workflow Action
+升级及其测试；`package.json`、锁文件、builder 配置、包审计、LICENSE/NOTICE、源码和构建资源均与
+该提交一致：
 
 | 文件                                    |        字节 | SHA-256                                                            | Authenticode          |
 | --------------------------------------- | ----------: | ------------------------------------------------------------------ | --------------------- |
@@ -123,7 +124,9 @@ Electron E2E 4 项：启动/About 身份与版本；TXT 精确字节打开保存
 
 本机 Microsoft 365 Word `16.0.20326.20132` 能打开合成 DOCX 并读到预期文字，但文档被报告为
 只读，`Save` 不可用；`SaveAs2` 尝试挂起后已中断并清理 Word 进程。WPS 未安装。没有把这些失败/缺失
-写成 Office 往返通过。
+写成当次 Office 往返通过。项目所有者随后明确确认可以沿用真正构筑这些功能时的 Word/WPS、备份、
+冲突、回收站与完整文件生命周期人工验收；结合当前 1184 项自动回归和最终 E2E，11.1.5 因此记为
+通过，不再作为当前阻塞。
 
 Defender 状态查询返回 Access Denied；组策略 SmartScreen 查询没有可用值；本地生成文件没有
 Zone.Identifier，所以没有触发下载声誉路径。两个 EXE 的 `NotSigned` 是确定证据；Defender/SmartScreen
@@ -139,12 +142,33 @@ CI/release workflow 静态审计通过：Action 使用完整 commit SHA；PR/pus
 不获得签名或 Release write；Draft job 单独获得 `contents: write`；没有签名凭据；release 路径会从
 触发提交重新安装、检查、构建、打包和验证，不复用 `node_modules`、`out` 或未知二进制。
 
-本地 dry-run 确认 package version 期望标签为 `v0.1.0-alpha.1`，但现有标签指向历史提交
-`c073f1f...`，不是 WP8 基准 `0a474b9...`，所以没有运行 release，也没有把本地产物写入旧 Draft。
+本地 dry-run 确认 package version 期望标签为 `v0.1.0-alpha.1`；当时本地未刷新的标签仍指向
+`c073f1f...`，因此本地演练正确拒绝继续。用户随后提供 WP8 前 GitHub Actions 截图：
+`Build internal Alpha draft #6` 由 tag push 触发，ref 显示 `v0.1.0-alpha.1`、commit `0a474b9`，
+状态 Success、总耗时 9 分 47 秒、1 个 artifact；“Rebuild and verify release artifacts”用时
+9 分 12 秒，“Upload approved Draft pre-release”用时 27 秒，均为绿色。`git ls-remote` 又只读确认
+远程标签当前确实指向完整 SHA `0a474b92e73c9d9bb0bcfcf8b4a96ce2d7a61ab5`。
 
-对当前基准 SHA 查询 GitHub workflow runs 返回 HTTP 404；本机没有 `gh`，所以不能确认远程 PR/push
-CI 对当前提交为绿色，也不能读取 attestation 资格。WP6 只证明较早提交和历史标签的远程运行，不能
-代替当前提交证据。当前未执行任何外部写操作；公开 Windows 二进制授权仍为“否”。
+截图同时显示 2 条 annotations；可见的一条指出旧 `actions/upload-artifact@v4.6.2` 以 Node.js 20
+为目标、由 GitHub 强制运行在 Node.js 24。WP8 据 GitHub 官方 release metadata 将上传 Action 更新为
+`actions/upload-artifact@v6.0.0`（`b7c566a...`），将同一传递链的下载 Action 更新为
+`actions/download-artifact@v8.0.1`（`3e5f45b...`），二者均锁定完整 SHA、默认使用 Node.js 24；
+workflow 定向测试通过。截图没有展开第二条 annotation，因此不推测其文字。
+
+该截图与仓库中 `0a474b9` 的 `release.yml` 对照后，能证明当时从 tag checkout 执行了 `npm ci`、
+Electron runtime 安装、build、check、Electron E2E、package、`NotSigned` 和 SHA-256 工作流。但它发生
+在 WP8 之前，不包含本轮 Electron 43.6.0、`publish: null` 和包审计修复。
+
+用户随后提供新上传后的独立 `Continuous integration #11` 截图：main push commit `98b05b4`，
+Status Success，总耗时 5 分 46 秒；唯一 “Check, build, and Electron E2E” job 用时 5 分 43 秒并为
+绿色。本地 HEAD 与 `origin/main` 均解析为完整 SHA
+`98b05b416bd00ce21cc465cea8be66ea02a90236`。该提交包含 Electron 43.6.0、`publish: null`、新包审计、
+NOTICE 和 WP8 初版报告，因此 11.4.1 关闭。提交后再次执行 package audit、两个 EXE SHA-256 与
+`NotSigned` 复验均一致，且打包输入相对该提交无差异，因此 11.4.4 也关闭。之后的 Action Node 24
+升级仍是未提交的 workflow/测试变化，不改变这两个本地产物的输入或哈希。
+
+REST workflow-runs 查询仍返回 HTTP 404，本机没有 `gh`，attestation 是否实际运行也无法从截图判断。
+当前未执行任何外部写操作；公开 Windows 二进制授权仍为“否”。
 
 ## 7. 许可证、依赖和文档
 
@@ -166,7 +190,7 @@ CI 对当前提交为绿色，也不能读取 attestation 资格。WP6 只证明
 | 11.1.2 | 通过 | 73 文件、1184 通过、10 条件跳过；check/build 均为 0                         |
 | 11.1.3 | 通过 | 开发、生产 E2E、unpacked、portable、installed 均实际出现窗口                |
 | 11.1.4 | 通过 | 安全配置、契约测试、E2E 和 fuse 实读                                        |
-| 11.1.5 | 保留 | 最终构建缺完整 WPS/Word、文件生命周期和 Windows 10 人工矩阵                 |
+| 11.1.5 | 通过 | 所有者确认沿用既有人工验收；当前完整回归与 E2E 覆盖核心语义                 |
 | 11.2.1 | 通过 | package metadata、About、窗口、EXE 和审计报告一致；未冒充旧标签             |
 | 11.2.2 | 通过 | WP2 图标来源/人工证据；最终安装文件、快捷方式资源存在                       |
 | 11.2.3 | 通过 | package:dir/package:win/verify 实际成功且命名固定                           |
@@ -180,10 +204,10 @@ CI 对当前提交为绿色，也不能读取 attestation 资格。WP6 只证明
 | 11.3.4 | 保留 | 外部工作区当前 hash 通过，但目标 Windows 10 最终包证据缺失                  |
 | 11.3.5 | 保留 | 当前残留为 0，但目标 Windows 10 最终包证据缺失                              |
 | 11.3.6 | 保留 | Authenticode 已确定；目标 Windows 10 Defender/SmartScreen 行为未取得        |
-| 11.4.1 | 保留 | 当前精确提交远程 workflow 证据不可访问                                      |
+| 11.4.1 | 通过 | main push `98b05b4` 的 Continuous integration #11 成功，唯一 CI job 绿色    |
 | 11.4.2 | 通过 | workflow 权限和 Action SHA 静态审计，历史 WP6 远程证据                      |
 | 11.4.3 | 通过 | workflow 结构、测试和本地拒绝旧标签 dry-run                                 |
-| 11.4.4 | 保留 | 产物来自未提交 WP8 工作树，不存在可声明的最终 commit                        |
+| 11.4.4 | 通过 | 打包输入与 `98b05b4` 一致；哈希、NotSigned、限制及复验记录完整              |
 | 11.4.5 | 通过 | 两个最终 EXE 均实测 NotSigned/无时间戳                                      |
 | 11.4.6 | 通过 | 签名检查后生成 manifest，再复验完全一致                                     |
 | 11.4.7 | 保留 | 远程资格未知，不能把未知写成不支持                                          |
@@ -200,12 +224,10 @@ CI 对当前提交为绿色，也不能读取 attestation 资格。WP6 只证明
 
 这些是当前 Task 12 收尾，不是未来 Windows 11/签名/公开发布扩张：
 
-1. 把 WP8 修改形成经所有者接受的固定 Git 提交，从该提交和锁文件重建产物；
-2. 在可明确证明为 Windows 10 x64 build 19045 的普通用户主机上，对该精确提交产物执行第 11.3
-   全矩阵及 TXT/DOCX/Word/WPS 人工矩阵，记录 Office/WPS 版本、退出码和残留；
-3. 让该精确提交的 PR/push CI 实际完成并保存 run URL/结论；读取仓库 artifact attestation 的实际
-   可用性，能用则验证，不能用则记录平台返回的真实原因；
-4. 重跑 `NotSigned → SHA-256 → verify` 并更新本报告。仍不得移动旧标签、公开二进制或开始签名。
+1. 在可明确证明为 Windows 10 x64 build 19045 的普通用户主机上，对该精确提交产物执行第 11.3
+   安装、覆盖安装、卸载、路径、外部工作区、安全产品和残留矩阵；
+2. 读取仓库 artifact attestation 的实际可用性，能用则验证，不能用则记录平台返回的真实原因；
+3. 重跑 `NotSigned → SHA-256 → verify` 并更新本报告。仍不得移动旧标签、公开二进制或开始签名。
 
 ## 10. 当日官方参考
 

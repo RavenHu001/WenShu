@@ -2,7 +2,7 @@
 
 ## 任务状态
 
-> **状态：WP8 已完成验收记录；Task 12 尚有 10 项真实门禁保留，未达到最终发布级别。**
+> **状态：WP8 已完成验收记录；Task 12 尚有 7 项真实门禁保留，未达到最终发布级别。**
 >
 > 规划日期：2026-08-27；范围修订：2026-09-08。Task 1 至 Task 11 已完成产品核心闭环、安全文件写入、
 > Windows 人工终验和桌面外壳收尾。Task 12 当前公开交付物固定为 GitHub 上的 MIT 源码；Windows 10
@@ -576,7 +576,7 @@ Windows 11 支持声明：
 - [x] Electron 迁移后 Task 1–11 全部自动测试、`check` 与 `build` 通过；
 - [x] 开发、生产构建、unpacked、portable 与 NSIS 安装结果均可启动；
 - [x] BrowserWindow、preload、IPC、权限、导航与 sandbox 安全基线无回退；
-- [ ] TXT/DOCX、备份、冲突、回收站、未保存保护和 WPS/Word 往返无回归。
+- [x] TXT/DOCX、备份、冲突、回收站、未保存保护和 WPS/Word 往返无回归。
 
 ### 11.2 身份、打包与产物
 
@@ -599,10 +599,10 @@ Windows 11 支持声明：
 
 ### 11.4 CI、签名、哈希与发布
 
-- [ ] PR/push CI 从干净 checkout 运行 `npm ci`、`check`、`build` 和定义的 E2E；
+- [x] PR/push CI 从干净 checkout 运行 `npm ci`、`check`、`build` 和定义的 E2E；
 - [x] PR/fork 无签名、Release write 或其他生产凭据权限；
 - [x] release workflow 校验标签、版本和 commit，重新构建而不复用未知来源产物；
-- [ ] 内部产物记录包含精确 commit、SHA-256、`NotSigned` 状态、系统要求、已知限制和验证说明；如使用 Draft，内容与精确标签一致；
+- [x] 内部产物记录包含精确 commit、SHA-256、`NotSigned` 状态、系统要求、已知限制和验证说明；如使用 Draft，内容与精确标签一致；
 - [x] portable/NSIS 均验证为 `NotSigned`，且没有可信发布者、时间戳或公开二进制声明；
 - [x] SHA-256 在最终 `NotSigned` 状态确认后生成，并在后续复验中一致；
 - [ ] 如条件支持 artifact attestation，其来源验证成功；如不支持，已记录真实原因；

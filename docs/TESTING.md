@@ -220,9 +220,10 @@ userData、`app-update.yml` 与不在 ASAR 索引中的 unpacked 文件，并验
 命名。哈希必须在两个 EXE 均为 `NotSigned` 后生成并再次复验。
 
 WP8 当前不是 Task 12 完成绿灯：验收主机内核 build 26200 属于 Windows 11，不能代替 Windows 10；
-最终 43.6.0 包还缺 Windows 10 x64 普通用户安装/文档/Word/WPS 全矩阵，当前精确提交远程 CI 与
-attestation 状态也不可取得。不得引用 WP5 的旧构建或当前 Windows 11 自动冒烟来勾选这些项目。
-23/33 项通过与 10 项保留的逐项映射见 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md)。
+最终 43.6.0 包还缺 Windows 10 x64 普通用户安装与系统行为矩阵，attestation 状态也不可取得。
+项目所有者确认沿用既有 Word/WPS 与文件生命周期人工验收，结合当前自动回归和 E2E，该功能项不再
+保留。精确产品提交 `98b05b4` 的 main push CI 已通过。26/33 项通过与 7 项保留的逐项映射见
+[TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md)。
 
 ## 3. 开发模式界面验收
 
