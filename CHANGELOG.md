@@ -11,9 +11,10 @@ yet made a public binary release.
   blocks packaging.
 - Updated the release workflow's upload/download artifact Actions to immutable Node.js 24 releases
   after the pre-WP8 remote run reported Node.js 20 deprecation annotations.
-- Completed the WP8 local build/package/E2E/unsigned/hash audit: 26 of 33 acceptance criteria have
-  evidence; 7 remain open because final Windows 10 system evidence and artifact attestation status
-  are unavailable. Main push CI passed for exact product commit `98b05b4`.
+- Completed all 33 current-scope WP8 acceptance criteria. The Windows 10 x64 theoretical
+  compatibility audit passed; owner-deferred physical Windows 10 runtime validation remains future
+  work and is not represented as completed testing. The private GitHub Free repository does not
+  support artifact attestations; main push CI passed for exact product commit `98b05b4`.
 - Selected the MIT License, copyright 2026 Jinxi Hu.
 - Public distribution is source-only through GitHub under MIT. Binary artifacts remain in an
   unsigned internal Draft; no Microsoft Store submission is planned.

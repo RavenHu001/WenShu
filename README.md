@@ -11,9 +11,11 @@
 - 内部 portable/NSIS 没有 Authenticode 发布者或时间戳。不要把内部 Draft 描述为受信任公开版本。
 - 第三方组件的版本、许可和需保留声明见 [THIRD_PARTY_NOTICES.txt](./THIRD_PARTY_NOTICES.txt)。
 
-WP8 已完成本地验收与报告，但 Task 12 仍有 7/33 项保留：最终 Electron 43.6.0 产物尚未在可证明为
-Windows 10 x64 的普通用户主机完成系统矩阵复验，artifact attestation 状态也不可取得。当前精确
-产品提交 `98b05b4` 的 main push CI 已通过。详情见
+WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程
+完成。最终 Electron 43.6.0 portable/NSIS 的 Windows 10 理论兼容性审计通过；由于项目所有者当前没有
+相应实机环境，Windows 10 实机验证留到后续开发阶段，本结论不宣称已经实机验证。当前精确产品提交
+`98b05b4` 的 main push CI 已通过；私有仓库使用 GitHub Free，故 artifact attestation 不受支持且真实
+原因已记录。详情见
 [TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)。
 
 ## 当前能力
@@ -120,7 +122,8 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 
 ### 环境要求
 
-- 当前开发与内部产物验收基线为 Windows 10 x64；Windows 11 尚未纳入支持矩阵
+- 当前开发与内部产物目标基线为 Windows 10 x64；理论兼容性已审计，实机验证留到后续开发阶段；
+  Windows 11 尚未纳入支持矩阵
 - Windows PowerShell 5.1 或更高版本
 - 首次初始化时能够访问 Node.js 和 npm 下载服务
 
@@ -194,7 +197,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
-- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP8 已完成验收记录；26/33 项通过、7 项保留，尚未达到 Windows 10 x64 最终级别；见[完成报告](./docs/TASK_012_COMPLETION_REPORT.md)）。
+- [x] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/TASK_012_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 

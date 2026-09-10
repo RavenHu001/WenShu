@@ -164,5 +164,5 @@ builder 配置显式使用 `publish: null`，最终审计禁止 `resources/app-u
 .\scripts\npm.cmd run release:verify:unsigned
 ```
 
-这些命令只构建和验证未签名内部产物，不授权 push、tag、签名或公开发布。最终 Windows 10 证据、
-远程 CI 和已知保留项以 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md) 为准。
+这些命令只构建和验证未签名内部产物，不授权 push、tag、签名或公开发布。Windows 10 理论兼容性、
+后续实机验证边界、远程 CI 和已知限制以 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md) 为准。

@@ -1,6 +1,6 @@
 # 文枢测试指南
 
-本文档说明 Task 1 至 Task 12 的自动检查、Windows 桌面冒烟与人工验收。Task 11 在不改变 Task 1–10 文件/保存/搜索生命周期的前提下新增统一中文外壳、设计 token 与 SVG、可调/可折叠侧栏、文件树上下文菜单与键盘入口、同工作区内部拖拽、DOCX 连续居中画布、工具栏溢出、搜索结果层级和 toast。自动保存、文件系统监听与会话恢复仍不属于已有能力。Task 7–10 的详细既有清单继续保留在 3.5–3.8；Task 11 的桌面外壳、缩放、无障碍和视觉基线见 2.10 与 3.9。Task 12 的打包门禁与真实保留项见 2.11，并以 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md) 为最终证据来源。
+本文档说明 Task 1 至 Task 12 的自动检查、Windows 桌面冒烟与人工验收。Task 11 在不改变 Task 1–10 文件/保存/搜索生命周期的前提下新增统一中文外壳、设计 token 与 SVG、可调/可折叠侧栏、文件树上下文菜单与键盘入口、同工作区内部拖拽、DOCX 连续居中画布、工具栏溢出、搜索结果层级和 toast。自动保存、文件系统监听与会话恢复仍不属于已有能力。Task 7–10 的详细既有清单继续保留在 3.5–3.8；Task 11 的桌面外壳、缩放、无障碍和视觉基线见 2.10 与 3.9。Task 12 的打包门禁、理论兼容性和实机验证边界见 2.11，并以 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md) 为最终证据来源。
 
 ## 1. 前置条件
 
@@ -8,8 +8,8 @@
 - Windows PowerShell 5.1 或更高版本；
 - 命令在仓库根目录执行。
 
-上述是开发测试环境范围。Task 12 当前 portable/NSIS 最终验收只要求并只声明 Windows 10 x64；
-Windows 11 矩阵已移到未来可选工作。
+上述是开发测试环境范围。Task 12 当前 portable/NSIS 只声明 Windows 10 x64 理论兼容；Windows 10
+实机验证留到后续开发阶段，Windows 11 矩阵已移到未来可选工作。
 
 首次使用时初始化项目本地 Node.js 和依赖：
 
@@ -219,10 +219,13 @@ check、build、package:dir、package:win、package:verify 与 Electron E2E 均�
 userData、`app-update.yml` 与不在 ASAR 索引中的 unpacked 文件，并验证 x64、身份、运行依赖和产物
 命名。哈希必须在两个 EXE 均为 `NotSigned` 后生成并再次复验。
 
-WP8 当前不是 Task 12 完成绿灯：验收主机内核 build 26200 属于 Windows 11，不能代替 Windows 10；
-最终 43.6.0 包还缺 Windows 10 x64 普通用户安装与系统行为矩阵，attestation 状态也不可取得。
-项目所有者确认沿用既有 Word/WPS 与文件生命周期人工验收，结合当前自动回归和 E2E，该功能项不再
-保留。精确产品提交 `98b05b4` 的 main push CI 已通过。26/33 项通过与 7 项保留的逐项映射见
+WP8 当前范围的 33/33 项均已关闭。验收主机内核 build 26200 属于 Windows 11，不能冒充 Windows 10
+实测；项目所有者于 2026-09-10 将 Windows 10 x64 实机验证移到后续开发阶段，当前只要求理论兼容性
+审计。最终 43.6.0 portable/NSIS 的 PE、架构、Electron、NSIS、依赖和源码平台门禁检查支持 Windows
+10 x64，且安装/覆盖安装/卸载、路径、外部工作区不变性、残留、安全产品行为和既有 Word/WPS 文件
+生命周期验收均无已知问题。私有仓库使用 GitHub Free，artifact attestation 不受支持且真实原因已
+记录；精确产品提交 `98b05b4` 的 main push CI 已通过。理论审计不得写成 Windows 10 实机验证；逐项
+映射见
 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md)。
 
 ## 3. 开发模式界面验收

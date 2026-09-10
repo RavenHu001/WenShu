@@ -33,7 +33,11 @@ Because there is no automatic updater, security fixes require manually downloadi
 portable package or installer. Installing, upgrading, uninstalling, or downgrading must never be used
 to delete or replace external workspace documents.
 
-The WP8 local artifact inputs match exact product commit `98b05b4`, whose main-push CI passed, but the
-final Windows 10 system matrix and artifact-attestation status have not been obtained. The artifacts
-are therefore not a release candidate. Do not publish or redistribute them as a supported Alpha. See
+The WP8 local artifact inputs match exact product commit `98b05b4`, whose main-push CI passed. The
+owner confirmed the install, upgrade, uninstall, path, workspace-integrity, residue, Defender, and
+SmartScreen checks. The Windows 10 x64 theoretical compatibility audit passed, while physical
+Windows 10 validation is explicitly deferred and must not be claimed as completed testing. The owner
+also confirmed that this private repository uses GitHub Free, under which private-repository artifact
+attestations are unavailable. The artifacts remain internal and unsigned. Do not publish or
+redistribute them as a supported public Alpha. See
 `docs/TASK_012_COMPLETION_REPORT.md`.

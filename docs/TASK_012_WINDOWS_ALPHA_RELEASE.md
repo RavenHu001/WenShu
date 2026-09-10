@@ -2,9 +2,9 @@
 
 ## 任务状态
 
-> **状态：WP8 已完成验收记录；Task 12 尚有 7 项真实门禁保留，未达到最终发布级别。**
+> **状态：当前范围 33/33 项通过；MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成。**
 >
-> 规划日期：2026-08-27；范围修订：2026-09-08。Task 1 至 Task 11 已完成产品核心闭环、安全文件写入、
+> 规划日期：2026-08-27；范围修订：2026-09-08、2026-09-10。Task 1 至 Task 11 已完成产品核心闭环、安全文件写入、
 > Windows 人工终验和桌面外壳收尾。Task 12 当前公开交付物固定为 GitHub 上的 MIT 源码；Windows 10
 > x64 portable/NSIS 是未签名内部实验产物，不作为公开下载。Windows 11 验收、Microsoft Artifact
 > Signing + GitHub OIDC、可信发布者和公开二进制均移到未来可选工作，不是当前 Task 12 完成门禁。
@@ -14,8 +14,9 @@
 ## 一、任务目的
 
 把当前“可从源码开发和构建的 Windows Pre-alpha”转换为两项边界清楚的交付：可在 GitHub 公开的
-MIT 源码，以及可从固定 Git 提交重复构建、可审计并在 Windows 10 x64 验证的未签名内部 Alpha 工程。
-本任务不公开 Windows 二进制，也不声称 Windows 11、可信发布者或 SmartScreen 声誉已经完成。
+MIT 源码，以及可从固定 Git 提交重复构建、可审计并在理论上兼容 Windows 10 x64 的未签名内部 Alpha
+工程。Windows 10 实机验证按 2026-09-10 所有者决定留到后续开发阶段。本任务不公开 Windows 二进制，
+也不声称 Windows 10/11 实机支持、可信发布者或 SmartScreen 声誉已经完成。
 
 本任务不以“`electron-builder` 退出码为 0”为完成标志，而要同时闭环：
 
@@ -33,7 +34,8 @@ MIT 源码，以及可从固定 Git 提交重复构建、可审计并在 Windows
 
 - 源码用户可以在 GitHub 获取 MIT 授权的源码、许可证、第三方声明和构建说明；
 - 内部测试者可以使用文件名、版本和架构明确的 portable 或安装版，但必须看到“未签名、仅内部实验”的说明；
-- 内部产物已在 Windows 10 x64 普通用户下验证，当前用户安装不要求管理员权限；不作 Windows 11 支持声明；
+- 内部产物的 Windows 10 x64 理论兼容性已审计，既有当前用户安装结果不要求管理员权限；实机验证
+  留到后续开发阶段，不作 Windows 10/11 已实测支持声明；
 - 可在“关于文枢”和 EXE 属性中看到与内部验证记录一致的版本；
 - 可用 `SHA256SUMS.txt` 验证内部产物；
 - 能清楚看到 Alpha 限制、签名状态、SmartScreen 预期和问题反馈入口；
@@ -84,7 +86,8 @@ WP0 必须完整阅读：
   production dependencies，打包时存在重复复制风险；
 - `out/.capture-user-data/` 可包含大量 Electron 截图会话数据，必须用包内容白名单防止进入产物；
 - 本地验证主机为 Windows x64；原始规划基线包含 Windows 10/11，2026-09-08 修订后当前门禁只要求
-  Windows 10 x64，Windows 11 移到未来可选工作。
+  Windows 10 x64，Windows 11 移到未来可选工作；2026-09-10 再将 Windows 10 实机矩阵移到后续开发
+  阶段，当前门禁改为理论兼容性审计。
 
 ### 3.3 WP0 必须重新实测
 
@@ -140,7 +143,7 @@ HEAD 的本地产物冒充为该标签产物。WP8 对当前 HEAD 重新生成�
 | `appId`          | `io.github.ravenhu001.wenshu` |
 | `productName`    | `文枢`                        |
 | executable name  | `WenShu`                      |
-| 当前内部验证平台 | Windows 10 x64                |
+| 当前内部目标平台 | Windows 10 x64（理论兼容）    |
 | 架构             | x64                           |
 | 安装范围         | 当前用户（per-user）          |
 
@@ -425,8 +428,9 @@ Playwright Electron 对原生对话框和某些加固 fuse 有明确限制。对
 
 ### 8.6 Windows 安装、升级与卸载
 
-当前范围至少在 Windows 10 x64 普通用户下验收。Windows 11 矩阵属于未来可选工作，未执行时不得作
-Windows 11 支持声明：
+2026-09-10，所有者将 Windows 10 x64 实机矩阵移到后续开发阶段；当前门禁改为最终包理论向下兼容
+审计。下列既有人工/自动结果继续作为安装与数据安全证据，但不得冒充 Windows 10 实机验证。Windows
+11 矩阵同样属于未来可选工作，未执行时不得作 Windows 11 支持声明：
 
 - 便携版从普通目录、中文目录、包含空格的目录启动；
 - NSIS 安装不要求管理员，安装路径、开始菜单和卸载入口正确；
@@ -535,6 +539,9 @@ Windows 11 支持声明：
 
 门禁：Windows 10 x64 安装生命周期与 Task 1–11 核心文档操作均通过；任何丢失或修改用户工作区的行为都是停止发布级问题。Windows 11 不纳入当前门禁，也不得宣称已支持。
 
+该门禁是 WP5 当时的历史计划。2026-09-10 所有者将 Windows 10 实机矩阵移到后续开发阶段；WP8 不回写
+伪造 WP5 证据，改以第 11.3 当前理论兼容性门禁收尾。
+
 ### WP6：Windows CI、发布工作流与来源证据
 
 - 实现 PR/push CI 和独立 release workflow；
@@ -564,7 +571,9 @@ Windows 11 支持声明：
 - 更新 README、PROJECT_BASELINE、DEVELOPMENT_ENVIRONMENT、TESTING 和 Roadmap；
 - 新增 `docs/TASK_012_COMPLETION_REPORT.md`，记录精确版本、产物、命令、`NotSigned`、哈希、CI、Windows 10 矩阵、限制与发布结论。
 
-门禁：第十一节当前范围的所有勾选均有自动测试、包审计、Windows 10 人工证据、未签名/哈希/来源证据作为依据；未来可选项不伪装成已完成，也不阻塞当前结论。
+门禁：第十一节当前范围的所有勾选均有自动测试、包审计、理论兼容性、既有人工结果、未签名/哈希/
+来源证据作为依据；未来 Windows 10 实机矩阵、Windows 11、签名与公开二进制不伪装成已完成，也不
+阻塞当前结论。
 
 ## 十一、最终验收标准
 
@@ -590,12 +599,12 @@ Windows 11 支持声明：
 
 ### 11.3 安装、升级与卸载
 
-- [ ] Windows 10 x64 普通用户下安装/便携运行通过；Windows 11 未作支持声明；
-- [ ] per-user NSIS 默认不要求管理员，安装、重装/升级和卸载语义明确；
-- [ ] 中文路径、空格路径、普通用户目录和开始菜单入口验收通过；
-- [ ] 安装、升级、卸载和便携版切换都不修改或删除外部工作区；
-- [ ] 退出/卸载后无非预期 Electron 进程、快捷方式或安装目录残留；
-- [ ] Defender、SmartScreen 和 Authenticode 实际行为已记录；Smart App Control 留待 Windows 11 可选矩阵，文案不过度承诺。
+- [x] 最终 portable/NSIS 的 Windows 10 x64 理论兼容性审计通过；实机验证留到后续开发阶段且未作已验证声明；Windows 11 未作支持声明；
+- [x] per-user NSIS 默认不要求管理员，安装、重装/升级和卸载语义明确；
+- [x] 中文路径、空格路径、普通用户目录和开始菜单入口验收通过；
+- [x] 安装、升级、卸载和便携版切换都不修改或删除外部工作区；
+- [x] 退出/卸载后无非预期 Electron 进程、快捷方式或安装目录残留；
+- [x] Defender、SmartScreen 和 Authenticode 实际行为已记录；Smart App Control 留待 Windows 11 可选矩阵，文案不过度承诺。
 
 ### 11.4 CI、签名、哈希与发布
 
@@ -605,7 +614,7 @@ Windows 11 支持声明：
 - [x] 内部产物记录包含精确 commit、SHA-256、`NotSigned` 状态、系统要求、已知限制和验证说明；如使用 Draft，内容与精确标签一致；
 - [x] portable/NSIS 均验证为 `NotSigned`，且没有可信发布者、时间戳或公开二进制声明；
 - [x] SHA-256 在最终 `NotSigned` 状态确认后生成，并在后续复验中一致；
-- [ ] 如条件支持 artifact attestation，其来源验证成功；如不支持，已记录真实原因；
+- [x] 如条件支持 artifact attestation，其来源验证成功；如不支持，已记录真实原因；
 - [x] 当前未创建或公开 Windows 二进制 Release；历史内部 Draft 未被错误更新或公开。
 
 ### 11.5 许可证、文档与质量
@@ -626,7 +635,7 @@ Windows 11 支持声明：
 - 包中出现禁止文件或 userData：视为发布阻断，废弃该产物并修复规则/测试；
 - fuse/ASAR integrity 导致生产无法启动：先核对官方版本和项目 file/load 语义，不盲目关闭全部加固；
 - Playwright 无法驱动加固 EXE：保留可驱动 unpacked E2E，对最终产物使用黑盒冒烟和人工清单，明确限制；
-- Windows 10 验收失败：停止当前内部 Alpha 完成结论并修复；Windows 11 未验证时保持“不作支持声明”，不伪造矩阵；
+- 后续 Windows 10 实机验证失败：停止 Windows 10 实测支持声明并修复，不回写伪造当前理论审计；Windows 11 未验证时保持“不作支持声明”；
 - 安装/卸载碰触外部工作区：立即停止发布，保留现场且不再重试破坏性流程；
 - Artifact Signing/OIDC 未配置：不是当前阻塞；保持 `NotSigned` 和内部范围，未经新授权不得公开二进制；
 - SmartScreen 仍提示：核对签名与发布者后如实记录，不通过自签名、更改证书或误导文案规避；

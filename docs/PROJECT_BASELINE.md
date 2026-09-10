@@ -12,8 +12,8 @@
 - **主要平台：** Windows 10 / Windows 11
 - **开发模式：** 个人开发者主导，AI Agent 辅助规划、编码、测试和维护
 
-平台目标不等于当前发布声明。Task 12 当前内部二进制验收只覆盖 Windows 10 x64；Windows 11 验收、
-可信签名和公开二进制发布均为未来可选工作。
+平台目标不等于当前发布声明。Task 12 当前内部二进制完成级别只包含 Windows 10 x64 理论兼容性；
+Windows 10 实机验证留到后续开发阶段，Windows 11 验收、可信签名和公开二进制发布均为未来可选工作。
 
 ### 1.1 命名含义
 
@@ -521,8 +521,9 @@ Windows x64 portable 与 per-user NSIS 内部产物。包使用 ASAR integrity �
 | 发布形式 | 安装包或便携包 |
 
 当前 Task 12 发布工程只把 Windows 10 x64 作为目标内部二进制基线，不宣称 Windows 11 已验收。
-WP8 发现当前验收宿主的内核 build 26200 实为 Windows 11，不能代替最终 Windows 10 证据；因此
-“Windows 10 x64 已验证”仍是目标基线，而不是当前最终发布结论。准确状态和保留项见
+WP8 发现当前验收宿主的内核 build 26200 实为 Windows 11；所有者于 2026-09-10 将 Windows 10 实机
+矩阵移到后续开发阶段，当前只要求理论兼容性审计。最终包的 PE、架构、Electron、NSIS、依赖和源码
+平台门禁审计均支持 Windows 10 x64，但不得表述为已经在 Windows 10 实机验证。准确状态见
 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md)。
 
 ### 9.2 文件和工作区规模
