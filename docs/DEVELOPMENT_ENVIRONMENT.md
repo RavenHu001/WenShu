@@ -51,6 +51,13 @@ scripts/                              引导脚本与固定环境命令入口
 .\scripts\npm.cmd run build
 ```
 
+当前固定工具链为 Node.js `22.15.0`、npm `10.9.2` 和 Electron `43.6.0`。干净 `npm ci`
+之后如果 Electron runtime 尚未落盘，在运行 E2E 或打包前执行：
+
+```powershell
+.\scripts\npm.cmd exec -- install-electron --no
+```
+
 包装器只修改自身及子进程的环境，不修改用户或系统 PATH。
 
 ## 更新 Node.js
@@ -132,6 +139,7 @@ Task 4 的 WP0 将这些项目作为首次写入能力实施前的强制门禁�
 ```powershell
 $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
 .\scripts\npm.cmd ci
+.\scripts\npm.cmd exec -- install-electron --no
 Remove-Item Env:ELECTRON_MIRROR
 ```
 
@@ -139,4 +147,22 @@ Remove-Item Env:ELECTRON_MIRROR
 
 ## 发布环境与开发环境的区别
 
-`.tools/` 只服务于源码开发和构建。未来生成的 Electron 安装包会携带应用运行所需的 Electron、Chromium 和 Node.js 组件，普通用户不需要安装或保留本地开发工具链。
+`.tools/` 只服务于源码开发和构建。Task 12 的内部 Electron 包携带应用运行所需的 Electron、
+Chromium 和 Node.js 组件，普通测试用户不需要安装或保留本地开发工具链。当前包没有自动更新源：
+builder 配置显式使用 `publish: null`，最终审计禁止 `resources/app-update.yml`。
+
+内部 Windows 产物的完整本地门禁为：
+
+```powershell
+.\scripts\npm.cmd run check
+.\scripts\npm.cmd run build
+.\scripts\npm.cmd run package:dir
+.\scripts\npm.cmd run package:win
+.\scripts\npm.cmd run package:verify -- --mode=win
+.\scripts\npm.cmd run test:e2e
+.\scripts\npm.cmd run release:manifest:unsigned
+.\scripts\npm.cmd run release:verify:unsigned
+```
+
+这些命令只构建和验证未签名内部产物，不授权 push、tag、签名或公开发布。最终 Windows 10 证据、
+远程 CI 和已知保留项以 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md) 为准。

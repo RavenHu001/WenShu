@@ -4,9 +4,13 @@ executableName: WenShu
 # v27 enables ASAR by default. Keep the object explicit so the integrity-producing
 # default is reviewable without using the removed `asar: true` sentinel.
 asar: {}
-# `electron@43.4.1` 的 postinstall 已下载同一 Windows x64 runtime；复用它可使干净 npm ci
+# `electron@43.6.0` 的 postinstall 已下载同一 Windows x64 runtime；复用它可使干净 npm ci
 # 后的打包不再额外下载一份 Electron，并避免环境镜像差异。
 electronDist: node_modules/electron/dist
+
+# 当前没有自动更新或二进制发布通道。显式禁用 publish/update feed，避免 builder
+# 从 Git remote 推断并把 app-update.yml 写入最终包；实际 Draft 演练由独立 workflow 的 gh CLI 完成。
+publish: null
 
 # Keep the audited official @electron/fuses afterPack hook as the single place that flips
 # fuses before any future Authenticode signing. The app still loads its renderer with loadFile().

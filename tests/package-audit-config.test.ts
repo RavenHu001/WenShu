@@ -20,6 +20,7 @@ describe('WP3 打包配置', () => {
     expect(config).toContain('output: release');
     expect(config).toContain('asar: {}');
     expect(config).toContain('electronDist: node_modules/electron/dist');
+    expect(config).toContain('publish: null');
     expect(config).toContain('out/main/**');
     expect(config).toContain('out/preload/**');
     expect(config).toContain('out/renderer/**');

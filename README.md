@@ -11,6 +11,10 @@
 - 内部 portable/NSIS 没有 Authenticode 发布者或时间戳。不要把内部 Draft 描述为受信任公开版本。
 - 第三方组件的版本、许可和需保留声明见 [THIRD_PARTY_NOTICES.txt](./THIRD_PARTY_NOTICES.txt)。
 
+WP8 已完成本地验收与报告，但 Task 12 仍有 10/33 项保留：最终工作树尚未形成固定提交，当前
+精确提交的远程 CI/attestation 状态不可取得，且最终 Electron 43.6.0 产物尚未在可证明为 Windows 10
+x64 的普通用户主机完成全矩阵复验。详情见 [TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)。
+
 ## 当前能力
 
 ### 可以体验
@@ -104,11 +108,11 @@
 在 Windows 项目根目录依次执行，任一步失败后先修复再继续：
 
 ```powershell
-npm ci
-npx install-electron --no
-npm run build
-npm run check
-npm run test:e2e
+.\scripts\npm.cmd ci
+.\scripts\npm.cmd exec -- install-electron --no
+.\scripts\npm.cmd run build
+.\scripts\npm.cmd run check
+.\scripts\npm.cmd run test:e2e
 ```
 
 Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`npm test` 和 `npm run check` 只运行普通测试；`npm run test:e2e` 单独运行 Electron 冒烟测试，需要已安装的 Electron 和最新的 `out/` 构建产物。
@@ -189,7 +193,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
 - [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
-- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP0–WP7 已完成；MIT 源码公开、Windows 10 x64 未签名二进制仅内部实验，WP8 待验收）。
+- [ ] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（WP8 已完成验收记录；23/33 项通过、10 项保留，尚未达到 Windows 10 x64 最终级别；见[完成报告](./docs/TASK_012_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
 
@@ -220,6 +224,8 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)
 - [TASK-011：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)
 - [TASK-011 WP0 报告](./docs/TASK_011_WP0_REPORT.md)
+- [TASK-012：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)
+- [TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)
 - [TASK-011 完成报告](./docs/TASK_011_COMPLETION_REPORT.md)
 - [TASK-012：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)
 - [TASK-012 开发执行提示词](./docs/TASK_012_DEVELOPMENT_PROMPT.md)
@@ -251,14 +257,14 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 
 ## 技术栈
 
-- Electron
+- Electron 43.6.0
 - React
 - TypeScript
 - CodeMirror 6（TXT 编辑器）
 - Tiptap / ProseMirror（DOCX 富文本编辑器）
 - Mammoth / JSZip / docx（DOCX 导入、ZIP 检查与基础导出）
 - Vite / electron-vite
-- Vitest + React Testing Library
+- Vitest + React Testing Library + Playwright Electron E2E
 - ESLint / Prettier
 
 ## 开发原则

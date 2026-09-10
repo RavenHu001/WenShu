@@ -1,6 +1,6 @@
 # 文枢测试指南
 
-本文档说明 Task 1 至 Task 11 的自动检查、Windows 桌面冒烟与人工验收。Task 11 在不改变 Task 1–10 文件/保存/搜索生命周期的前提下新增统一中文外壳、设计 token 与 SVG、可调/可折叠侧栏、文件树上下文菜单与键盘入口、同工作区内部拖拽、DOCX 连续居中画布、工具栏溢出、搜索结果层级和 toast。自动保存、文件系统监听与会话恢复仍不属于已有能力。Task 7–10 的详细既有清单继续保留在 3.5–3.8；Task 11 的桌面外壳、缩放、无障碍和视觉基线见 2.10 与 3.9，并以 [TASK-011 完成报告](./TASK_011_COMPLETION_REPORT.md) 为实际证据来源。
+本文档说明 Task 1 至 Task 12 的自动检查、Windows 桌面冒烟与人工验收。Task 11 在不改变 Task 1–10 文件/保存/搜索生命周期的前提下新增统一中文外壳、设计 token 与 SVG、可调/可折叠侧栏、文件树上下文菜单与键盘入口、同工作区内部拖拽、DOCX 连续居中画布、工具栏溢出、搜索结果层级和 toast。自动保存、文件系统监听与会话恢复仍不属于已有能力。Task 7–10 的详细既有清单继续保留在 3.5–3.8；Task 11 的桌面外壳、缩放、无障碍和视觉基线见 2.10 与 3.9。Task 12 的打包门禁与真实保留项见 2.11，并以 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md) 为最终证据来源。
 
 ## 1. 前置条件
 
@@ -196,6 +196,33 @@ Task 11 最终自动门禁除完整 Task 1–10 回归外，新增覆盖：
 文件操作未发现问题。
 
 最终数量、命令退出码与人工终验证据见 Task 11 完成报告；不得用截图或 CSS 静态断言替代关键交互行为测试。
+
+### 2.11 Task 12 WP8 验收结果
+
+2026-09-09 从干净基准和锁文件安装依赖后，Electron `43.6.0` 的最终普通测试为
+**73 个测试文件、1184 通过、10 条件跳过、0 失败**；typecheck、lint、format:check、test、
+check、build、package:dir、package:win、package:verify 与 Electron E2E 均实际通过。E2E 为
+1 个文件、4 个用例：启动/About、TXT 精确字节保存、DOCX 有效产物与备份、dirty 关闭取消。
+
+内部 Windows 包还必须执行：
+
+```powershell
+.\scripts\npm.cmd run package:dir
+.\scripts\npm.cmd run package:win
+.\scripts\npm.cmd run package:verify -- --mode=win
+.\scripts\npm.cmd run test:e2e
+.\scripts\npm.cmd run release:manifest:unsigned
+.\scripts\npm.cmd run release:verify:unsigned
+```
+
+`package:verify` 会读取完整 unpacked 树和 ASAR，拒绝源码、测试、日志、环境文件、凭据、
+userData、`app-update.yml` 与不在 ASAR 索引中的 unpacked 文件，并验证 x64、身份、运行依赖和产物
+命名。哈希必须在两个 EXE 均为 `NotSigned` 后生成并再次复验。
+
+WP8 当前不是 Task 12 完成绿灯：验收主机内核 build 26200 属于 Windows 11，不能代替 Windows 10；
+最终 43.6.0 包还缺 Windows 10 x64 普通用户安装/文档/Word/WPS 全矩阵，当前精确提交远程 CI 与
+attestation 状态也不可取得。不得引用 WP5 的旧构建或当前 Windows 11 自动冒烟来勾选这些项目。
+23/33 项通过与 10 项保留的逐项映射见 [TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md)。
 
 ## 3. 开发模式界面验收
 

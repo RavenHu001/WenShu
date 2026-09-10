@@ -20,7 +20,7 @@
 - 验证清单：必读材料；`check`/测试数量与条件跳过；`build`；开发与生产主窗口冒烟；
   临时工作区夹具实测（名称/大小写/rename/父目录/trash/reveal/空白 DOCX/保存复用点/
   标签身份/后代迁移/搜索失效）；审查 diff；结束前再次完整 `check`/`build`。
-- 将新增的最小夹具：临时目录 `C:\Users\24196\AppData\Local\Temp\wenshu-wp0\` 下的
+- 将新增的最小夹具：临时目录 `%LOCALAPPDATA%\Temp\wenshu-wp0\` 下的
   `fs-ws-*`、`case-ws-*`、`electron-ws-*` 真实文件系统/回收站夹具与两个 Node 探针脚本，
   以及一个跑完即删的 Vitest 技术探针（10 用例）；全部位于系统临时目录，不提交仓库。
 

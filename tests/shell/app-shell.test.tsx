@@ -120,13 +120,13 @@ describe('shell status and activity', () => {
   it('moves platform and Electron version into the About dialog', () => {
     render(
       <AboutDialog
-        runtime={{ platform: 'win32', electronVersion: '43.4.1', appVersion: '0.1.0-alpha.1' }}
+        runtime={{ platform: 'win32', electronVersion: '43.6.0', appVersion: '0.1.0-alpha.1' }}
         onClose={vi.fn()}
       />,
     );
     expect(screen.getByRole('dialog', { name: '关于文枢' })).toBeDefined();
     expect(screen.getByText('Windows')).toBeDefined();
-    expect(screen.getByText('43.4.1')).toBeDefined();
+    expect(screen.getByText('43.6.0')).toBeDefined();
     expect(screen.getAllByText('0.1.0-alpha.1')).toHaveLength(1);
     expect(screen.getByText('Alpha · 版本 0.1.0-alpha.1')).toBeDefined();
   });

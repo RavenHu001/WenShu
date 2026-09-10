@@ -2,7 +2,7 @@
 
 ## 任务状态
 
-> **状态：WP0–WP7 已完成，WP8 待执行。**
+> **状态：WP8 已完成验收记录；Task 12 尚有 10 项真实门禁保留，未达到最终发布级别。**
 >
 > 规划日期：2026-08-27；范围修订：2026-09-08。Task 1 至 Task 11 已完成产品核心闭环、安全文件写入、
 > Windows 人工终验和桌面外壳收尾。Task 12 当前公开交付物固定为 GitHub 上的 MIT 源码；Windows 10
@@ -572,21 +572,21 @@ Windows 11 支持声明：
 
 ### 11.1 运行时与回归
 
-- [ ] 最终产物使用发布时仍受 Electron 官方支持的精确稳定版；
-- [ ] Electron 迁移后 Task 1–11 全部自动测试、`check` 与 `build` 通过；
-- [ ] 开发、生产构建、unpacked、portable 与 NSIS 安装结果均可启动；
-- [ ] BrowserWindow、preload、IPC、权限、导航与 sandbox 安全基线无回退；
+- [x] 最终产物使用发布时仍受 Electron 官方支持的精确稳定版；
+- [x] Electron 迁移后 Task 1–11 全部自动测试、`check` 与 `build` 通过；
+- [x] 开发、生产构建、unpacked、portable 与 NSIS 安装结果均可启动；
+- [x] BrowserWindow、preload、IPC、权限、导航与 sandbox 安全基线无回退；
 - [ ] TXT/DOCX、备份、冲突、回收站、未保存保护和 WPS/Word 往返无回归。
 
 ### 11.2 身份、打包与产物
 
-- [ ] appId、productName、executable name、版本、About 和 EXE 一致；如使用标签/Draft，其 commit 与版本严格匹配；
-- [ ] 图标清晰、来源可追溯，在文件、任务栏、安装器和卸载入口中正确；
-- [ ] 可重复生成命名固定的 Windows x64 portable 和 NSIS 产物；
-- [ ] 产物包含完整运行依赖，不依赖源码仓库、`.tools/`、全局 Node.js 或 npm；
-- [ ] 包内容白名单自动验证，无源码目录、测试、日志、`.env`、凭据、隐私夹具或 userData；
-- [ ] ASAR、integrity 和所有固定 fuses 已从最终产物实际读取并验证；
-- [ ] 产物大小、文件组成、`app.asar.unpacked` 与依赖重复有审计记录。
+- [x] appId、productName、executable name、版本、About 和 EXE 一致；如使用标签/Draft，其 commit 与版本严格匹配；
+- [x] 图标清晰、来源可追溯，在文件、任务栏、安装器和卸载入口中正确；
+- [x] 可重复生成命名固定的 Windows x64 portable 和 NSIS 产物；
+- [x] 产物包含完整运行依赖，不依赖源码仓库、`.tools/`、全局 Node.js 或 npm；
+- [x] 包内容白名单自动验证，无源码目录、测试、日志、`.env`、凭据、隐私夹具或 userData；
+- [x] ASAR、integrity 和所有固定 fuses 已从最终产物实际读取并验证；
+- [x] 产物大小、文件组成、`app.asar.unpacked` 与依赖重复有审计记录。
 
 ### 11.3 安装、升级与卸载
 
@@ -600,23 +600,23 @@ Windows 11 支持声明：
 ### 11.4 CI、签名、哈希与发布
 
 - [ ] PR/push CI 从干净 checkout 运行 `npm ci`、`check`、`build` 和定义的 E2E；
-- [ ] PR/fork 无签名、Release write 或其他生产凭据权限；
-- [ ] release workflow 校验标签、版本和 commit，重新构建而不复用未知来源产物；
+- [x] PR/fork 无签名、Release write 或其他生产凭据权限；
+- [x] release workflow 校验标签、版本和 commit，重新构建而不复用未知来源产物；
 - [ ] 内部产物记录包含精确 commit、SHA-256、`NotSigned` 状态、系统要求、已知限制和验证说明；如使用 Draft，内容与精确标签一致；
-- [ ] portable/NSIS 均验证为 `NotSigned`，且没有可信发布者、时间戳或公开二进制声明；
-- [ ] SHA-256 在最终 `NotSigned` 状态确认后生成，并在后续复验中一致；
+- [x] portable/NSIS 均验证为 `NotSigned`，且没有可信发布者、时间戳或公开二进制声明；
+- [x] SHA-256 在最终 `NotSigned` 状态确认后生成，并在后续复验中一致；
 - [ ] 如条件支持 artifact attestation，其来源验证成功；如不支持，已记录真实原因；
-- [ ] 当前未创建或公开 Windows 二进制 Release；历史内部 Draft 未被错误更新或公开。
+- [x] 当前未创建或公开 Windows 二进制 Release；历史内部 Draft 未被错误更新或公开。
 
 ### 11.5 许可证、文档与质量
 
-- [ ] 项目自身许可证已由项目所有者选择并正确附带；
-- [ ] 第三方依赖、版本、许可证和 NOTICE 与锁文件/产物一致；
-- [ ] `README`、`PROJECT_BASELINE`、`DEVELOPMENT_ENVIRONMENT`、`TESTING`、`CHANGELOG`、`SECURITY` 与实际 Alpha 一致；
-- [ ] 不宣称未实现的自动更新、遥测、会话恢复、文件关联或多平台支持；
-- [ ] 无 `.only`、无新增无条件 `.skip`、无弱化断言、无超时掩盖、无凭据/隐私/绝对路径泄漏；
-- [ ] `TASK_012_WP0_REPORT.md` 与 `TASK_012_COMPLETION_REPORT.md` 包含可复核的命令、版本、产物、测试、Windows、签名与发布证据；
-- [ ] 最终结论使用“MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成”或记录真实阻塞，并明确没有公开 Alpha 二进制。
+- [x] 项目自身许可证已由项目所有者选择并正确附带；
+- [x] 第三方依赖、版本、许可证和 NOTICE 与锁文件/产物一致；
+- [x] `README`、`PROJECT_BASELINE`、`DEVELOPMENT_ENVIRONMENT`、`TESTING`、`CHANGELOG`、`SECURITY` 与实际 Alpha 一致；
+- [x] 不宣称未实现的自动更新、遥测、会话恢复、文件关联或多平台支持；
+- [x] 无 `.only`、无新增无条件 `.skip`、无弱化断言、无超时掩盖、无凭据/隐私/绝对路径泄漏；
+- [x] `TASK_012_WP0_REPORT.md` 与 `TASK_012_COMPLETION_REPORT.md` 包含可复核的命令、版本、产物、测试、Windows、签名与发布证据；
+- [x] 最终结论使用“MIT 源码发布准备完成；Windows 10 x64 未签名内部 Alpha 工程完成”或记录真实阻塞，并明确没有公开 Alpha 二进制。
 
 ## 十二、失败处理与决策规则
 

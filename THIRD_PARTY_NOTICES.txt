@@ -18,7 +18,7 @@ The WenShu project is licensed under the MIT License; see the packaged LICENSE f
 
 Packaged runtime
 ----------------
-Electron 43.4.1 | MIT | https://github.com/electron/electron
+Electron 43.6.0 | MIT | https://github.com/electron/electron
 Chromium and Electron bundled components | multiple licenses | LICENSES.chromium.html
 
 License summary

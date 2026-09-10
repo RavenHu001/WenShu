@@ -24,6 +24,14 @@ const forbiddenPathPatterns = [
   /(?:^|\/)(?:credentials?|passwords?|secrets?|private[-_]?key)(?:\.[^/]*)?$/i,
   /(?:^|\/)(?:access[-_]?token|api[-_]?key)(?:\.[^/]*)?$/i,
 ];
+const forbiddenUnpackedPathPatterns = [
+  /^resources\/app-update\.yml$/i,
+  /(?:^|\/)\.env(?:\..*)?$/i,
+  /(?:^|\/)(?:userData|userdata)(?:\/|$)/i,
+  /(?:^|\/)(?:credentials?|passwords?|secrets?|private[-_]?key)(?:\.[^/]*)?$/i,
+  /(?:^|\/)(?:access[-_]?token|api[-_]?key)(?:\.[^/]*)?$/i,
+  /(?:^|\/)[^/]*\.(?:pem|pfx|p12)$/i,
+];
 
 const fail = (message) => {
   throw new Error(`package audit failed: ${message}`);
@@ -171,6 +179,14 @@ assert(
 );
 
 const executablePath = resolve(unpackedDirectory, 'WenShu.exe');
+const unpackedFiles = await directoryFileList(unpackedDirectory);
+const forbiddenUnpackedPaths = unpackedFiles.filter((path) =>
+  forbiddenUnpackedPathPatterns.some((pattern) => pattern.test(path)),
+);
+assert(
+  forbiddenUnpackedPaths.length === 0,
+  `forbidden files outside app.asar: ${forbiddenUnpackedPaths.join(', ')}`,
+);
 await stat(resolve(unpackedDirectory, 'LICENSE.electron.txt'));
 await stat(resolve(unpackedDirectory, 'LICENSES.chromium.html'));
 const unpackedStat = await stat(unpackedDirectory);
@@ -194,6 +210,11 @@ try {
     throw error;
   }
 }
+const unindexedAsarUnpackedFiles = appAsarUnpackedFiles.filter((path) => !asarFiles.includes(path));
+assert(
+  unindexedAsarUnpackedFiles.length === 0,
+  `app.asar.unpacked contains files absent from the ASAR index: ${unindexedAsarUnpackedFiles.join(', ')}`,
+);
 
 const artifactPaths = {
   portable: resolve(releaseDirectory, 'WenShu-0.1.0-alpha.1-portable-x64.exe'),
@@ -236,6 +257,11 @@ const report = {
           .filter((packageName) => packagedNodeModules.includes(packageName)),
       ),
     ].sort(),
+    unindexedAsarUnpackedFiles,
+  },
+  unpackedFiles: {
+    count: unpackedFiles.length,
+    forbidden: forbiddenUnpackedPaths,
   },
 };
 

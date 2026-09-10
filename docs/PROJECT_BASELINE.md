@@ -494,12 +494,17 @@ Task 7 已由 Mammoth 负责语义导入（`mammoth.convertToHtml({buffer}, {tra
 |---|---|
 | Vitest | 单元测试 |
 | React Testing Library | React 组件和交互测试 |
-| Playwright | 后续 Electron 端到端测试 |
+| Playwright | Electron 端到端启动、TXT/DOCX 保存与关闭保护冒烟 |
 | ESLint | 静态代码检查 |
 | Prettier | 统一代码格式 |
 | electron-builder | Windows 安装包和便携版本 |
 | Git | 版本管理和修改恢复 |
 | GitHub | 可选的远程仓库、Issue 和版本发布 |
+
+Task 12 当前发布工程固定使用 Electron `43.6.0` 和 electron-builder `27.0.0-alpha.8`，生成
+Windows x64 portable 与 per-user NSIS 内部产物。包使用 ASAR integrity 和固定 Electron fuses，
+并通过完整 unpacked/ASAR 白名单、x64 PE、脱离源码启动、`NotSigned` 与 SHA-256 门禁。builder 的
+`publish` 显式禁用，因此应用没有更新 feed 或自动更新。当前没有公开 Windows 二进制发布授权。
 
 ## 9. 技术指标
 
@@ -512,10 +517,13 @@ Task 7 已由 Mammoth 负责语义导入（`mammoth.convertToHtml({buffer}, {tra
 | 应用形式 | 本地独立桌面应用 |
 | 用户模式 | 单用户 |
 | 基础网络依赖 | 无 |
-
-当前 Task 12 发布工程只将 Windows 10 x64 作为已验证内部二进制基线；不得据此宣称 Windows 11 已验收。
 | 工作区形式 | 本地单文件夹工作区 |
 | 发布形式 | 安装包或便携包 |
+
+当前 Task 12 发布工程只把 Windows 10 x64 作为目标内部二进制基线，不宣称 Windows 11 已验收。
+WP8 发现当前验收宿主的内核 build 26200 实为 Windows 11，不能代替最终 Windows 10 证据；因此
+“Windows 10 x64 已验证”仍是目标基线，而不是当前最终发布结论。准确状态和保留项见
+[TASK-012 完成报告](./TASK_012_COMPLETION_REPORT.md)。
 
 ### 9.2 文件和工作区规模
 

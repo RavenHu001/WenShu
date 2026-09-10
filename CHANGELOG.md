@@ -5,6 +5,13 @@ yet made a public binary release.
 
 ## [Unreleased]
 
+- Updated the supported Electron 43 line to exact patch `43.6.0`.
+- Explicitly disabled builder publish metadata and added full unpacked-tree checks so an inferred
+  `app-update.yml`, environment/credential material, userData, or unindexed ASAR-unpacked file
+  blocks packaging.
+- Completed the WP8 local build/package/E2E/unsigned/hash audit: 23 of 33 acceptance criteria have
+  evidence; 10 remain open because the final worktree is not a fixed commit, final Windows 10 and
+  Office/WPS evidence is missing, and current remote CI/attestation evidence is unavailable.
 - Selected the MIT License, copyright 2026 Jinxi Hu.
 - Public distribution is source-only through GitHub under MIT. Binary artifacts remain in an
   unsigned internal Draft; no Microsoft Store submission is planned.
