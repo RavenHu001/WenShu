@@ -718,27 +718,34 @@ describe('searchTextWorkspace 真实文件系统混合搜索（第 8.3 节）', 
     expect(result.files.map((f) => f.relativePath).sort()).toEqual(['plain.docx', 'readonly.docx']);
   });
 
-  it('标题、跨 run marks、列表与 emoji 在真实 DOCX 中命中', async () => {
-    for (const [query, expectedCount] of [
-      ['投影标题', 1],
-      ['粗体与斜体', 1],
-      ['嵌套项目', 1],
-      ['English', 1],
-      ['🎉', 1],
-    ] as const) {
+  // 每次查询都会重新读取、解压并导入真实 DOCX；独立查询分别计时，
+  // 避免多个完整工作区扫描累计耗尽单个用例的默认 5 秒预算。
+  it.each([
+    ['投影标题', 1],
+    ['粗体与斜体', 1],
+    ['嵌套项目', 1],
+    ['English', 1],
+    ['🎉', 1],
+  ] as const)(
+    '标题、跨 run marks、列表与 emoji 在真实 DOCX 中命中：%s',
+    async (query, expectedCount) => {
       const result = completedFiles(await searchTextWorkspace(ws, request(query, false)));
       const proj = result.files.find((f) => f.relativePath === 'proj.docx');
       expect(proj, `查询 ${query}`).toBeDefined();
       expect(proj!.matches).toHaveLength(expectedCount);
-    }
-  });
+    },
+  );
 
-  it('不搜索未进入模型的内容：表格单元格文字不命中，模型内正文命中', async () => {
-    const noMatch = completedFiles(await searchTextWorkspace(ws, request('单元格')));
-    expect(noMatch.files).toEqual([]);
-    const hit = completedFiles(await searchTextWorkspace(ws, request('表格后的正文')));
-    expect(hit.files.map((f) => f.relativePath)).toEqual(['table.docx']);
-  });
+  it.each([
+    ['单元格', []],
+    ['表格后的正文', ['table.docx']],
+  ] as const)(
+    '不搜索未进入模型的内容：表格单元格文字不命中，模型内正文命中：%s',
+    async (query, expectedPaths) => {
+      const result = completedFiles(await searchTextWorkspace(ws, request(query)));
+      expect(result.files.map((f) => f.relativePath)).toEqual(expectedPaths);
+    },
+  );
 
   it('0 字节 DOCX 占位：无匹配、不报错、不计跳过', async () => {
     const result = completedFiles(await searchTextWorkspace(ws, request('zzzz')));
