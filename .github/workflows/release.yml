@@ -88,10 +88,34 @@ jobs:
 
       - name: Stage release documentation
         shell: pwsh
+        env:
+          RELEASE_COMMIT: ${{ steps.release-metadata.outputs.commit }}
         run: |
           Copy-Item -LiteralPath 'LICENSE' -Destination 'release/LICENSE'
           Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.txt' -Destination 'release/THIRD_PARTY_NOTICES.txt'
-          Copy-Item -LiteralPath 'docs/releases/v0.1.0-alpha.1.md' -Destination 'release/ALPHA_RELEASE_NOTES.md'
+          if ($env:RELEASE_COMMIT -notmatch '^[0-9a-f]{40}$') { throw 'Invalid release commit.' }
+          $root = (Resolve-Path -LiteralPath '.').Path
+          $rootPrefix = $root.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+          $source = (Resolve-Path -LiteralPath 'docs/releases/v0.1.0-alpha.1.md').Path
+          $sourceDirectory = Split-Path -Parent $source
+          $blobBase = "$($env:GITHUB_SERVER_URL.TrimEnd('/'))/$env:GITHUB_REPOSITORY/blob/$env:RELEASE_COMMIT/"
+          # Release bodies and downloaded notes do not retain the source document's directory.
+          $notes = [regex]::Replace((Get-Content -Raw -LiteralPath $source), '\]\((?<target>[^)\r\n]+)\)', {
+            param($link)
+            $target = $link.Groups['target'].Value
+            if ($target -match '^(?:[a-z][a-z0-9+.-]*:|//|#)') { return $link.Value }
+            $parts = [regex]::Match($target, '^(?<path>[^?#]+)(?<suffix>[?#].*)?$')
+            if (-not $parts.Success) { throw "Unsupported documentation link: $target" }
+            $path = [IO.Path]::GetFullPath((Join-Path $sourceDirectory ([Uri]::UnescapeDataString($parts.Groups['path'].Value))))
+            if (-not $path.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+                -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Documentation link must point to a file in this checkout: $target"
+            }
+            $relativePath = [IO.Path]::GetRelativePath($root, $path).Replace('\', '/')
+            $encodedPath = (($relativePath -split '/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
+            return '](' + $blobBase + $encodedPath + $parts.Groups['suffix'].Value + ')'
+          })
+          Set-Content -LiteralPath 'release/ALPHA_RELEASE_NOTES.md' -Value $notes -NoNewline -Encoding utf8
 
       # actions/attest@v4.1.1 (GitHub; optional provenance when the repository plan supports it)
       - name: Attest release artifacts when enabled

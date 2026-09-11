@@ -205,7 +205,7 @@ async function clickMatch(index: number): Promise<void> {
  * 注意：提交只用 fireEvent（change + Enter + form submit），不使用 user-event 键盘输入——
  * React 19.1 的 act 与 user-event 的 document 捕获级 dispatch 在编辑器聚焦夺走输入框焦点
  * 时存在 flush 碰撞，会产生"component suspended inside an act scope"一次性警告
- * （TASK-007 WP0 归因，见 docs/TASK_007_WP0_REPORT.md）。本文件的主题是结果定位，
+ * （TASK-007 WP0 归因，见 docs/tasks/task-007/TASK_007_WP0_REPORT.md）。本文件的主题是结果定位，
  * 键入路径已在 tests/search/search-sidebar.test.tsx 用 user-event 覆盖。
  */
 async function submitSearch(query: string): Promise<void> {

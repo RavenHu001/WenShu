@@ -37,7 +37,7 @@ function errno(code: string): NodeJS.ErrnoException {
 }
 
 /**
- * 有界符号链接探测（DEVELOPMENT_ENVIRONMENT.md"symlink/junction 探测卡住"处置）：
+ * 有界符号链接探测（docs/development/DEVELOPMENT_ENVIRONMENT.md"symlink/junction 探测卡住"处置）：
  * 受控环境可能因权限或安全软件使 `fs.symlink` 长时间阻塞后才失败；探测只在有限时间内等待，
  * 超时按"环境不支持符号链接"处理，只跳过真实链接用例，mock 拒绝分支继续确定性覆盖。
  */

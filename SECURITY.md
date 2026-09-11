@@ -1,5 +1,8 @@
 # Security Policy
 
+[Project overview](./README.en.md) · [Documentation](./docs/README.en.md) ·
+[Release notes](./docs/releases/README.en.md)
+
 ## Supported versions
 
 WenShu `0.1.0-alpha.1` is an internal, unsigned Alpha. It is intended only for controlled testing;
@@ -40,4 +43,4 @@ Windows 10 validation is explicitly deferred and must not be claimed as complete
 also confirmed that this private repository uses GitHub Free, under which private-repository artifact
 attestations are unavailable. The artifacts remain internal and unsigned. Do not publish or
 redistribute them as a supported public Alpha. See
-`docs/TASK_012_COMPLETION_REPORT.md`.
+[Task 12 completion report](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.en.md).

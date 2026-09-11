@@ -1,5 +1,8 @@
 # Changelog
 
+[Project overview](./README.en.md) · [Documentation](./docs/README.en.md) ·
+[Release notes](./docs/releases/README.en.md)
+
 All notable changes to WenShu are recorded here. The project is licensed under MIT and has not
 yet made a public binary release.
 

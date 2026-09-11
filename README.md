@@ -1,11 +1,14 @@
 # 文枢（WenShu）
 
+[简体中文](./README.md) | [English](./README.en.md)
+
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
 > **当前阶段：Task 12 内部 Alpha 发布工程。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
 
 ## 发布与许可
 
+- 发布说明与发布范围见[发布文档](./docs/releases/README.md)；分类开发资料见[文档中心](./docs/README.md)。
 - 项目代码采用 [MIT License](./LICENSE)，Copyright 2026 Jinxi Hu。
 - 当前公开范围仅为 GitHub 源码；没有公开二进制 Pre-release，也没有自动更新。
 - 内部 portable/NSIS 没有 Authenticode 发布者或时间戳。不要把内部 Draft 描述为受信任公开版本。
@@ -16,7 +19,7 @@ WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Wi
 相应实机环境，Windows 10 实机验证留到后续开发阶段，本结论不宣称已经实机验证。当前精确产品提交
 `98b05b4` 的 main push CI 已通过；私有仓库使用 GitHub Free，故 artifact attestation 不受支持且真实
 原因已记录。详情见
-[TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)。
+[TASK-012 完成报告](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.md)。
 
 ## 当前能力
 
@@ -46,7 +49,7 @@ WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Wi
 - 关闭未保存标签前会得到"放弃修改/取消"确认，`Ctrl+W` 与关闭按钮走同一流程；有未保存修改时切换工作区或关闭窗口会显示包含未保存标签数量的聚合确认；
 - 正在保存的标签不会被关闭标签、切换工作区或关闭窗口等操作丢弃，会提示等待保存完成；
 - 读取期间显示加载状态；读取失败、文件过大或编码非法时显示可恢复的错误提示，且不影响其他标签；
-- 通过受控 preload API 在状态栏读取平台和 Electron 版本信息；
+- 通过受控 preload API 获取平台和 Electron 版本信息，并在“关于文枢”中查看；
 - 在活动 TXT 标签中按 `Ctrl+F` 打开查找面板、`Ctrl+H` 打开替换面板：普通文字查询、大小写选项、上一个/下一个、替换当前项与全部替换；替换进入撤销历史并正常产生 dirty 与显式保存；查找不修改正文、不制造 dirty；查找面板、查询、选区与历史按标签隔离；
 - 在活动 DOCX 标签中按 `Ctrl+F` / `Ctrl+H` 打开与 TXT 共用的“查找与替换”面板：在实时未保存的 ProseMirror 正文中即时搜索（段落、标题、跨 marks run、列表、中文、emoji），普通/当前匹配双 class 高亮，上一个/下一个循环导航、计数与“匹配超过 2000 处”截断提示；查找、导航与关闭面板不修改正文、不 dirty、不进撤销历史，关闭后恢复编辑器焦点；
 - 对可编辑 DOCX 替换当前项或全部替换：执行瞬间重新扫描并复验实时范围，非空替换继承匹配起点字符的格式（跨不同 marks run 时只取起点 marks），全部替换最多 2000 项、从文档末到开头写入同一 transaction、一次撤销/重做完整恢复，dispatch 前对候选模型做结构与序列化预算验证（任一失败 0 dispatch、0 dirty）；替换进入 dirty 与既有保存流程（revision 冲突、滚动备份与安全替换不变），不自动保存；
@@ -140,7 +143,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 .\scripts\dev.cmd
 ```
 
-本地 Node.js 安装在被 Git 忽略的 `.tools/` 中，不会修改系统 PATH 或 PowerShell 执行策略。网络受限环境的镜像配置和故障处理参见[开发环境说明](./docs/DEVELOPMENT_ENVIRONMENT.md)。
+本地 Node.js 安装在被 Git 忽略的 `.tools/` 中，不会修改系统 PATH 或 PowerShell 执行策略。网络受限环境的镜像配置和故障处理参见[开发环境说明](./docs/development/DEVELOPMENT_ENVIRONMENT.md)。
 
 ## 使用与验证
 
@@ -168,7 +171,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 .\scripts\npm.cmd run build
 ```
 
-完整的自动检查、手动界面验收和生产构建验证步骤见[测试指南](./docs/TESTING.md)。
+完整的自动检查、手动界面验收和生产构建验证步骤见[测试指南](./docs/development/TESTING.md)。
 
 ## 常用命令
 
@@ -187,59 +190,45 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 ## Roadmap
 
 - [x] Task 1：建立可运行、可测试的桌面应用工程骨架；
-- [x] [Task 2：工作区目录选择与只读文件树](./docs/TASK_002_WORKSPACE_READONLY.md)；
-- [x] [Task 3：UTF-8 TXT 受控读取与单只读标签页](./docs/TASK_003_TXT_READONLY.md)；
-- [x] [Task 4：单 TXT 基础编辑与安全保存](./docs/TASK_004_TXT_EDIT_SAFE_SAVE.md)；
-- [x] [Task 5：多 TXT 标签页与独立编辑会话](./docs/TASK_005_MULTI_TXT_TABS.md)；
-- [x] [Task 6：工作区 TXT 搜索与当前文件查找替换](./docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md)；
-- [x] [Task 7：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)（已完成，见 [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)）。
-- [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)）。
-- [x] [Task 9：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)）。
-- [x] [Task 10：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)）。
-- [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/TASK_011_COMPLETION_REPORT.md)）。
-- [x] [Task 12：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/TASK_012_COMPLETION_REPORT.md)）。
+- [x] [Task 2：工作区目录选择与只读文件树](./docs/tasks/task-002/TASK_002_WORKSPACE_READONLY.md)；
+- [x] [Task 3：UTF-8 TXT 受控读取与单只读标签页](./docs/tasks/task-003/TASK_003_TXT_READONLY.md)；
+- [x] [Task 4：单 TXT 基础编辑与安全保存](./docs/tasks/task-004/TASK_004_TXT_EDIT_SAFE_SAVE.md)；
+- [x] [Task 5：多 TXT 标签页与独立编辑会话](./docs/tasks/task-005/TASK_005_MULTI_TXT_TABS.md)；
+- [x] [Task 6：工作区 TXT 搜索与当前文件查找替换](./docs/tasks/task-006/TASK_006_TXT_SEARCH_FIND_REPLACE.md)；
+- [x] [Task 7：基础 DOCX 阅读、编辑与安全保存](./docs/tasks/task-007/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)（已完成，见 [TASK-007 完成报告](./docs/tasks/task-007/TASK_007_COMPLETION_REPORT.md)）。
+- [x] [Task 8：工作区 DOCX 正文搜索与富文本结果定位](./docs/tasks/task-008/TASK_008_DOCX_WORKSPACE_SEARCH.md)（已完成，见 [TASK-008 完成报告](./docs/tasks/task-008/TASK_008_COMPLETION_REPORT.md)）。
+- [x] [Task 9：基础文件管理闭环](./docs/tasks/task-009/TASK_009_BASIC_FILE_MANAGEMENT.md)（已完成，见 [TASK-009 完成报告](./docs/tasks/task-009/TASK_009_COMPLETION_REPORT.md)）。
+- [x] [Task 10：当前 DOCX 内查找与替换](./docs/tasks/task-010/TASK_010_DOCX_FIND_REPLACE.md)（已完成，见 [TASK-010 完成报告](./docs/tasks/task-010/TASK_010_COMPLETION_REPORT.md)）。
+- [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.md)）。
+- [x] [Task 12：Windows Alpha 发布工程](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.md)）。
 
-具体范围与技术约束以任务文档和[项目技术基线](./docs/PROJECT_BASELINE.md)为准。
+具体范围与技术约束以任务文档和[项目技术基线](./docs/architecture/PROJECT_BASELINE.md)为准。
 
 ## 文档
 
-- [项目定义与技术基线](./docs/PROJECT_BASELINE.md)
-- [开发环境说明](./docs/DEVELOPMENT_ENVIRONMENT.md)
-- [测试指南](./docs/TESTING.md)
-- [TASK-001：桌面应用工程骨架](./docs/TASK_001_PROJECT_BOOTSTRAP.md)
-- [TASK-001 完成报告](./docs/TASK_001_COMPLETION_REPORT.md)
-- [TASK-002：工作区目录选择与只读文件树](./docs/TASK_002_WORKSPACE_READONLY.md)
-- [TASK-002 完成报告](./docs/TASK_002_COMPLETION_REPORT.md)
-- [TASK-003：UTF-8 TXT 受控读取与单只读标签页](./docs/TASK_003_TXT_READONLY.md)
-- [TASK-003 完成报告](./docs/TASK_003_COMPLETION_REPORT.md)
-- [TASK-004：单 TXT 基础编辑与安全保存](./docs/TASK_004_TXT_EDIT_SAFE_SAVE.md)
-- [TASK-004 完成报告](./docs/TASK_004_COMPLETION_REPORT.md)
-- [TASK-005：多 TXT 标签页与独立编辑会话](./docs/TASK_005_MULTI_TXT_TABS.md)
-- [TASK-005 完成报告](./docs/TASK_005_COMPLETION_REPORT.md)
-- [TASK-006：工作区 TXT 搜索与当前文件查找替换](./docs/TASK_006_TXT_SEARCH_FIND_REPLACE.md)
-- [TASK-006 完成报告](./docs/TASK_006_COMPLETION_REPORT.md)
-- [TASK-007：基础 DOCX 阅读、编辑与安全保存](./docs/TASK_007_DOCX_BASIC_EDIT_SAFE_SAVE.md)
-- [TASK-007 完成报告](./docs/TASK_007_COMPLETION_REPORT.md)
-- [TASK-008：工作区 DOCX 正文搜索与富文本结果定位](./docs/TASK_008_DOCX_WORKSPACE_SEARCH.md)
-- [TASK-008 完成报告](./docs/TASK_008_COMPLETION_REPORT.md)
-- [TASK-009：基础文件管理闭环](./docs/TASK_009_BASIC_FILE_MANAGEMENT.md)
-- [TASK-009 完成报告](./docs/TASK_009_COMPLETION_REPORT.md)
-- [TASK-010：当前 DOCX 内查找与替换](./docs/TASK_010_DOCX_FIND_REPLACE.md)
-- [TASK-010 完成报告](./docs/TASK_010_COMPLETION_REPORT.md)
-- [TASK-011：桌面应用外壳、信息架构与编辑体验重构](./docs/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)
-- [TASK-011 WP0 报告](./docs/TASK_011_WP0_REPORT.md)
-- [TASK-012：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)
-- [TASK-012 完成报告](./docs/TASK_012_COMPLETION_REPORT.md)
-- [TASK-011 完成报告](./docs/TASK_011_COMPLETION_REPORT.md)
-- [TASK-012：Windows Alpha 发布工程](./docs/TASK_012_WINDOWS_ALPHA_RELEASE.md)
-- [TASK-012 开发执行提示词](./docs/TASK_012_DEVELOPMENT_PROMPT.md)
-- [未来 UI 优化计划](./docs/FUTURE_UI_OPTIMIZATION_PLAN.md)
+[文档中心](./docs/README.md)提供完整分类导航；[English documentation index](./docs/README.en.md)提供英文入口。任务规范、开发记录和验收报告均提供中英文版本。
+
+| 分类       | 入口                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------- |
+| 发布与版本 | [发布文档](./docs/releases/README.md) · [v0.1.0-alpha.1 发布说明](./docs/releases/v0.1.0-alpha.1.md)      |
+| 开发与验证 | [开发环境说明](./docs/development/DEVELOPMENT_ENVIRONMENT.md) · [测试指南](./docs/development/TESTING.md) |
+| 架构与约束 | [项目定义与技术基线](./docs/architecture/PROJECT_BASELINE.md)                                             |
+| 任务档案   | [任务索引：规范、执行记录与完成报告](./docs/tasks/README.md)                                              |
+| 规划与设计 | [UI 优化计划（已由 Task 11 实施）](./docs/plans/FUTURE_UI_OPTIMIZATION_PLAN.md)                           |
 
 ## 项目结构
 
 ```text
 .
-├─ docs/                  项目基线、任务记录和开发说明
+├─ docs/
+│  ├─ README.md           中文文档中心
+│  ├─ README.en.md        英文文档中心
+│  ├─ releases/           中英文发布索引与发布说明
+│  ├─ development/        开发环境与测试指南
+│  ├─ architecture/       项目定义与技术基线
+│  ├─ tasks/              任务索引及按 task-NNN 分类的任务档案
+│  ├─ plans/              设计计划与实施记录
+│  └─ visual-baselines/   界面视觉基线截图
 ├─ scripts/               本地工具链及开发命令包装器
 ├─ src/
 │  ├─ main/
@@ -256,7 +245,8 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 │  │  └─ styles/          tokens/common/shell/workspace/document/search 分层样式
 │  └─ shared/             跨进程共享的纯类型契约（含 DOCX 结构化中间模型、规范正文投影、文件管理契约与纯转换）
 ├─ tests/                  单元测试与组件行为测试
-└─ README.md               项目入口与快速使用说明
+├─ README.md               中文项目入口与快速使用说明
+└─ README.en.md            英文项目入口与快速使用说明
 ```
 
 ## 技术栈
@@ -277,4 +267,4 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - 渲染进程不直接拥有 Node.js 或文件系统权限，桌面能力通过受控接口逐项提供；
 - 先保证简单、稳定和可运行，再扩展文件类型、编辑能力与 AI 功能。
 
-完整设计原则见[项目技术基线](./docs/PROJECT_BASELINE.md)。当前项目处于个人开发阶段，暂未建立外部贡献、用户支持或正式发布流程。
+完整设计原则见[项目技术基线](./docs/architecture/PROJECT_BASELINE.md)。当前项目处于个人开发阶段，暂未建立外部贡献、用户支持或正式发布流程。
