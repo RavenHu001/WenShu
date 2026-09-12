@@ -8,6 +8,8 @@
 > This task defines the product scope, implementation approach, and work packages requested by the owner, prioritizing a simple design and minimizing unnecessary writes to the C drive.
 > This is not an implementation completion report and does not change Task 12's boundary between internal binaries and public source releases.
 
+Use the [full-task execution prompt](./TASK_013_DEVELOPMENT_PROMPT.en.md) or copy an individual [WP0–WP5 work-package prompt](./TASK_013_WORK_PACKAGE_PROMPTS.en.md). Both follow the scope and behavior defined in this plan.
+
 ## 1. Goals and Scope
 
 Let users continue their previous file work when they next start WenShu and adjust basic display preferences. Keep settings and restoration records in one explicit data directory, together with Electron runtime data whose location the application can configure.
