@@ -12,6 +12,7 @@
 - Run automated checks, manual acceptance, and production-build verification: [testing guide](./development/TESTING.en.md).
 - Understand product scope, architecture, and security constraints: [project definition and technical baseline](./architecture/PROJECT_BASELINE.en.md).
 - Trace feature planning, implementation, and acceptance: [task archive index](./tasks/README.en.md).
+- Next planned stage: [Task 13: basic settings and startup restore](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md), including data-directory policy, implementation design, and work packages.
 
 ## Categories
 

@@ -202,6 +202,8 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.md)）。
 - [x] [Task 12：Windows Alpha 发布工程](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.md)）。
 
+- [ ] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（规划完成，待实施；包含减少非必要 C 盘写入的数据目录策略、实现方式与工作包）。
+
 具体范围与技术约束以任务文档和[项目技术基线](./docs/architecture/PROJECT_BASELINE.md)为准。
 
 ## 文档

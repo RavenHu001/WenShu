@@ -12,6 +12,7 @@
 - 执行自动检查、手工验收和生产构建验证：[测试指南](./development/TESTING.md)。
 - 理解产品范围、架构和安全约束：[项目定义与技术基线](./architecture/PROJECT_BASELINE.md)。
 - 追溯具体功能的规划、实施和验收：[任务档案索引](./tasks/README.md)。
+- 下一阶段待实施：[Task 13：基础设置与启动恢复](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)，包含数据目录策略、实现方式与工作包。
 
 ## 文档分类
 
