@@ -213,6 +213,15 @@ Internal Windows packages also require:
 
 All 33/33 current-scope WP8 items are closed. The acceptance host's kernel build 26200 is Windows 11 and cannot represent actual Windows 10 testing. On 2026-09-10 the owner deferred physical Windows 10 x64 validation to a later development stage, requiring only theoretical compatibility auditing now. Final 43.6.0 portable/NSIS checks of PE, architecture, Electron, NSIS, dependencies, and source-platform gates support Windows 10 x64. Installation/over-installation/uninstallation, paths, external workspace preservation, residue, security-product behavior, and existing Word/WPS document lifecycle acceptance have no known issues. The private repository uses GitHub Free; artifact attestation is unsupported and the actual reason is recorded. Main-push CI passed for exact product commit `98b05b4`. Theoretical auditing must not be described as physical Windows 10 testing. See the item-by-item mapping in the [TASK-012 completion report](../tasks/task-012/TASK_012_COMPLETION_REPORT.en.md).
 
+### 2.12 Task 13 WP0 baseline and startup probe
+
+2026-09-20: after correcting lint/format scanning of Git-ignored tool directories, sequential
+check/build passed: 73 files, 1189 passed, 10 existing conditional skips; Electron E2E also passed
+4/4. The isolated WP0 probe retained sandboxing and exercised pre-ready paths, native first
+selection/relaunch, same-root locking, portable launcher location, and separate NSIS uninstall.
+Commands, isolation, and remaining conditions are in the [Task 13 handoff](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
+This closes WP0 only, not product settings/restore; existing E2E no-sandbox arguments are not platform-security evidence.
+
 ## 3. Development-mode UI acceptance
 
 Start the application:

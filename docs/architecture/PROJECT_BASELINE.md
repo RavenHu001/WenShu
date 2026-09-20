@@ -490,6 +490,10 @@ Task 7 已由 Mammoth 负责语义导入（`mammoth.convertToHtml({buffer}, {tra
 | Context Bridge | 向界面暴露受限桌面 API |
 | electron-store | 设置、最近工作区和窗口状态持久化 |
 
+上表 electron-store 是原技术建议，当前未安装。Task 13 已固定使用 Node.js 文件 API 与两个版本化
+JSON（settings/state），不新增存储依赖；目前仅 WP0 基线与启动验证完成，产品持久化未实现，见
+[Task 13 交接报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md)。
+
 初期不使用 SQLite。只有在未来需要大规模全文索引、文档关系、历史版本或 Agent 日志时再评估引入。
 
 ### 8.6 测试、质量与发布

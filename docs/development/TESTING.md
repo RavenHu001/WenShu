@@ -232,6 +232,14 @@ WP8 当前范围的 33/33 项均已关闭。验收主机内核 build 26200 属�
 映射见
 [TASK-012 完成报告](../tasks/task-012/TASK_012_COMPLETION_REPORT.md)。
 
+### 2.12 Task 13 WP0 基线与启动探针
+
+2026-09-20：修正 lint/format 对 Git 已忽略工具目录的误扫描后，顺序运行 check/build 均通过：
+73 文件、1189 通过、10 既有条件跳过；另外 Electron E2E 4/4 通过。WP0 独立探针保持 sandbox，
+实测 ready 前路径、原生首次选择→重启、同根单实例、portable 启动器位置与独立 NSIS 卸载边界。
+命令、隔离目录及剩余条件见 [Task 13 交接报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md)。
+本结果只关闭 WP0，不表示设置/恢复产品功能完成；现有 E2E 的 no-sandbox 参数不作为平台安全证据。
+
 ## 3. 开发模式界面验收
 
 启动应用：

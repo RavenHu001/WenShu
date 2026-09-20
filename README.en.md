@@ -196,7 +196,7 @@ Production build output is written to `out/`. Internal Windows packaging and aud
 - [x] [Task 11: desktop shell, information architecture, and editing experience rework](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.en.md). Implementation, automated quality gates, and final manual Windows acceptance all passed; see the [completion report](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.en.md).
 - [x] [Task 12: Windows Alpha release engineering](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.en.md). All 33/33 items in the current scope passed. MIT source publication preparation and unsigned Windows 10 x64 internal Alpha engineering are complete. Actual-machine validation is deferred to a later development phase; see the [completion report](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.en.md).
 
-- [ ] [Task 13: basic settings and startup restore](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). Planning is complete; implementation is pending. The plan covers data directories that reduce unnecessary C-drive writes, implementation design, and work packages.
+- [ ] [Task 13: basic settings and startup restore](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). In progress: WP0 baseline and real startup verification complete; WP1 not started, product settings/restore not delivered. See the [handoff report](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
 
 The task documents and [project technical baseline](./docs/architecture/PROJECT_BASELINE.en.md) define the detailed scope and technical constraints. These development records are available in Chinese and English.
 

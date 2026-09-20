@@ -4,7 +4,7 @@
 
 [Task archive](../README.en.md) · [Documentation hub](../../README.en.md)
 
-> **Status: planning complete; not yet implemented.** Planning date: 2026-09-12.
+> **Status: in progress; WP0 complete, WP1–WP5 not implemented.** Planning date: 2026-09-12. See the [completion report](./TASK_013_COMPLETION_REPORT.en.md) for the 2026-09-20 baseline, real startup evidence, and handoff.
 > This task defines the product scope, implementation approach, and work packages requested by the owner, prioritizing a simple design and minimizing unnecessary writes to the C drive.
 > This is not an implementation completion report and does not change Task 12's boundary between internal binaries and public source releases.
 
@@ -195,4 +195,4 @@ Dependency order: **WP0 → WP1 → WP2/WP3 → WP4 → WP5**. WP2 and WP3 may p
 - [electron-builder portable documentation](https://www.electron.build/docs/nsis/#portable): verify the actual launcher location together with the pinned dependency's `portable.nsi`. Follow the current template; do not assume that portable packaging automatically makes application data portable.
 - [electron-builder NSIS configuration](https://www.electron.build/docs/nsis/): verify data retention against the current `electron-builder.yml` and the pinned dependency's uninstall template.
 
-This planning work reviewed source, existing records, and official references only. It did not implement product changes or newly claim that automated/manual acceptance checks passed.
+The original plan reviewed source, existing records, and official references only. Subsequent WP0 verification is recorded separately in the completion report; it does not imply product-feature or full-task acceptance.

@@ -489,6 +489,11 @@ In Task 7, Mammoth handles semantic import through the document tree from `mammo
 | Context Bridge          | Expose restricted desktop APIs to the UI              |
 | electron-store          | Persist settings, recent workspaces, and window state |
 
+The electron-store row is an original technology suggestion; it is not installed. Task 13 fixes
+Node.js file APIs and two versioned JSON files (settings/state), with no new storage dependency.
+Only WP0 baseline/startup verification is complete; product persistence is not implemented. See
+the [Task 13 handoff](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
+
 Do not use SQLite initially. Reevaluate it only if future requirements include large full-text indexes, document relationships, historical versions, or Agent logs.
 
 ### 8.6 Testing, quality, and releases

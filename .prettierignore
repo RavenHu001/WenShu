@@ -1,4 +1,7 @@
 node_modules/
+.tools/
+.local-data/
+release/
 out/
 dist/
 coverage/
