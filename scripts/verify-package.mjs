@@ -15,6 +15,8 @@ const appAsarUnpackedDirectory = resolve(resourcesDirectory, 'app.asar.unpacked'
 const expectedExternalDependencies = ['docx', 'jszip', 'mammoth'];
 const unexpectedRendererPackages = ['@codemirror', '@tiptap', 'prosemirror-', 'react', 'react-dom'];
 const forbiddenPathPatterns = [
+  /(?:^|\/)(?:\.local-data|WenShuData)(?:\/|$)/i,
+  /^(?:settings|state|bootstrap)\.json$/i,
   /^(?:\.git|\.github|\.tools|docs|scripts|src|tests)(?:\/|$)/i,
   /^out\/\.capture-user-data(?:\/|$)/i,
   /(?:^|\/)\.env(?:\..*)?$/i,
@@ -25,6 +27,7 @@ const forbiddenPathPatterns = [
   /(?:^|\/)(?:access[-_]?token|api[-_]?key)(?:\.[^/]*)?$/i,
 ];
 const forbiddenUnpackedPathPatterns = [
+  /(?:^|\/)(?:\.local-data|WenShuData)(?:\/|$)/i,
   /^resources\/app-update\.yml$/i,
   /(?:^|\/)\.env(?:\..*)?$/i,
   /(?:^|\/)(?:userData|userdata)(?:\/|$)/i,

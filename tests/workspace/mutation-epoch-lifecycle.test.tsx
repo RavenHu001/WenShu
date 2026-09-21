@@ -106,6 +106,7 @@ function makeDesktopMock(): DesktopMock {
   const cancelTextWorkspace = vi.fn(async () => undefined);
   const open = vi.fn(async (): Promise<OpenWorkspaceResult> => ({
     status: 'selected',
+    workspaceSessionId: '00000000-0000-4000-8000-000000000001',
     workspace: snapshot([f('a.txt', 'a.txt'), f('note.bin', 'note.bin'), f('b.docx', 'b.docx')]),
   }));
   const refresh = vi.fn(async (): Promise<RefreshWorkspaceResult> => ({

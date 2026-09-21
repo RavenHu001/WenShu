@@ -20,7 +20,14 @@
 
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { scanWorkspace } from './scan-workspace';
-import { getCurrentWorkspaceRoot, setCurrentWorkspaceRoot } from './workspace-session';
+import {
+  beginWorkspaceOpen,
+  getCurrentWorkspaceRoot,
+  isCurrentWorkspaceOpen,
+  setCurrentWorkspaceRoot,
+} from './workspace-session';
+import { ordinaryDirectory } from '../app-state/app-state-files';
+import { isDataPath } from '../app-state/data-directory';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -56,6 +63,7 @@ export function registerWorkspaceIpc(): void {
   // 打开原生目录选择器，用户选中后扫描并更新当前工作区。
   // 不接受渲染进程传入的任何路径参数。
   ipcMain.handle('workspace:open', async (event): Promise<OpenWorkspaceResult> => {
+    const generation = beginWorkspaceOpen();
     try {
       const win = BrowserWindow.fromWebContents(event.sender);
       const dialogResult = win
@@ -72,11 +80,13 @@ export function registerWorkspaceIpc(): void {
         return { status: 'cancelled' };
       }
 
-      const rootPath = dialogResult.filePaths[0]!;
+      const rootPath = ordinaryDirectory(dialogResult.filePaths[0]!);
+      if (isDataPath(rootPath)) throw new Error('应用数据目录不能作为工作区');
       const workspace = await scanWorkspace(rootPath);
+      if (!isCurrentWorkspaceOpen(generation)) return { status: 'cancelled' };
       // 扫描成功后才更新当前工作区，失败或取消保留原状态
-      setCurrentWorkspaceRoot(rootPath);
-      return { status: 'selected', workspace };
+      const identity = setCurrentWorkspaceRoot(rootPath);
+      return { status: 'selected', workspace, workspaceSessionId: identity.id };
     } catch (err) {
       // 对话框或根目录扫描失败：保留原有工作区，返回错误让界面提示
       return { status: 'error', error: toWorkspaceEntryError(err) };

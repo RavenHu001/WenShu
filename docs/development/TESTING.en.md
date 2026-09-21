@@ -537,3 +537,9 @@ These constraints are verified through code review, type isolation, unit tests, 
 ```
 
 Do not run `check` and `build` in parallel: electron-vite creates temporary configuration files during builds, which can race unnecessarily with ESLint scanning.
+
+## 7. Task 13 WP1 directory and storage checks
+
+Run `.\scripts\npm.cmd exec -- vitest run tests/app-state` for focused coverage. Product E2E workspaces/profiles live in `.local-data/test/e2e`. `--user-data-dir=<P>` isolates settings/state and Electron runtime together, with session in `<P>/session`. Capture runtime is script-relative `.local-data/screenshots/runtime`.
+
+Native bootstrap, real portable-launcher, and Windows ACL-denial checks use `scripts/verify-task-013-storage.mjs` after preparing/packaging its dedicated host. See the [WP1 report](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md#84-actual-commands-and-evidence) for commands, isolation, native interaction, and limitations. Do not modify user/system TEMP/TMP, use real profiles, or package probe data. WP1 supplies persistence; settings UI, document restoration, and final layout/close integration remain later work packages.

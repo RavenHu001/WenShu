@@ -1,5 +1,9 @@
-import { app, BrowserWindow, Menu, session } from 'electron';
-import { join } from 'node:path';
+import { app, BrowserWindow, dialog, Menu, session } from 'electron';
+import { join, resolve } from 'node:path';
+import { startApplication } from './app-state/startup';
+import { AppStateStore } from './app-state/app-state-store';
+import { registerAppStateIpc } from './app-state/app-state-ipc';
+import { getWorkspaceIdentity } from './workspace/workspace-session';
 import { appIdentity } from '../shared/app-metadata';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
@@ -48,30 +52,86 @@ const createMainWindow = (): BrowserWindow => {
 
 app.setAppUserModelId(appIdentity.appId);
 
-void app.whenReady().then(() => {
-  // 文枢使用 renderer 内可测试、可访问的中文菜单；移除 Electron 默认英文菜单，避免双菜单。
-  Menu.setApplicationMenu(null);
-  // 当前应用无需摄像头、定位等 Web 权限，因此采用拒绝优先策略。
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
-  });
+startApplication(
+  {
+    packaged: app.isPackaged,
+    projectRoot: resolve(__dirname, '../..'),
+    executable: app.getPath('exe'),
+    appData: app.getPath('appData'),
+    temp: app.getPath('temp'),
+    ...(process.env['PORTABLE_EXECUTABLE_DIR']
+      ? { portableDirectory: process.env['PORTABLE_EXECUTABLE_DIR'] }
+      : {}),
+    ...(app.commandLine.hasSwitch('user-data-dir')
+      ? { userDataOverride: app.commandLine.getSwitchValue('user-data-dir') }
+      : {}),
+  },
+  (plan) => {
+    const store = new AppStateStore({
+      root: plan.directory.root,
+      mode: plan.directory.mode,
+      getWorkspace: getWorkspaceIdentity,
+    });
+    let mainWindow: BrowserWindow | null = null;
+    registerAppStateIpc(store, plan, () => mainWindow);
+    // 文枢使用 renderer 内可测试、可访问的中文菜单；移除 Electron 默认英文菜单，避免双菜单。
+    Menu.setApplicationMenu(null);
+    // 当前应用无需摄像头、定位等 Web 权限，因此采用拒绝优先策略。
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+      callback(false);
+    });
 
-  registerWorkspaceIpc();
-  registerDocumentIpc();
-  registerDocxIpc();
-  registerSearchIpc();
-  registerFileManagementIpc();
-  registerSaveAsIpc();
-  registerWindowCloseIpc();
+    registerWorkspaceIpc();
+    registerDocumentIpc();
+    registerDocxIpc();
+    registerSearchIpc();
+    registerFileManagementIpc();
+    registerSaveAsIpc();
+    registerWindowCloseIpc();
 
-  createMainWindow();
+    mainWindow = createMainWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
-  });
-});
+    // Drain already accepted metadata only. WP4 owns final layout/checkpoint and dirty-close integration.
+    let draining = false;
+    let bypassOnce = false;
+    app.on('before-quit', (event) => {
+      if (bypassOnce) {
+        bypassOnce = false;
+        return;
+      }
+      if (!draining && !Object.values(store.get().files).some((file) => file.pending)) return;
+      event.preventDefault();
+      if (draining) return;
+      draining = true;
+      void store.flush().then(async (result) => {
+        if (result.status === 'error') {
+          const choice = await dialog.showMessageBox({
+            title: '文枢记录未保存',
+            type: 'error',
+            message: result.error.message,
+            detail: '本次设置或恢复记录未保存。原有文件和正文不受影响。',
+            buttons: ['重试', '退出'],
+            cancelId: 0,
+          });
+          if (choice.response === 0) {
+            draining = false;
+            app.quit();
+            return;
+          }
+          bypassOnce = true;
+        }
+        draining = false;
+        app.quit();
+      });
+    });
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createMainWindow();
+      }
+    });
+  },
+);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

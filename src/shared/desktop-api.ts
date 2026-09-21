@@ -10,6 +10,7 @@ export interface DesktopRuntimeInfo {
 }
 
 import type { OpenWorkspaceResult, RefreshWorkspaceResult } from './workspace';
+import type { AppStateApi } from './app-state';
 import type {
   ReadTextDocumentResult,
   SaveTextDocumentRequest,
@@ -51,6 +52,7 @@ export interface DesktopWindowApi {
 
 /** 渲染进程能够使用的完整桌面 API；后续能力应按具体用例逐项添加。 */
 export interface DesktopApi {
+  readonly appState: AppStateApi;
   readonly runtime: DesktopRuntimeInfo;
   readonly workspace: {
     readonly open: () => Promise<OpenWorkspaceResult>;

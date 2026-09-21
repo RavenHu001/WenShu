@@ -61,7 +61,11 @@ export interface WorkspaceSnapshot {
  * - `error`：选择了目录但根目录扫描失败（权限不足、路径不存在等），保留原工作区。
  */
 export type OpenWorkspaceResult =
-  | { readonly status: 'selected'; readonly workspace: WorkspaceSnapshot }
+  | {
+      readonly status: 'selected';
+      readonly workspace: WorkspaceSnapshot;
+      readonly workspaceSessionId: string;
+    }
   | { readonly status: 'cancelled' }
   | { readonly status: 'error'; readonly error: WorkspaceEntryError };
 

@@ -30,6 +30,48 @@ import '../../src/preload/index';
 const desktop = electronMock.expose.mock.calls[0]?.[1] as DesktopApi;
 
 describe('preload 窄接口契约', () => {
+  it('appState exposes only fixed persistence capabilities, with no root/path/channel argument', async () => {
+    expect(Object.keys(desktop.appState).sort()).toEqual([
+      'checkpoint',
+      'chooseDataDirectoryOnNextStart',
+      'flush',
+      'get',
+      'openDataDirectory',
+      'resetInvalidFile',
+      'updatePreferences',
+    ]);
+    await desktop.appState.get();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:get');
+    await desktop.appState.flush();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:flush');
+    await desktop.appState.openDataDirectory();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:open-data-directory');
+    await desktop.appState.chooseDataDirectoryOnNextStart();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith(
+      'app-state:choose-data-directory-on-next-start',
+    );
+    await desktop.appState.resetInvalidFile('state');
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:reset-invalid-file', 'state');
+    const preferences = {
+      theme: 'system',
+      txtFontPreset: 'monospace',
+      txtFontSizePx: 13,
+      startupMode: 'blank',
+    } as const;
+    await desktop.appState.updatePreferences(preferences);
+    expect(electronMock.invoke).toHaveBeenLastCalledWith(
+      'app-state:update-preferences',
+      preferences,
+    );
+    const checkpoint = {
+      workspaceSessionId: null,
+      tabRelativePaths: [],
+      activeRelativePath: null,
+      sidebar: { width: 258, collapsed: false },
+    } as const;
+    await desktop.appState.checkpoint(checkpoint);
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:checkpoint', checkpoint);
+  });
   beforeEach(() => {
     electronMock.invoke.mockClear();
   });
@@ -39,8 +81,9 @@ describe('preload 窄接口契约', () => {
     expect(electronMock.expose.mock.calls[0]?.[0]).toBe('desktop');
   });
 
-  it('desktop 只包含 runtime、workspace、document、search、window 五个命名空间', () => {
+  it('desktop 只包含六个固定命名空间', () => {
     expect(Object.keys(desktop).sort()).toEqual([
+      'appState',
       'document',
       'runtime',
       'search',

@@ -4,10 +4,11 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md)
 
-> **Status: in progress.** Only WP0 (baseline and startup verification) was executed on 2026-09-20. Work stops after this handoff; WP1–WP5 have not been implemented.
-> The settings UI, production data-directory entry, JSON store, and restoration are not delivered. Task 12's internal-binary/public-source release boundary is unchanged.
+> **Status: in progress. WP0 and WP1 completed.** This separately authorized run on 2026-09-20 implements WP1 only and stops at its handoff. WP2/WP3/WP4/WP5 have not started.
+> Production directory initialization and JSON persistence are connected. Settings UI, tab restoration, and final layout/close integration are not implemented. Task 12's internal-binary/public-source boundary is unchanged.
+> Sections 1–7 preserve the historical WP0 baseline. Section 8 records the final WP1 implementation, evidence, and handoff.
 
-## 1. Baseline and scope
+## 1. WP0 baseline and scope
 
 - Branch `TASK-13`, starting commit `e536c1c70e826fe5dd0fe232fda178a953660635`; initially clean Git worktree, no existing Task 13 completion report, and no applicable repository/ancestor `AGENTS.md` found.
 - Read the complete task plan, development prompt, README, PROJECT_BASELINE, TESTING, and Task 12 completion report; inspected the integration points below.
@@ -79,7 +80,7 @@ Keep the small planned modules: `src/shared/app-state.ts` (pure DTO/budgets/vali
 4. First selection cancellation exits. Requested reselection cancellation preserves the old path, clears the flag, and restarts there. If the old root is unavailable, cancellation returns to retry/exit. No automatic migration/merge/deletion; requesting next-start reselection only writes the flag, without restarting the editing session.
 5. No zero-C-write promise for Windows/bootstrap/portable TEMP extraction, and no global TEMP/TMP changes. Test overrides precede mode selection and accept only main-process launch inputs; renderer gets no path-selection capability.
 
-### WP1 DTO basis (not implemented)
+### WP1 DTO basis frozen during WP0 (implementation in section 8)
 
 | Object        | Fields, defaults, budgets                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -120,10 +121,120 @@ WP0's core feasibility checkpoint is satisfied and ready for WP1 handoff. The fo
 - Default development `.local-data/dev` and final portable/installed product entries are not wired. Final product upgrade/uninstall preservation of external settings/state, real log/dump output, cross-user/different-root lock scope, and Windows 10 hardware remain unverified. This run proves the minimal pinned-runtime/template flow only.
 - Subsequent implementation must migrate E2E/capture overrides and add `.local-data` Git/package audit exclusions. Existing E2E no-sandbox limitations must remain explicit.
 
-Work stops here; WP1 does not start automatically.
+WP0 stopped here. The subsequently authorized WP1 work is recorded in section 8.
 
 ## 7. References checked
 
 - Pinned `node_modules/electron/electron.d.ts`: `setPath`, `setAppLogsPath`, `relaunch`, `requestSingleInstanceLock`, `Session.getStoragePath`; compared with [Electron app API](https://www.electronjs.org/docs/latest/api/app#appsetpathname-path): directories must exist and sessionData is overridden before ready.
 - Pinned `node_modules/app-builder-lib/templates/nsis/portable.nsi`: `$EXEDIR` environment variable, `ExecWait`, extraction cleanup; compared with [builder portable documentation](https://www.electron.build/docs/nsis/#portable).
 - Pinned `uninstaller.nsh`: `RMDir /r $INSTDIR` and separate AppData deletion branch; compared with [NSIS configuration](https://www.electron.build/docs/nsis/#deleteappdataonuninstall). `deleteAppDataOnUninstall:false` does not protect data inside the installation directory.
+
+## 8. WP1: Data directories and JSON storage (completed)
+
+Started from clean commit `521e9cd` (WP0). Re-read the entire plan, development prompt, and WP0 handoff; no applicable AGENTS.md was found. Reused applicable WP0 baseline and pinned Electron/portable/NSIS evidence instead of repeating all prerequisites. No dependency, lockfile, database, state framework, generic configuration registry, settings UI, or document restoration scheduler was added.
+
+### 8.1 Final directory and startup rules
+
+| Mode                   | Data root                                                                   | userData / sessionData                      | Locator and failure behavior                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Development            | Repository `.local-data/dev`, resolved from the built entry rather than cwd | `<root>/runtime` / `<root>/runtime/session` | Report unavailable fixed root and exit                                                                                   |
+| Portable               | `PORTABLE_EXECUTABLE_DIR/WenShuData`                                        | Same                                        | Never derive persistent storage from the extracted EXE; prompt to move the entire portable folder when unwritable        |
+| Installed              | Independently selected native directory                                     | Same                                        | `<appData>/WenShu/bootstrap.json`, UTF-8 ≤8192 bytes; neither data root nor installation directory may contain the other |
+| Explicit test override | `--user-data-dir=<P>`                                                       | `<P>` / `<P>/session`                       | settings/state also reside in `<P>`; bypass real bootstrap; empty, relative, unsafe, or unavailable overrides fail       |
+
+`logs` and `crashDumps` are below runtime and configured before ready; no document logging or crashReporter is started. Bootstrap uses its own `wenshu-bootstrap-*` runtime under OS temp, with best-effort cleanup of that directory on exit. This contains the Local State observed in WP0 without creating a permanent Chromium profile alongside the locator. After the isolated installed-mode native selection/restart, the appData subtree contained only the **131-byte bootstrap.json**. This does not promise zero C-drive writes by Windows, native dialogs, or portable extraction.
+
+Only the ready branch requests the lock for the resolved profile, initializes the business session/IPC, and creates the business window. A second instance creates no business window/session and asks the first instance to restore/show/focus its window. Bootstrap uses native UI only, writes the locator, requests `app.relaunch()`, and exits.
+
+First cancellation exits without a locator. Requested reselection cancellation revalidates the old root, clears the flag, and restarts with it. Missing old roots are never recreated as empty substitutes; cancelling replacement returns to Retry/Exit. Reselection marks the next launch and never migrates data. The native picker suggests a non-C installation volume, or enumerates available non-C volumes when installed on C; a suggestion never silently becomes the data root. Selection accepts an empty or compatible WenShu directory and rejects installation overlap, links/unsafe ancestors, unrelated contents, and invalid existing JSON.
+
+### 8.2 Final DTOs and error contracts
+
+`src/shared/app-state.ts` owns the fixed whitelist, budgets, and defaults:
+
+- `settings.json`: `version:1`, `theme:'system'` (system/light/dark), `txtFontPreset:'monospace'` (system/monospace/serif), `txtFontSizePx:13` (integer 12–24), `startupMode:'workspace-and-tabs'` (blank/workspace/workspace-and-tabs); ≤16 KiB.
+- `state.json`: `version:1`, `window:{normalBounds:null,maximized:false}`, `sidebar:{width:258,collapsed:false}`, `lastWorkspace:null`; ≤512 KiB. Bounds use safe integer x/y/width/height with positive dimensions; screen correction belongs to WP4. Sidebar width is an integer 180–420.
+- `lastWorkspace`: main-owned `rootPath`, `tabRelativePaths`, `activeRelativePath`. Paths are bounded to 4096 UTF-16 units and the overall UTF-8 budget. Only canonical relative TXT/DOCX paths are accepted; dot segments, absolute paths, backslashes, controls, ADS, reserved device names, etc. are rejected. Existing filesystem segments are checked for links and type. At most 100 deduplicated restore tabs are retained, including the active item and original selected-item order; truncation reports `TAB_LIMIT`.
+- `checkpoint`: only `workspaceSessionId`, relative tab paths/active path, and sidebar. Null session requires empty paths and does not erase a pending saved workspace. No body, DOCX model, search, old revision/confirmation, tabId, or editor object is accepted.
+- `workspace-session.ts` owns roots and UUIDs. Every successful open, including reopening the same root, issues a new token in the selected `workspace.open()` result; refresh retains it. Open generations prevent stale scans from committing. Queue admission and replacement both validate the token; tokens are never persisted. WP3 must retain the token returned with the committed open/restore result instead of fetching a newer token for an old tab collection.
+
+`appState.get()` returns `{status:'ok',snapshot}` with settings, projected state, `effectiveStartupMode`, current `workspaceSessionId`, both file health records, and `dataDirectory:{path,mode,canReselect}`. Health is `{status,pending,error}`, with missing/valid/invalid/unsupported/too-large/read-error statuses. Writes return `{status:'queued'|'saved'|'unchanged',warnings:[]|['TAB_LIMIT']}`; actions return `{status:'ok'}`. Failures are `{status:'error',error:{code,message,retryable}}`, without raw exceptions or stacks.
+
+Codes are INVALID_REQUEST, INVALID_DATA, UNSUPPORTED_VERSION, TOO_LARGE, STALE_SESSION, DATA_DIRECTORY_UNAVAILABLE, READ_FAILED, WRITE_FAILED, FILE_CHANGED, and NOT_SUPPORTED. Write/read/directory/stale-session failures are retryable: stale sessions require a current snapshot; startup read failures require repair and restart. External changes report FILE_CHANGED and require restart/inspection rather than blind overwrite.
+
+Seven fixed preload methods map to seven `app-state:*` handlers: `get`, `updatePreferences`, `checkpoint`, `flush`, `openDataDirectory`, `chooseDataDirectoryOnNextStart`, and `resetInvalidFile('settings'|'state')`. Handlers verify the business window, its main frame, arity, and DTO. There is no arbitrary path/key/channel capability. Directory display uses get, opening uses only the resolved root, and reselection is installed-mode only. No fake-success restore/layout method is exposed.
+
+### 8.3 Publication and future wiring
+
+Each file has one serial queue. Checkpoints coalesce for approximately 500 ms; preference calls await publication. Flush waits for in-flight and subsequently accepted revisions. Publication uses an exclusive random same-directory `wx` temporary file, full write, sync, close, parent/target fingerprint checks, and session validation immediately followed by synchronous rename without an event-loop yield. Targets are never truncated or deleted first. Failure preserves the old file, pending in-memory values, and an explicit error.
+
+Missing files use defaults without automatic creation on startup/get/unchanged flush. Corrupt, oversized, unsupported, and unreadable files block automatic writes, including default layout, mode changes, and exit flush. Explicit reset handles invalid/too-large files only, preserving and flushing an exclusive `.wenshu-invalid-<uuid>.json` backup. Oversized originals are copied using filesystem identity checks rather than loaded entirely into memory. Unknown versions, links, and read failures are not reset over. External-change checks also apply to reset.
+
+`projectStartupState` and `AppStateStore` are the sole startup-mode policy: only durable settings clear/trim lastWorkspace; reads also project it. Blank clears the workspace and workspace-only clears tabs. The two files are not a transaction. Failed preference writes retain a preview but `effectiveStartupMode` remains durable. WP2 and WP3 reuse this policy.
+
+The main entry drains already accepted metadata only, with Retry/Exit on persistence failure and a one-attempt exit bypass; a cancelled dirty close cannot permanently bypass later flushes. WP4 still owns final snapshots, bounds/sidebar application, screen correction, and saving/dirty-close integration. Main-only `updateWindow` is not wired to window events. WP2 settings/theme/font UI and WP3 `workspace.restoreLast`, restore generations/cancellation, document reads/error tabs, and renderer snapshot suspension remain unimplemented.
+
+Workspace scan/search exclude the precise active data subtree, including real-path boundaries, while retaining same-named user folders. Scan classifies links before directories. E2E uses `.local-data/test/e2e`; capture uses script-relative `.local-data/screenshots/runtime` and redirects session/log/dump paths too. Git ignore, explicit builder exclusions, and actual ASAR/unpacked audits reject data/probes.
+
+### 8.4 Actual commands and evidence
+
+All commands use repository `scripts/npm.cmd` / `scripts/node.cmd`; prefixes are abbreviated below. WP1 did not change global or verification-shell TEMP/TMP. Only native-probe child environments override TEMP/TMP and explicitly isolate appData.
+
+| Command/check                                                                                                                                                | Actual result                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Initial `npm.cmd run typecheck`                                                                                                                              | Failed on inferred numeric bootstrap version; fixed with BootstrapRecord. Two strongly typed fixtures were updated when selected results gained a session ID                                                                                                                                      |
+| Initial targeted tests                                                                                                                                       | 11 failed/49 passed, primarily because Windows Node 22 lstat.dev=0 differs from fstat's volume serial, plus a cyclic junction fixture. Replaced the invalid comparison with bigint file identity/timestamps and same-path validation; corrected the fixture without weakening assertions/timeouts |
+| Initial `npm.cmd run check`                                                                                                                                  | Typecheck passed; lint rejected control-character regexes. Replaced them with character-code checks without disabling the rule                                                                                                                                                                    |
+| Corrected full `npm.cmd run check`                                                                                                                           | Typecheck/lint/format/NOTICE passed; 76 files, 1226 passed, 10 baseline conditional skips. Subsequent additions are included in the final verification record                                                                                                                                     |
+| Subsequent `npm.cmd run build`                                                                                                                               | Passed; later title/path/exit-drain revisions were rebuilt                                                                                                                                                                                                                                        |
+| `npm.cmd exec -- vitest run tests/app-state`                                                                                                                 | 4 files, 39 passed, no skips: read-only replacement failure/retry, concurrency/flush, stale sessions, corrupt/oversized/future JSON, extra fields, hard links/junctions, exact exclusion                                                                                                          |
+| `npm.cmd run test:e2e`, ordinary desktop                                                                                                                     | Original 4 passed; expanded persistence restart/path/session/bad-file checks passed 6/6. Removed the pre-existing `--no-sandbox`; retained only the test GPU option                                                                                                                               |
+| `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never`, then `npm.cmd run package:verify -- --mode=dir` | Passed actual ASAR/unpacked exclusion audits. External runtime imports remain docx/jszip/mammoth. Old portable/NSIS artifacts listed by the audit are not newly rebuilt product binaries                                                                                                          |
+
+Reusable real verification entry:
+
+```powershell
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --prepare-package
+.\scripts\node.cmd scripts/run-electron-builder.mjs --config .local-data/test/task-013/startup/builder.json --win --x64 --publish never
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=development
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=first
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=first-cancel
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=reselect-cancel
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=missing-cancel
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=portable
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=portable --case=unwritable
+```
+
+The host bundles production startup/store modules and creates a minimal isolated window. Installed mode uses a real unpacked EXE with `app.isPackaged=true`; portable uses the actual builder launcher. Electron/native dialogs are not mocked. Development projectRoot and installed appData are injected for isolation, so this is not final full-product installation/uninstallation evidence. Native cases require real UI interaction. The unwritable case applies a Windows write-deny ACL only to its newly created fixture and removes it on normal completion. Wrappers record actual native calls/responses and reject selections outside the isolated run.
+
+Evidence is retained in `.local-data/test/task-013/startup/<run>/events.jsonl`, excluded from packages:
+
+| Run                                | Observation                                                                                                                                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `development-known-0tIKBq`         | userData=`project/.local-data/dev/runtime`; session.storagePath=`…/runtime/session`; zero windows/sessions before ready; second instance has no business initialization                                               |
+| `installed-first-plmlyS`           | PID 37776 selects `chosen 中文`, writes a 131-byte locator, and exits with zero business windows/sessions; PID 13800 starts the business branch with all runtime paths under that root; same-root lock/focus observed |
+| `installed-first-cancel-JIv7yJ`    | Cancellation exits without business initialization or bootstrap.json                                                                                                                                                  |
+| `installed-reselect-cancel-Mk76a6` | Cancellation clears the flag, preserves the old root, and restarts in a new PID; same-root lock passes                                                                                                                |
+| `installed-missing-cancel-MKHmXt`  | Real native sequence: Retry/Select/Exit → Select → native cancellation → Retry/Exit → Exit; locator retained and missing root not created                                                                             |
+| `portable-known-0w8izI`            | `PORTABLE_EXECUTABLE_DIR=launcher`; EXE=`temp/<random>/WenShu.exe`; actual runtime/session/log/dump paths under `launcher/WenShuData`; same-root lock passes                                                          |
+| `portable-unwritable-Y6L00C`       | Real ACL denial produces a move-the-entire-folder message and Exit only; no business initialization or fallback; deny ACL removed after completion                                                                    |
+
+Two early missing-root UI runs lacked a complete targetable interaction record: one isolated host was specifically terminated, the other recorded only exit. Neither establishes cancellation behavior. A clear native message title, visible interactive probe launch, and actual-response recording were added; MKHmXt is the complete accepted evidence. No security option was disabled and no platform conclusion rests only on mocks.
+
+### 8.5 Handoff and remaining conditions
+
+No unresolved prerequisite blocks WP1's core. WP2/WP3 take over `src/shared/app-state.ts`, `DesktopApi.appState`, `AppStateStore`, and the selected `workspaceSessionId`. WP3 reuses `workspace-session.ts` identity/generation ownership for restore commits instead of creating another root authority. WP4 takes over `updateWindow`, existing window-close coordination, and flush.
+
+Remaining work: settings UI; real document restoration/error tabs; snapshot suppression during restore; layout application and final dirty/saving close integration; final full-product portable/NSIS restart, upgrade/uninstall preservation of external settings/state; actual log/crash-dump production; power-loss/forced-exit final-millisecond behavior; cross-user/different-root locking; Windows 10 hardware. WP0's NSIS template/uninstall findings still apply: keeping AppData never protects files inside the installation directory.
+
+Stop after this handoff. Do not automatically implement WP2, WP3, or WP4, and do not mark Task 13 complete.
+
+### 8.6 Final verification record
+
+- Final `npm.cmd run check`: exit 0; 77 test files, 1230 passed, 10 conditional skips inherited from WP0's existing link-permission conditions, no failures. Typecheck, lint, format, and the 103-package NOTICE check passed. Subsequent final build, 6/6 E2E, product dir packaging, and package:verify all exited 0. Final main 193.38 kB, preload 4.96 kB, ASAR 12642170 bytes.
+- Final missing-root guard: runtime creates direct children one level at a time and cannot recursively recreate a previously validated data root. The real-filesystem case passed. Its initial empty-directory fixture used rm and failed with EISDIR; corrected to rmdir before the full passing check. WP1 focused coverage now totals 40 cases.
+- Latest real development host `development-known-XlzK63` passed with this single-level creation logic; runtime/session locations and same-root locking remained correct.
+- Real host `--mode=test` recheck passed: `test-known-or8AXF/events.jsonl`, complementing the product E2E `--user-data-dir` evidence.
+- Confirmed bootstrap temporary runtime cleanup, no locator after first cancellation, no recreated missing root, and no residual deny ACE on the ACL fixture. `git diff --check` passed.
+- If even a safe runtime directory cannot be established, startup displays an error before ready and terminates without waiting for default-profile initialization. Checked pinned Electron types and the [official showErrorBox documentation](https://www.electronjs.org/docs/latest/api/dialog#dialogshowerrorboxtitle-content). This extreme temporary-directory failure was not separately exercised through native UI.
+- Capture-launcher paths and syntax were checked; visual baselines were not regenerated. WP2 must connect the capture host's settings service when it starts reading preferences.

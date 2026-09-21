@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import console from 'node:console';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, resolve } from 'node:path';
 import process from 'node:process';
@@ -12,7 +13,18 @@ const zoomFactor = Number(process.env.WENSHU_CAPTURE_ZOOM_FACTOR ?? '1');
 const matrixOnly = process.env.WENSHU_CAPTURE_MATRIX_ONLY === '1';
 if (deviceScale) app.commandLine.appendSwitch('force-device-scale-factor', deviceScale);
 if (forceHighContrast) app.commandLine.appendSwitch('force-high-contrast');
-app.setPath('userData', resolve('out/.capture-user-data'));
+const captureRuntime = resolve(import.meta.dirname, '../.local-data/screenshots/runtime');
+for (const path of [
+  captureRuntime,
+  resolve(captureRuntime, 'session'),
+  resolve(captureRuntime, 'logs'),
+  resolve(captureRuntime, 'crashDumps'),
+])
+  mkdirSync(path, { recursive: true });
+app.setPath('userData', captureRuntime);
+app.setPath('sessionData', resolve(captureRuntime, 'session'));
+app.setAppLogsPath(resolve(captureRuntime, 'logs'));
+app.setPath('crashDumps', resolve(captureRuntime, 'crashDumps'));
 
 const outputDirectory = resolve('docs/visual-baselines/task-011');
 const rendererDirectory = resolve('out/renderer');

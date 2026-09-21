@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
 import { appIdentity } from '../shared/app-metadata';
+import type { AppPreferences, SessionCheckpoint, StateFileName } from '../shared/app-state';
 import type { SaveTextDocumentRequest } from '../shared/document';
 import type {
   CreateWorkspaceEntryTarget,
@@ -17,6 +18,18 @@ import type {
 } from '../shared/search';
 
 const desktopApi: DesktopApi = Object.freeze({
+  appState: Object.freeze({
+    get: () => ipcRenderer.invoke('app-state:get'),
+    updatePreferences: (value: AppPreferences) =>
+      ipcRenderer.invoke('app-state:update-preferences', value),
+    checkpoint: (value: SessionCheckpoint) => ipcRenderer.invoke('app-state:checkpoint', value),
+    flush: () => ipcRenderer.invoke('app-state:flush'),
+    openDataDirectory: () => ipcRenderer.invoke('app-state:open-data-directory'),
+    chooseDataDirectoryOnNextStart: () =>
+      ipcRenderer.invoke('app-state:choose-data-directory-on-next-start'),
+    resetInvalidFile: (file: StateFileName) =>
+      ipcRenderer.invoke('app-state:reset-invalid-file', file),
+  }),
   runtime: Object.freeze({
     platform: process.platform,
     electronVersion: process.versions.electron,

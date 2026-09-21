@@ -557,3 +557,9 @@ Task 10 已实施并持续验证：
 ```
 
 不要并行运行 `check` 和 `build`：electron-vite 构建期间会创建临时配置文件，与 ESLint 扫描并发时可能产生无意义的文件竞争。
+
+## 7. Task 13 WP1 数据目录与存储
+
+定向运行 `.\scripts\npm.cmd exec -- vitest run tests/app-state`。产品 E2E 的工作区/profile 在 `.local-data/test/e2e`；`--user-data-dir=<P>` 同时隔离 settings/state 和 Electron runtime，session 在 `<P>/session`。截图 runtime 已迁到 `.local-data/screenshots/runtime`，路径从脚本位置解析。
+
+原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1 提供持久化服务，设置 UI、正文恢复与最终布局/关闭联调仍属后续包。

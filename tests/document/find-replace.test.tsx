@@ -98,6 +98,7 @@ function mockDesktop(files: Readonly<Record<string, string>>): DesktopMock {
     workspace: {
       open: vi.fn(async (): Promise<OpenWorkspaceResult> => ({
         status: 'selected',
+        workspaceSessionId: '00000000-0000-4000-8000-000000000001',
         workspace: snapshot([f('a.txt', 'a.txt'), f('b.txt', 'b.txt')]),
       })),
       refresh: vi.fn(async (): Promise<RefreshWorkspaceResult> => ({ status: 'not-open' })),

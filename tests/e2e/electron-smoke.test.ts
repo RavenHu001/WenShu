@@ -1,15 +1,16 @@
 import { Document, Packer, Paragraph } from 'docx';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import JSZip from 'jszip';
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const projectRoot = resolve(import.meta.dirname, '../..');
 const executablePath = resolve(projectRoot, 'node_modules/electron/dist/electron.exe');
+const isolatedRoot = resolve(projectRoot, '.local-data/test/e2e');
 
 beforeAll(async () => {
+  await mkdir(isolatedRoot, { recursive: true });
   for (const [path, command] of [
     [executablePath, 'npx install-electron --no'],
     [resolve(projectRoot, 'out/main/index.js'), 'npm run build'],
@@ -51,21 +52,27 @@ afterEach(async () => {
 }, 30_000);
 
 async function createWorkspace(): Promise<string> {
-  const workspace = await mkdtemp(resolve(tmpdir(), 'wenshu-e2e-'));
+  const workspace = await mkdtemp(resolve(isolatedRoot, 'workspace-'));
   temporaryRoots.push(workspace);
   return workspace;
 }
 
 async function launchWithWorkspace(
   workspace: string,
-): Promise<{ page: Page; pageErrors: string[] }> {
-  const userData = await mkdtemp(resolve(tmpdir(), 'wenshu-e2e-user-data-'));
-  temporaryRoots.push(userData);
+  existingProfile?: string,
+): Promise<{
+  page: Page;
+  pageErrors: string[];
+  application: ElectronApplication;
+  userData: string;
+}> {
+  const userData = existingProfile ?? (await mkdtemp(resolve(isolatedRoot, 'profile-')));
+  if (!existingProfile) temporaryRoots.push(userData);
   const application = await electron.launch({
     executablePath,
     cwd: projectRoot,
     // 自动化会话无稳定 GPU 合成环境；仅测试进程禁用 GPU，不改变产品配置或 fuses。
-    args: ['.', `--user-data-dir=${userData}`, '--disable-gpu', '--no-sandbox'],
+    args: ['.', `--user-data-dir=${userData}`, '--disable-gpu'],
     env: Object.fromEntries(
       Object.entries(process.env).filter(
         (entry): entry is [string, string] => entry[1] !== undefined,
@@ -93,7 +100,7 @@ async function launchWithWorkspace(
   const openWorkspace = page.getByRole('button', { name: '打开文件夹' });
   await openWorkspace.waitFor({ state: 'visible', timeout: 10_000 });
   await openWorkspace.click();
-  return { page, pageErrors };
+  return { page, pageErrors, application, userData };
 }
 
 async function openFile(page: Page, name: string): Promise<void> {
@@ -116,6 +123,79 @@ async function expectOoxml(path: string): Promise<void> {
 }
 
 describe('Electron E2E：隔离工作区', () => {
+  it('WP1 real paths, durable preferences, and stale-session rejection through preload', async () => {
+    const workspace = await createWorkspace();
+    await writeFile(resolve(workspace, 'sample.txt'), 'unchanged body');
+    const first = await launchWithWorkspace(workspace);
+    const paths = await first.application.evaluate(({ app, session }) => ({
+      userData: app.getPath('userData'),
+      sessionData: app.getPath('sessionData'),
+      storagePath: session.defaultSession.storagePath,
+    }));
+    expect(paths).toEqual({
+      userData: first.userData,
+      sessionData: resolve(first.userData, 'session'),
+      storagePath: resolve(first.userData, 'session'),
+    });
+    const result = await first.page.evaluate(async () => {
+      const selected = await window.desktop.workspace.open();
+      if (selected.status !== 'selected') throw new Error('open failed');
+      const checkpoint = {
+        workspaceSessionId: selected.workspaceSessionId,
+        tabRelativePaths: ['sample.txt'],
+        activeRelativePath: 'sample.txt',
+        sidebar: { width: 270, collapsed: false },
+      };
+      const queued = await window.desktop.appState.checkpoint(checkpoint);
+      const flushed = await window.desktop.appState.flush();
+      const preferences = await window.desktop.appState.updatePreferences({
+        theme: 'dark',
+        txtFontPreset: 'serif',
+        txtFontSizePx: 18,
+        startupMode: 'workspace-and-tabs',
+      });
+      await window.desktop.workspace.open();
+      const stale = await window.desktop.appState.checkpoint(checkpoint);
+      return { queued, flushed, preferences, stale };
+    });
+    expect(result).toMatchObject({
+      queued: { status: 'queued' },
+      flushed: { status: 'saved' },
+      preferences: { status: 'saved' },
+      stale: { status: 'error', error: { code: 'STALE_SESSION' } },
+    });
+    await destroyTestApplication(first.application);
+    const second = await launchWithWorkspace(workspace, first.userData);
+    const loaded = await second.page.evaluate(() => window.desktop.appState.get());
+    expect(loaded).toMatchObject({
+      status: 'ok',
+      snapshot: {
+        settings: { theme: 'dark', txtFontPreset: 'serif', txtFontSizePx: 18 },
+        state: { lastWorkspace: { rootPath: workspace, tabRelativePaths: ['sample.txt'] } },
+      },
+    });
+    expect(await readFile(resolve(workspace, 'sample.txt'), 'utf8')).toBe('unchanged body');
+  }, 30_000);
+  it('WP1 product startup and exit flush preserve corrupt and future-version originals', async () => {
+    const workspace = await createWorkspace();
+    const profile = await mkdtemp(resolve(isolatedRoot, 'bad-profile-'));
+    temporaryRoots.push(profile);
+    const originalSettings = '{bad';
+    const originalState = '{"version":999,"future":"keep"}';
+    await writeFile(resolve(profile, 'settings.json'), originalSettings);
+    await writeFile(resolve(profile, 'state.json'), originalState);
+    const running = await launchWithWorkspace(workspace, profile);
+    expect(await running.page.evaluate(() => window.desktop.appState.get())).toMatchObject({
+      status: 'ok',
+      snapshot: { files: { settings: { status: 'invalid' }, state: { status: 'unsupported' } } },
+    });
+    expect(await running.page.evaluate(() => window.desktop.appState.flush())).toMatchObject({
+      status: 'error',
+    });
+    await destroyTestApplication(running.application);
+    expect(await readFile(resolve(profile, 'settings.json'), 'utf8')).toBe(originalSettings);
+    expect(await readFile(resolve(profile, 'state.json'), 'utf8')).toBe(originalState);
+  }, 30_000);
   it('启动、受控打开工作区与 About 版本', async () => {
     const workspace = await createWorkspace();
     await writeFile(resolve(workspace, '示例.txt'), '初始文本\n', 'utf8');

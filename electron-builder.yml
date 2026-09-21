@@ -29,6 +29,8 @@ files:
   - package.json
   - LICENSE
   - THIRD_PARTY_NOTICES.txt
+  - '!**/.local-data/**'
+  - '!**/WenShuData/**'
 
 win:
   icon: build/icon.ico

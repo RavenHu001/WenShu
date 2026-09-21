@@ -16,7 +16,20 @@
  */
 
 /** 当前工作区根路径；null 表示尚未打开任何工作区。 */
+import { randomUUID } from 'node:crypto';
+import type { WorkspaceIdentity } from '../../shared/app-state';
 let currentWorkspaceRoot: string | null = null;
+let identity: WorkspaceIdentity | null = null;
+let openGeneration = 0;
+export function getWorkspaceIdentity(): WorkspaceIdentity | null {
+  return identity;
+}
+export function beginWorkspaceOpen(): number {
+  return ++openGeneration;
+}
+export function isCurrentWorkspaceOpen(generation: number): boolean {
+  return generation === openGeneration;
+}
 
 /** 获取当前工作区根路径；未打开工作区时返回 null。 */
 export function getCurrentWorkspaceRoot(): string | null {
@@ -27,6 +40,8 @@ export function getCurrentWorkspaceRoot(): string | null {
  * 更新当前工作区根路径。
  * 仅允许在工作区成功打开并扫描后调用；失败或取消时必须保持原值。
  */
-export function setCurrentWorkspaceRoot(root: string): void {
+export function setCurrentWorkspaceRoot(root: string): WorkspaceIdentity {
   currentWorkspaceRoot = root;
+  identity = Object.freeze({ id: randomUUID(), rootPath: root });
+  return identity;
 }
