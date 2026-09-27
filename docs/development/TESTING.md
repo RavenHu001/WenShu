@@ -435,7 +435,7 @@ Task 6 已完成并交付工作区 TXT 搜索与当前文件查找替换。当�
 
 ```powershell
 .\scripts\npm.cmd run build
-.\scripts\npm.cmd exec -- electron .\scripts\capture-ui-baselines.mjs
+.\scripts\node.cmd .\scripts\capture-ui-baselines.mjs
 ```
 
 人工核对：
@@ -560,6 +560,12 @@ Task 10 已实施并持续验证：
 
 ## 7. Task 13 WP1 数据目录与存储
 
-定向运行 `.\scripts\npm.cmd exec -- vitest run tests/app-state`。产品 E2E 的工作区/profile 在 `.local-data/test/e2e`；`--user-data-dir=<P>` 同时隔离 settings/state 和 Electron runtime，session 在 `<P>/session`。截图 runtime 已迁到 `.local-data/screenshots/runtime`，路径从脚本位置解析。
+定向运行 `.\scripts\npm.cmd exec -- vitest run tests/app-state`。产品 E2E 的工作区/profile 在 `.local-data/test/e2e`；`--user-data-dir=<P>` 同时隔离 settings/state 和 Electron runtime，session 在 `<P>/session`。截图启动器现通过 Playwright 启动真实产品主进程，每轮使用 `.local-data/screenshots/profile-*`；沿用显式测试路径覆盖，不再提供截图专用设置服务。
 
-原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1 提供持久化服务，设置 UI、正文恢复与最终布局/关闭联调仍属后续包。
+原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1 提供持久化服务，WP2 已接设置 UI；正文恢复与最终布局/关闭联调仍属后续包。
+
+### WP2 设置与显示验证
+
+定向命令：`scripts/npm.cmd exec -- vitest run tests/shell/settings.test.tsx tests/document/settings-display.test.tsx`。覆盖真实编辑器状态/选区/撤销重做保持、设置请求顺序、失败预览/重试、模式生效值、坏文件重置确认、焦点圈定和系统主题订阅释放。E2E 使用真实产品服务，覆盖偏好重启、只读 settings 写失败不清旧记录、重试、TXT/DOCX 显示与磁盘字节不变、坏文件反馈。
+
+E2E 的 WP2 截图在 `.local-data/test/task-013/wp2`，不提交或打包；数据路径遮罩仅用于证据，产品仍显示真实路径。900×600 的设置可纵向滚动，高对比度采用 Chromium forced-colors 模拟；不等同 Windows 系统高对比度切换。截图脚本现用 `scripts/node.cmd scripts/capture-ui-baselines.mjs`，可给该验证进程设置 `WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2`，避免覆盖历史 Task 11 图片。构建完成后运行；不要用 Electron 执行该 Node 启动器。

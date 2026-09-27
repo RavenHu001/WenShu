@@ -4,9 +4,9 @@
 
 [任务规划](./TASK_013_SETTINGS_STARTUP_RESTORE.md) · [任务档案](../README.md)
 
-> **状态：实施中。WP0、WP1 已完成。** 2026-09-20 本轮仅实施 WP1：数据目录与 JSON 存储，到本包交接结束；未开始 WP2/WP3/WP4/WP5。
-> 数据目录启动入口和 JSON 存储器已接入；设置页面、标签恢复与最终布局/关闭联调尚未实现。Task 12 的内部二进制/公开源码边界不变。
-> 第 1–7 节保留 WP0 当时的基线和结论；WP1 最终实现、验证与后续接线见第 8 节。
+> **状态：实施中。WP0、WP1、WP2 已完成。** 2026-09-27 本轮只实施 WP2：基础设置与主题，交接后结束；未开始 WP3/WP4/WP5。
+> 数据目录、JSON 存储、设置对话框、主题与 TXT 显示偏好已接入；启动方式已保存，工作区/标签自动恢复及最终布局/关闭集成尚未实现。Task 12 发布边界不变。
+> 第 1–8 节保留 WP0/WP1 的历史基线与结果；WP2 见第 9 节。
 
 ## 1. WP0 基线与改动范围
 
@@ -238,3 +238,54 @@ WP1 核心无未解决前置阻塞。WP2/WP3 接手 `src/shared/app-state.ts`、
 - 确认首次引导临时 runtime 已清理、首次取消未产生 bootstrap、失效根没有被创建、ACL 验证目录没有遗留拒绝 ACE；`git diff --check` 通过。
 - 安全运行目录本身无法建立时，错误提示直接在 ready 前显示并终止进程，不等待默认 profile 初始化。已核对锁定 Electron 类型及 [showErrorBox 官方说明](https://www.electronjs.org/docs/latest/api/dialog#dialogshowerrorboxtitle-content)；该极端临时目录故障分支未另作原生实测。
 - 截图启动器路径和语法已核对，本包未重生成视觉基线；WP2 接入偏好读取后还须同步截图宿主的设置服务。
+
+## 9. WP2：基础设置与主题（完成）
+
+2026-09-27 从 `ca39bae`（WP1）开始，工作树干净，无适用 AGENTS.md。已核对规划、统一提示词、WP0/WP1 实际启动证据及七个 appState 接口；路径和存储前置仍适用，无核心阻塞。本轮只实施 WP2，不开始 WP3；没有新增依赖、状态框架、localStorage、路由、设置活动栏、自动保存或草稿。
+
+### 9.1 入口、持久化与错误反馈
+
+- `AppMenuBar` 提供“视图 → 设置…”；`App` 注册 `Ctrl+,`，已有对话框时不叠开。`SettingsDialog` 复用 `ModalDialog`，只有“显示 / 启动 / 数据位置”三组，保留 Tab 圈定、Escape 和焦点恢复；菜单进入时先把返回焦点绑定到“视图”。设置内快捷键不传给文档命令。
+- 字段/默认值不变：theme=system（light/dark/system），txtFontPreset=monospace（system/monospace/serif），txtFontSizePx=13（整数 12–24），startupMode=workspace-and-tabs（blank/workspace/workspace-and-tabs）。JSON 字段、版本和预算仍按 WP1。
+- `main.tsx` 在首次 React 渲染前等待真实 `appState.get()` 并应用显示偏好；主进程根据设置与 nativeTheme 选择初始窗口背景，未加载的页面透明以减少反色闪烁。缺失使用默认值；坏文件保留原件、使用安全默认值并显示异常入口。服务读取失败明确反馈，可重读，不伪造后端。
+- `use-app-settings.ts` 管理即时预览、串行请求和反馈。`updatePreferences` 只收到四个偏好字段，不含 version；成功后用既有 flush/get 复核。迟到返回不覆盖最新预览；失败保留显示并可重试。设置写错误与目录动作错误分开，成功打开目录不吞掉写失败。
+- 已生效模式只认 `snapshot.effectiveStartupMode`；清空/裁剪 lastWorkspace 仍由 WP1 AppStateStore/projectStartupState 单处执行。UI 不 checkpoint、不另存恢复历史；写失败显示旧有效模式。当前只能宣称模式已保存，界面明确本版本暂不自动恢复工作区或标签。
+- 数据路径只来自 snapshot；固定打开和安装版 canReselect 入口调用 `openDataDirectory()` / `chooseDataDirectoryOnNextStart()`，不传路径、不立即退出或搬迁。invalid/too-large 经过二次明确操作调用 `resetInvalidFile('settings'|'state')`；unsupported 不提供重置。界面保留“启动恢复重新打开磁盘文件，未保存内容仍需手动保存”。
+
+### 9.2 显示接口与编辑器边界
+
+根 `data-theme=light|dark` 与语义 tokens 切换外壳；system 监听 prefers-color-scheme，改为显式主题或卸载时释放，StrictMode 只保留一个有效订阅。遗留 app.css 的外壳、错误/禁用、菜单/按钮、搜索面板转为语义色；CodeMirror 光标、选区、当前/普通查找匹配也适配深色。
+
+TXT 只经 `--txt-font-family` / `--txt-font-size` 作用于 `.cm-scroller`；默认 Cascadia Mono / Consolas / Courier New / monospace 13 px，system 与 serif 均有通用字体回退。无编辑器事务、实例重建或正文格式命令。DOCX `.ProseMirror` 固定白底、默认深色正文和 light color-scheme，显式颜色仍由模型控制；正文查找装饰保留白色画布配色，高对比有描边。没有 DOCX 缩放。
+
+### 9.3 实际验证与故障归因
+
+命令均使用仓库 scripts/npm.cmd / scripts/node.cmd。本机 Node os.release 为 `10.0.26200`，属 Windows 11，Electron 43.6.0；不作为 Windows 10 实机证据。CIM 查询因权限被拒，未猜测当前补丁号。没有修改用户/系统 TEMP/TMP；产品测试均用隔离 `--user-data-dir`，日志在 `.local-data/wp2-*.log`。
+
+| 命令/检查                                            | 实际结果                                                                                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 修改产品前 check（沙箱）                             | 1230 通过、10 既有条件跳过，但 worker spawn EPERM 造成 56 个未处理错误，退出 1，不能记为通过                                  |
+| 随后基线 build                                       | 退出 0；main 193.38 kB / preload 4.96 kB                                                                                      |
+| 同一基线 check，普通进程权限                         | 退出 0；77 文件 / 1230 通过 / 10 条件跳过，确认沙箱 worker 限制，无产品基线修复                                               |
+| 首轮受影响组件/样式回归                              | 4 文件 / 79 项通过                                                                                                            |
+| 新设置/真实编辑器定向测试                            | 初版 12 项通过；增加“目录成功不吞写失败”回归后的最终数量见下节                                                                |
+| 真实 Electron E2E                                    | 扩展至 8/8 通过；重启偏好、只读 settings 写失败/重试与旧 state 保护、TXT/DOCX 选区/历史/dirty、原文字颜色/磁盘字节、坏文件 UI |
+| 截图启动器 node.cmd scripts/capture-ui-baselines.mjs | 退出 0；仅给验证子进程 WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2，生成四张真实产品图片，未覆盖 Task 11 历史图         |
+
+初版新测试的 mock 返回类型推断为 string，改用 AppStateApi 方法类型。新增 Electron 用例初版误用 Vitest 5 秒默认值；沿用既有 E2E 的 30 秒预算后仍失败，诊断确认嵌套 label/select 在真实 Chromium 中的可访问名称包含选项；改为独立 label + htmlFor/id 后场景约 2 秒通过，未继续放宽超时。截图脚本 lint 的浏览器 document 全局改用页面执行字符串，没有禁用规则。
+
+真实窗口检查 900×600、1280×820 设置，900×600 可纵向滚动、无横向溢出且关闭可达；检查深色 TXT、白色 DOCX 画布和红色原文、工具栏/禁用态、系统主题媒体变化与 forced-colors。截图在 `.local-data/test/task-013/wp2`，证据遮罩数据根/侧栏绝对路径，UI 本身仍显示真实路径；均不提交或打包。高对比度是 Chromium 模拟，不等同 Windows 系统切换。单元测试另直接比较真实编辑器实例、不可变 state、选区、正文模型、undo/redo 和通知次数。
+
+### 9.4 最终检查与交接
+
+最终按 check → build → test:e2e 顺序验证：check 退出 0（79 文件、1243 通过、10 既有条件跳过；typecheck/lint/format/103 包 NOTICE 均通过），build 退出 0（main 193.55 kB、preload 4.96 kB、renderer CSS 61.55 kB / JS 2282.73 kB），E2E 最终 8/8 通过。随后 `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never` 与 `npm.cmd run package:verify -- --mode=dir` 均退出 0；只生成本地 unpacked 产品，没有重建 portable/NSIS 或发布。新增设置/编辑器定向用例合计 13 项，全部包含在最终 check。实际 ASAR 12669263 bytes、禁止项 0，主进程外部依赖仍为 docx/jszip/mammoth；审计列出的旧 portable/NSIS 不是本轮产物。收尾 format:check、git diff --check 通过，14 份变更文档的 336 个本地链接目标均存在，未观察到 Electron/WenShu 遗留进程。Task 13 仍为“实施中”。
+
+完整回归首轮有 1 项旧搜索组件断言失败：旧夹具没有 appState.get，应用因此正确显示读取异常入口；补齐正常读取夹具后，保留全部原断言并通过。最后新增查找高亮 E2E 时，Playwright fill 只发 input，CodeMirror 原生搜索在 change/keyup 提交；补上用户 Enter 操作，保留高亮断言和 30 秒预算后通过。真实原生窗口关闭时设置会先让出既有 dirty/saving 确认；取消仍保留两个 dirty 标签，不属于 WP4 最终快照接线。
+
+WP3 接手 `App.tsx`、`use-app-settings.ts` 的 snapshot/effectiveStartupMode、WP1 DesktopApi.appState 和 workspaceSessionId；restoreLast、正文恢复调度/取消/失败标签与恢复期间快照抑制均未实现。复用主进程模式政策，不能拿未持久化 preferences.startupMode 调度。
+
+WP4 接手 `waitForPendingPreferences()`（等完 renderer 已排队请求，再 flush 主进程队列）、现有 dirty/saving 关闭协议、最终 checkpoint/window/sidebar。没有接布局恢复或关闭最终快照，不承诺强杀前最后一次请求必达磁盘。
+
+本包未改 preload/共享 DTO。样式接口为 data-theme、两个 TXT CSS 变量和语义 tokens。截图脚本改为 Node + Playwright 启动真实产品，每轮使用 `.local-data/screenshots/profile-*`，保留 DEVICE_SCALE/HIGH_CONTRAST/ZOOM_FACTOR/MATRIX_ONLY 环境选项，增加输出目录覆盖。
+
+后续仍需完整产品 portable/NSIS 重启/升级/卸载、安装版设置按钮到下次原生引导的整包联调、Windows 系统高对比度/实际缩放和 Windows 10 实机。WP0/WP1 路径证据继续适用，不冒充本轮整包终验，不用另一套存储设计替代。本包交接后结束，不自动开始 WP3。

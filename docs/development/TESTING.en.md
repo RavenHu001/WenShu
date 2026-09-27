@@ -416,7 +416,7 @@ Fixed screenshot sizes: `1280×820`, `900×600`. In normal mode, run:
 
 ```powershell
 .\scripts\npm.cmd run build
-.\scripts\npm.cmd exec -- electron .\scripts\capture-ui-baselines.mjs
+.\scripts\node.cmd .\scripts\capture-ui-baselines.mjs
 ```
 
 Manually verify:
@@ -540,6 +540,12 @@ Do not run `check` and `build` in parallel: electron-vite creates temporary conf
 
 ## 7. Task 13 WP1 directory and storage checks
 
-Run `.\scripts\npm.cmd exec -- vitest run tests/app-state` for focused coverage. Product E2E workspaces/profiles live in `.local-data/test/e2e`. `--user-data-dir=<P>` isolates settings/state and Electron runtime together, with session in `<P>/session`. Capture runtime is script-relative `.local-data/screenshots/runtime`.
+Run `.\scripts\npm.cmd exec -- vitest run tests/app-state` for focused coverage. Product E2E workspaces/profiles live in `.local-data/test/e2e`. `--user-data-dir=<P>` isolates settings/state and Electron runtime together, with session in `<P>/session`. The capture launcher now starts the real product main process through Playwright with a fresh script-relative `.local-data/screenshots/profile-*` directory per capture; no screenshot-only settings service is used.
 
-Native bootstrap, real portable-launcher, and Windows ACL-denial checks use `scripts/verify-task-013-storage.mjs` after preparing/packaging its dedicated host. See the [WP1 report](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md#84-actual-commands-and-evidence) for commands, isolation, native interaction, and limitations. Do not modify user/system TEMP/TMP, use real profiles, or package probe data. WP1 supplies persistence; settings UI, document restoration, and final layout/close integration remain later work packages.
+Native bootstrap, real portable-launcher, and Windows ACL-denial checks use `scripts/verify-task-013-storage.mjs` after preparing/packaging its dedicated host. See the [WP1 report](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md#84-actual-commands-and-evidence) for commands, isolation, native interaction, and limitations. Do not modify user/system TEMP/TMP, use real profiles, or package probe data. WP1 supplies persistence; WP2 connects settings UI. Document restoration and final layout/close integration remain later work packages.
+
+### WP2 settings and display checks
+
+Focused command: `scripts/npm.cmd exec -- vitest run tests/shell/settings.test.tsx tests/document/settings-display.test.tsx`. Coverage includes real editor state/selection/undo/redo preservation, preference ordering, failed previews/retry, effective startup mode, explicit bad-file reset, focus trapping, and system-theme subscription cleanup. Product E2E covers restart persistence, read-only settings write failure without clearing old records, retry, TXT/DOCX display and unchanged disk bytes, and bad-file feedback.
+
+WP2 E2E screenshots stay in `.local-data/test/task-013/wp2`, excluded from Git/packages. Paths are masked only in evidence; the product shows the real path. The 900×600 dialog can scroll vertically. High contrast uses Chromium forced-colors emulation, not a Windows system-theme switch. Run the capture script with `scripts/node.cmd scripts/capture-ui-baselines.mjs` after building; set `WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2` only for that verification process to avoid overwriting historical Task 11 images. Do not run this Node launcher through Electron.

@@ -187,7 +187,7 @@ button.ft-row {
 }
 
 .ft-kind--directory {
-  color: #8a6a2f;
+  color: var(--color-warning);
 }
 .ft-row--selected .ft-kind {
   color: var(--color-primary);

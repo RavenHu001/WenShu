@@ -29,6 +29,8 @@ import { useFileManagement } from './lib/use-file-management';
 import { AppMenuBar } from './components/shell/AppMenuBar';
 import { ActivityBar, type ActivityPanel } from './components/shell/ActivityBar';
 import { AboutDialog } from './components/shell/AboutDialog';
+import { SettingsDialog } from './components/shell/SettingsDialog';
+import { useAppSettings, type SettingsLoad } from './lib/use-app-settings';
 import { StatusBar } from './components/shell/StatusBar';
 import { ToastRegion, type ToastMessage } from './components/common/ToastRegion';
 import { clampSidebarWidth, SIDEBAR_DEFAULT_WIDTH } from './lib/sidebar-size';
@@ -59,7 +61,23 @@ type PendingDiscard =
       readonly source: 'close-tab' | 'switch-workspace' | 'close-window';
     };
 
-export const App = (): React.JSX.Element => {
+export const App = ({
+  initialSettings,
+}: {
+  readonly initialSettings?: SettingsLoad;
+}): React.JSX.Element => {
+  const settings = useAppSettings(initialSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key === ',') {
+        event.preventDefault();
+        if (!document.querySelector('[role="dialog"]')) setSettingsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
   const {
     model,
     openFile,
@@ -181,6 +199,8 @@ export const App = (): React.JSX.Element => {
 
   useEffect(() => {
     const unsubscribe = window.desktop.window.onCloseRequested(() => {
+      // Keep the existing dirty/saving confirmation visible above settings.
+      setSettingsOpen(false);
       if (pendingRef.current !== null) {
         // 已有确认流程在途：不覆盖尚未处理的目标，复位主进程询问状态
         void window.desktop.window.cancelClose();
@@ -843,6 +863,7 @@ export const App = (): React.JSX.Element => {
             },
             toggleSidebar: () => setSidebarCollapsed((value) => !value),
             about: () => setAboutOpen(true),
+            settings: () => setSettingsOpen(true),
           }}
           capabilities={{
             hasWorkspace: workspace.state.workspace !== null,
@@ -853,6 +874,12 @@ export const App = (): React.JSX.Element => {
             sidebarCollapsed,
           }}
         />
+        {(settings.error ||
+          Object.values(settings.snapshot?.files ?? {}).some((file) => file.error)) && (
+          <button className="settings-alert" onClick={() => setSettingsOpen(true)}>
+            设置或恢复记录异常 · 查看
+          </button>
+        )}
       </header>
 
       <main
@@ -978,6 +1005,9 @@ export const App = (): React.JSX.Element => {
       )}
       {aboutOpen && (
         <AboutDialog runtime={window.desktop.runtime} onClose={() => setAboutOpen(false)} />
+      )}
+      {settingsOpen && (
+        <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} />
       )}
       <ToastRegion
         toasts={toasts}

@@ -11,6 +11,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../../src/renderer/App';
+import { defaultSettings, defaultState, type AppStateApi } from '../../src/shared/app-state';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -127,6 +128,22 @@ function makeDesktopMock(): {
   const open = vi.fn(async (): Promise<OpenWorkspaceResult> => ({ status: 'cancelled' }));
   const refresh = vi.fn(async (): Promise<RefreshWorkspaceResult> => ({ status: 'not-open' }));
   (window as unknown as Record<string, unknown>).desktop = {
+    appState: {
+      get: vi.fn<AppStateApi['get']>(async () => ({
+        status: 'ok',
+        snapshot: {
+          settings: defaultSettings(),
+          state: defaultState(),
+          effectiveStartupMode: 'workspace-and-tabs',
+          workspaceSessionId: null,
+          files: {
+            settings: { status: 'missing', pending: false, error: null },
+            state: { status: 'missing', pending: false, error: null },
+          },
+          dataDirectory: { path: '/test-data', mode: 'test', canReselect: false },
+        },
+      })),
+    },
     runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
     workspace: { open, refresh },
     document: {

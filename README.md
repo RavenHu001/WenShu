@@ -4,7 +4,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Task 12 内部 Alpha 发布工程。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
+> **当前阶段：Task 13 实施中，WP0–WP2 完成。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
 
 ## 发布与许可
 
@@ -65,12 +65,16 @@ WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Wi
 - 对文件、目录或工作区根执行"在资源管理器中显示"；
 - 任一成功新建/另存为/重命名/移动/删除后工作区自动刷新，旧搜索结果立即失效（取消活动搜索、清空结果与定位），不会继续点击到已不存在的路径；失败、取消与"在资源管理器中显示"不误使有效结果失效。
 - 顶部只保留 renderer 内的一套中文应用菜单；文件、编辑、视图与帮助菜单中的命令均为真实入口，运行时版本信息移入“关于文枢”；
-- 活动栏、文件树、标签、工具栏和状态反馈使用项目内 SVG 图标；未实现的设置入口不再伪装成可用功能；
+- 活动栏、文件树、标签、工具栏和状态反馈使用项目内 SVG 图标；设置通过“视图 → 设置…”或 `Ctrl+,` 打开；
 - 工作区侧栏可在 180–420 px 间拖动或键盘调整，可折叠并通过活动栏/视图菜单恢复；长路径、深层目录与超长文件名可滚动并保留完整 tooltip；
 - 文件树右键、`Shift+F10`/菜单键支持根、文件、文件夹三类菜单；`F2` 重命名、`Delete` 删除确认、`F5` 刷新、`Ctrl+Shift+S` 另存为均复用既有门禁；
 - 文件和文件夹可拖到同工作区普通目录或根投放区，no-op、自身/后代、同名、saving、非法类型和过期工作区在提交前拒绝，主进程仍作最终裁决；
 - DOCX 使用居中 820 px 上限的连续写作画布（不承诺分页），工具栏按历史、字符、段落、列表与对齐分组，窄宽度进入“更多格式”溢出；TXT 保持全高纯文本布局；
 - 成功文件操作显示限时可关闭 toast；错误、冲突与 partial failure 不自动消失；高对比度与减少动画具有 CSS 适配入口。
+
+通过“视图 → 设置…”或 `Ctrl+,` 可即时调整浅色/深色/跟随系统、TXT 系统/等宽/衬线字体与 12–24 px 字号。默认跟随系统、等宽 13 px；DOCX 保留白色画布和原正文格式。设置显示实际数据目录、固定打开入口和安装版下次启动重选入口。三种启动方式已持久化，自动恢复工作区/标签仍待 WP3；未保存正文仍须手动保存。
+
+数据根为开发 `.local-data/dev`、portable 启动器旁 `WenShuData` 或安装版原生选择的独立目录；安装版系统用户目录只保留 ≤8 KiB 定位文件。不承诺系统/portable 临时解包零 C 盘写入。
 
 ### 工程能力
 
@@ -98,7 +102,6 @@ WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Wi
 
 ### 尚未实现
 
-- 深色主题、完整设置系统、可持久主题/字体配置；
 - 标签页拖拽排序、固定、批量关闭与状态恢复；
 - TXT/DOCX 自动保存与会话恢复；
 - 工作区替换、批量替换、正则/模糊/语义搜索与持久全文索引；
@@ -202,7 +205,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.md)）。
 - [x] [Task 12：Windows Alpha 发布工程](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.md)）。
 
-- [ ] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（实施中；WP0 基线与实际启动验证完成，WP1 尚未开始，产品设置/恢复未交付；见[交接报告](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.md)）。
+- [ ] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（实施中；WP0–WP2 完成，已提供数据目录、JSON 存储、主题/TXT 显示与设置对话框；恢复调度和布局/关闭集成未完成；见[交接报告](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/architecture/PROJECT_BASELINE.md)为准。
 

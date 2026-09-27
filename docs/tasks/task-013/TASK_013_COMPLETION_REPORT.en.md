@@ -4,9 +4,9 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md)
 
-> **Status: in progress. WP0 and WP1 completed.** This separately authorized run on 2026-09-20 implements WP1 only and stops at its handoff. WP2/WP3/WP4/WP5 have not started.
-> Production directory initialization and JSON persistence are connected. Settings UI, tab restoration, and final layout/close integration are not implemented. Task 12's internal-binary/public-source boundary is unchanged.
-> Sections 1–7 preserve the historical WP0 baseline. Section 8 records the final WP1 implementation, evidence, and handoff.
+> **Status: in progress. WP0, WP1, and WP2 complete.** This run on 2026-09-27 implements only WP2, basic settings and themes, and stops at handoff; WP3/WP4/WP5 have not started.
+> Directories, JSON storage, the settings dialog, themes, and TXT display preferences are connected. Startup modes are saved; automatic workspace/tab restoration and final layout/close integration are not implemented. Task 12 release boundaries remain unchanged.
+> Sections 1–8 preserve historical WP0/WP1 results; section 9 records WP2.
 
 ## 1. WP0 baseline and scope
 
@@ -238,3 +238,54 @@ Stop after this handoff. Do not automatically implement WP2, WP3, or WP4, and do
 - Confirmed bootstrap temporary runtime cleanup, no locator after first cancellation, no recreated missing root, and no residual deny ACE on the ACL fixture. `git diff --check` passed.
 - If even a safe runtime directory cannot be established, startup displays an error before ready and terminates without waiting for default-profile initialization. Checked pinned Electron types and the [official showErrorBox documentation](https://www.electronjs.org/docs/latest/api/dialog#dialogshowerrorboxtitle-content). This extreme temporary-directory failure was not separately exercised through native UI.
 - Capture-launcher paths and syntax were checked; visual baselines were not regenerated. WP2 must connect the capture host's settings service when it starts reading preferences.
+
+## 9. WP2: basic settings and themes (complete)
+
+This run started on 2026-09-27 from clean commit `ca39bae` (WP1), with no applicable AGENTS.md. The plan, execution prompt, WP0/WP1 startup evidence, and seven appState methods were checked. Directory/storage prerequisites remain valid without a core blocker. Only WP2 was implemented; WP3 was not started. No dependencies, state framework, localStorage, routes, settings activity page, autosave, or drafts were added.
+
+### 9.1 Entry points, persistence, and errors
+
+- AppMenuBar exposes View → Settings…; App handles Ctrl+, without stacking an existing dialog. SettingsDialog reuses ModalDialog with Display / Startup / Data location groups, Tab containment, Escape, and focus restoration. Menu entry first establishes View as the return target. Dialog shortcuts do not reach document commands.
+- Fields/defaults remain theme=system (light/dark/system), txtFontPreset=monospace (system/monospace/serif), txtFontSizePx=13 (integer 12–24), startupMode=workspace-and-tabs (blank/workspace/workspace-and-tabs). JSON fields, versions, and budgets remain WP1's.
+- main.tsx waits for real appState.get and applies preferences before the first React render. Main chooses the initial background from preferences/nativeTheme; the unloaded page is transparent to reduce opposite-theme flashing. Missing files use defaults. Bad files remain intact with safe defaults and visible warnings. Service failures explicitly allow rereading without a substitute backend.
+- use-app-settings manages immediate previews, serialized requests, and feedback. updatePreferences receives exactly four fields without version, followed by existing flush/get verification. Late responses cannot replace newer previews; failure retains display and permits retry. Preference-write and directory-action errors are separate, so successful directory opening does not hide a failed preference write.
+- Only snapshot.effectiveStartupMode is durable. WP1 AppStateStore/projectStartupState alone clears/trims lastWorkspace. UI neither checkpoints nor maintains another history; failure shows the old effective mode. This version saves modes but explicitly does not automatically restore workspaces/tabs.
+- The real path comes only from snapshot. Fixed opening and installed-mode canReselect actions call openDataDirectory/chooseDataDirectoryOnNextStart without paths, exit, or migration. Explicit second confirmation resets invalid/too-large settings/state; unsupported versions have no reset action. The dialog explains that restoration reopens disk files and unsaved content still requires manual saving.
+
+### 9.2 Display seams and editor boundaries
+
+Root data-theme=light|dark and semantic tokens theme the shell. System mode subscribes to prefers-color-scheme and cleans up on explicit-theme changes/unmount, with one effective listener in StrictMode. Legacy shell, error/disabled, menu/button, and search-panel colors use tokens. CodeMirror cursor, selection, and ordinary/current matches support dark display.
+
+TXT uses only --txt-font-family / --txt-font-size on .cm-scroller. Defaults remain Cascadia Mono / Consolas / Courier New / monospace at 13 px; system/serif stacks include generic fallbacks. No editor transactions, reconstruction, or document formatting commands are added. DOCX ProseMirror keeps a white canvas, dark default text, and light color-scheme; explicit colors remain model-owned. Its match decorations retain white-canvas colors with forced-color outlines. No DOCX zoom was added.
+
+### 9.3 Actual verification and failures
+
+Commands use repository scripts/npm.cmd / scripts/node.cmd. Node os.release reports `10.0.26200`, Windows 11; Electron is 43.6.0. This is not Windows 10 hardware evidence. CIM queries were denied, so no current patch revision is inferred. User/system TEMP/TMP were unchanged. Product tests use isolated --user-data-dir profiles; logs remain in .local-data/wp2-*.log.
+
+| Command/check                                         | Actual result                                                                                                                                                                             |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pre-edit check in sandbox                             | 1230 assertions passed, 10 existing conditional skips; worker spawn EPERM caused 56 unhandled errors and exit 1, not a passing baseline                                                   |
+| Subsequent baseline build                             | Exit 0; main 193.38 kB / preload 4.96 kB                                                                                                                                                  |
+| Same baseline check with ordinary process permissions | Exit 0; 77 files / 1230 passed / 10 conditional skips. Confirmed sandbox worker restriction; no baseline product fix                                                                      |
+| Initial affected component/style regression           | 4 files / 79 passed                                                                                                                                                                       |
+| New settings/live-editor focused tests                | Initially 12 passed; final count after adding directory-success/write-failure regression follows below                                                                                    |
+| Real Electron E2E                                     | Expanded to 8/8 passing: restart persistence, read-only settings failure/retry and old-state preservation, TXT/DOCX selection/history/dirty, original colors/unchanged bytes, bad-file UI |
+| node.cmd scripts/capture-ui-baselines.mjs             | Exit 0; child-only WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2 produced four real-product images, leaving Task 11 images untouched                                                  |
+
+Initial mock return types widened to string; typing mocks against AppStateApi fixed them. New E2E tests accidentally used Vitest's five-second default. Matching the existing Electron suite's 30-second budget still failed; diagnosis found nested label/select accessible names included options in real Chromium. Separate label + htmlFor/id fixed this, with the scenario completing in about two seconds and no further timeout increase. Capture lint's browser document reference moved into a page-evaluation string; no lint rule was disabled.
+
+Real windows were inspected at 900×600 and 1280×820. Small settings dialogs scroll vertically without horizontal overflow and keep Close reachable. Evidence includes dark TXT, white DOCX canvas/original red text, toolbar/disabled states, system-theme media changes, and forced-colors. Images remain in .local-data/test/task-013/wp2, excluded from Git/packages; data/sidebar paths are masked only in evidence. Forced-colors is Chromium emulation, not a Windows system-setting change. Unit tests also compare real editor identities, immutable states, selections, models, undo/redo, and notification counts.
+
+### 9.4 Final checks and handoff
+
+Final verification followed check → build → test:e2e: check exited 0 (79 files, 1243 passed, 10 existing conditional skips; typecheck/lint/format/103-package NOTICE passed), build exited 0 (main 193.55 kB, preload 4.96 kB, renderer CSS 61.55 kB / JS 2282.73 kB), and final E2E passed 8/8. Then `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never` and `npm.cmd run package:verify -- --mode=dir` both exited 0. Only the local unpacked product was generated; portable/NSIS were not rebuilt or published. All 13 new settings/editor tests are included in the passing check. The actual ASAR is 12669263 bytes with zero forbidden entries; main external imports remain docx/jszip/mammoth. Old portable/NSIS artifacts listed by the audit were not generated in this run. Closeout format:check and git diff --check passed; all 336 local link targets in 14 changed documents exist, and no remaining Electron/WenShu processes were observed. Task 13 remains in progress.
+
+The first full regression had one old search-component assertion fail because its fixture lacked appState.get and the application correctly showed a read-error entry. Adding a normal read fixture preserved every original assertion and passed. The final search-highlight E2E initially used Playwright fill, which emits input, while native CodeMirror search commits on change/keyup; adding the user Enter action preserved highlight assertions and the 30-second budget and passed. Native window close now dismisses settings before the existing dirty/saving confirmation; cancellation preserves two dirty tabs. This is not WP4 final-checkpoint integration.
+
+WP3 takes App.tsx, use-app-settings snapshot/effectiveStartupMode, WP1 DesktopApi.appState, and workspaceSessionId. restoreLast, document scheduling/cancellation/error tabs, and checkpoint suppression during restore are unimplemented. Reuse the main-process policy; never schedule from unpersisted preferences.startupMode.
+
+WP4 takes waitForPendingPreferences() (drain renderer requests before flushing main-process queues), existing dirty/saving close coordination, and final checkpoint/window/sidebar integration. Layout restoration/final close snapshots are not connected; the last request is not guaranteed to reach disk before forced termination.
+
+WP2 changes no preload/shared DTO. Display seams are data-theme, two TXT CSS variables, and semantic tokens. Capture now uses Node + Playwright to start the real product with fresh .local-data/screenshots/profile-* directories. DEVICE_SCALE/HIGH_CONTRAST/ZOOM_FACTOR/MATRIX_ONLY environment options remain; an output-directory override was added.
+
+Later verification remains: complete product portable/NSIS restart/upgrade/uninstall, installed settings-button-to-next-native-bootstrap integration, Windows system high contrast/physical scaling, and Windows 10 hardware. WP0/WP1 path evidence remains valid, not a new final-package acceptance. No substitute storage design was introduced. This run stops at WP2 handoff without starting WP3.

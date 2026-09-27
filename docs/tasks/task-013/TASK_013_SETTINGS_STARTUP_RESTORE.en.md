@@ -4,7 +4,7 @@
 
 [Task archive](../README.en.md) · [Documentation hub](../../README.en.md)
 
-> **Status: in progress; WP0 complete, WP1–WP5 not implemented.** Planning date: 2026-09-12. See the [completion report](./TASK_013_COMPLETION_REPORT.en.md) for the 2026-09-20 baseline, real startup evidence, and handoff.
+> **Status: in progress; WP0–WP2 complete, WP3–WP5 not implemented.** Planning date: 2026-09-12. See the [completion report](./TASK_013_COMPLETION_REPORT.en.md) for WP0/WP1 on 2026-09-20 and WP2 implementation, verification, and handoff on 2026-09-27.
 > This task defines the product scope, implementation approach, and work packages requested by the owner, prioritizing a simple design and minimizing unnecessary writes to the C drive.
 > This is not an implementation completion report and does not change Task 12's boundary between internal binaries and public source releases.
 

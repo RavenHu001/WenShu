@@ -12,7 +12,7 @@
 - Run automated checks, manual acceptance, and production-build verification: [testing guide](./development/TESTING.en.md).
 - Understand product scope, architecture, and security constraints: [project definition and technical baseline](./architecture/PROJECT_BASELINE.en.md).
 - Trace feature planning, implementation, and acceptance: [task archive index](./tasks/README.en.md).
-- In progress: [Task 13: basic settings and startup restore](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). Only WP0 baseline/startup verification is complete; WP1 has not started. See the [handoff report](./tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
+- In progress: [Task 13: basic settings and startup restore](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). WP0–WP2 are complete: directories, JSON storage, basic settings, and themes are connected. Automatic restoration and layout/close integration remain pending. See the [handoff report](./tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
 
 ## Categories
 

@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, Menu, session } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeTheme, session } from 'electron';
+import type { AppPreferences } from '../shared/app-state';
 import { join, resolve } from 'node:path';
 import { startApplication } from './app-state/startup';
 import { AppStateStore } from './app-state/app-state-store';
@@ -13,7 +14,7 @@ import { registerFileManagementIpc } from './workspace/file-management-ipc';
 import { registerSaveAsIpc } from './document/save-as-ipc';
 import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/window-close';
 
-const createMainWindow = (): BrowserWindow => {
+const createMainWindow = (preferences: AppPreferences): BrowserWindow => {
   const window = new BrowserWindow({
     title: appIdentity.productName,
     width: 1280,
@@ -21,7 +22,11 @@ const createMainWindow = (): BrowserWindow => {
     minWidth: 900,
     minHeight: 600,
     show: false,
-    backgroundColor: '#f4f5f7',
+    backgroundColor:
+      preferences.theme === 'dark' ||
+      (preferences.theme === 'system' && nativeTheme.shouldUseDarkColors)
+        ? '#20242c'
+        : '#f5f6f8',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // 渲染进程必须保持浏览器权限模型，桌面能力只能经 preload 窄接口进入。
@@ -89,7 +94,7 @@ startApplication(
     registerSaveAsIpc();
     registerWindowCloseIpc();
 
-    mainWindow = createMainWindow();
+    mainWindow = createMainWindow(store.get().settings);
 
     // Drain already accepted metadata only. WP4 owns final layout/checkpoint and dirty-close integration.
     let draining = false;
@@ -127,7 +132,7 @@ startApplication(
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow();
+        mainWindow = createMainWindow(store.get().settings);
       }
     });
   },

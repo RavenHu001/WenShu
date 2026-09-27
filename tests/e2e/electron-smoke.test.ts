@@ -1,7 +1,8 @@
-import { Document, Packer, Paragraph } from 'docx';
+import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import JSZip from 'jszip';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { defaultSettings, defaultState } from '../../src/shared/app-state';
 import { resolve } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -123,6 +124,238 @@ async function expectOoxml(path: string): Promise<void> {
 }
 
 describe('Electron E2E：隔离工作区', () => {
+  it('WP2 real settings dialog, theme/font persistence, TXT/DOCX history and visual sizes', async () => {
+    const workspace = await createWorkspace();
+    await writeFile(resolve(workspace, 'display.txt'), 'TXT display');
+    const docx = await Packer.toBuffer(
+      new Document({
+        sections: [
+          {
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: '初始 DOCX 内容', color: 'B3261E' })],
+              }),
+            ],
+          },
+        ],
+      }),
+    );
+    await writeFile(resolve(workspace, 'display.docx'), docx);
+    const first = await launchWithWorkspace(workspace);
+    const { page, application } = first;
+    await openFile(page, 'display.txt');
+    const txt = page.locator('.cm-content');
+    await txt.press('Control+End');
+    await page.keyboard.type(' draft');
+    await txt.press('Home');
+    await txt.press('Shift+End');
+    const selection = await page.evaluate(() => window.getSelection()?.toString());
+    await page.keyboard.press('Control+,');
+    const dialog = page.getByRole('dialog', { name: '设置', exact: true });
+    await dialog.waitFor({ timeout: 3000 });
+    expect(await page.getByLabel('TXT 字号', { exact: true }).inputValue()).toBe('13');
+    await page.getByLabel('主题', { exact: true }).selectOption('dark', { timeout: 3000 });
+    await page.getByLabel('TXT 字体', { exact: true }).selectOption('serif');
+    await page.getByLabel('TXT 字号', { exact: true }).selectOption('24');
+    await page.getByLabel('启动方式', { exact: true }).selectOption('workspace');
+    await page.getByText('设置已保存', { exact: true }).waitFor();
+    expect(await txt.textContent()).toBe('TXT display draft');
+    expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
+    expect(
+      await page.locator('.cm-scroller').evaluate((element) => getComputedStyle(element).fontSize),
+    ).toBe('24px');
+    const evidence = resolve(projectRoot, '.local-data/test/task-013/wp2');
+    await mkdir(evidence, { recursive: true });
+    for (const [width, height] of [
+      [900, 600],
+      [1280, 820],
+    ]) {
+      await application.evaluate(
+        ({ BrowserWindow }, size) =>
+          BrowserWindow.getAllWindows()[0]!.setSize(size.width!, size.height!),
+        { width, height },
+      );
+      await page.getByText('关闭设置', { exact: true }).scrollIntoViewIfNeeded();
+      const bounds = await dialog.boundingBox();
+      const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height);
+      expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+      await page.screenshot({
+        path: resolve(evidence, `settings-dark-${width}x${height}.png`),
+        mask: [page.getByLabel('当前数据目录'), page.locator('.ws-info-path')],
+      });
+      if (width === 900) {
+        await dialog.evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        await page.screenshot({
+          path: resolve(evidence, 'settings-dark-900x600-top.png'),
+          mask: [page.getByLabel('当前数据目录'), page.locator('.ws-info-path')],
+        });
+      }
+    }
+    await page.keyboard.press('Escape');
+    expect(await page.locator('.tab.is-dirty').count()).toBe(1);
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(selection);
+    await txt.press('Control+z');
+    expect(await txt.textContent()).toBe('TXT display');
+    await txt.press('Control+y');
+    expect(await txt.textContent()).toBe('TXT display draft');
+    await page.screenshot({
+      path: resolve(evidence, 'txt-dark.png'),
+      mask: [page.locator('.ws-info-path')],
+    });
+    await txt.press('Control+f');
+    await page.locator('.cm-search input[name="search"]').fill('TXT', { timeout: 3000 });
+    // CodeMirror commits its native search field on change/keyup, not input alone.
+    await page.locator('.cm-search input[name="search"]').press('Enter');
+    await page.locator('.cm-searchMatch').first().waitFor({ timeout: 3000 });
+    await page.screenshot({ path: resolve(evidence, 'txt-dark-find.png') });
+    await page.getByRole('button', { name: '文件面板', exact: true }).click();
+    await openFile(page, 'display.docx');
+    const prose = page.locator('.docx-editor .ProseMirror:visible');
+    await prose.press('Control+End');
+    await page.keyboard.type(' draft');
+    await prose.press('Home');
+    await prose.press('Shift+End');
+    const beforeHtml = await prose.innerHTML();
+    const beforeSelection = await page.evaluate(() => window.getSelection()?.toString());
+    const font = await prose.evaluate((element) => getComputedStyle(element).fontSize);
+    await page.keyboard.press('Control+,');
+    await page.getByLabel('TXT 字体', { exact: true }).selectOption('system');
+    await page.getByLabel('TXT 字号', { exact: true }).selectOption('18');
+    await page.getByText('设置已保存', { exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    expect(await prose.innerHTML()).toBe(beforeHtml);
+    expect(await page.locator('.tab.is-dirty').count()).toBe(2);
+    expect(
+      await prose
+        .locator('span')
+        .first()
+        .evaluate((element) => getComputedStyle(element).color),
+    ).toBe('rgb(179, 38, 30)');
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(beforeSelection);
+    expect(await prose.evaluate((element) => getComputedStyle(element).fontSize)).toBe(font);
+    expect(await prose.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
+      'rgb(255, 255, 255)',
+    );
+    await page.screenshot({
+      path: resolve(evidence, 'docx-dark.png'),
+      mask: [page.locator('.ws-info-path')],
+    });
+    await application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.setSize(900, 600),
+    );
+    await page.screenshot({
+      path: resolve(evidence, 'docx-dark-900x600.png'),
+      mask: [page.locator('.ws-info-path')],
+    });
+    await prose.press('Control+z');
+    expect(await prose.textContent()).toBe('初始 DOCX 内容');
+    await prose.press('Control+y');
+    expect(await prose.textContent()).toBe('初始 DOCX 内容 draft');
+    await prose.press('Control+f');
+    await page.getByRole('textbox', { name: '查找内容', exact: true }).fill('DOCX');
+    await page.locator('.wenshu-search-current').waitFor();
+    await page.screenshot({ path: resolve(evidence, 'docx-dark-find-900x600.png') });
+    await page.getByRole('button', { name: '关闭查找', exact: true }).click();
+    await page.emulateMedia({ forcedColors: 'active' });
+    await page.keyboard.press('Control+,');
+    await page.screenshot({
+      path: resolve(evidence, 'settings-high-contrast.png'),
+      mask: [page.getByLabel('当前数据目录'), page.locator('.ws-info-path')],
+    });
+    expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.emulateMedia({ forcedColors: 'none' });
+    await page.getByRole('button', { name: '视图', exact: true }).click();
+    await page.getByRole('menuitem', { name: '设置…', exact: true }).click();
+    await page.getByLabel('主题', { exact: true }).selectOption('system');
+    await page.getByText('设置已保存', { exact: true }).waitFor();
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForFunction(() => document.documentElement.dataset['theme'] === 'light');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.waitForFunction(() => document.documentElement.dataset['theme'] === 'dark');
+    await page.getByLabel('主题', { exact: true }).selectOption('dark');
+    await page.getByText('设置已保存', { exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    expect(
+      await page
+        .getByRole('button', { name: '视图', exact: true })
+        .evaluate((element) => element === document.activeElement),
+    ).toBe(true);
+    expect(await readFile(resolve(workspace, 'display.txt'), 'utf8')).toBe('TXT display');
+    expect(await readFile(resolve(workspace, 'display.docx'))).toEqual(docx);
+    await page.keyboard.press('Control+,');
+    await page.getByRole('dialog', { name: '设置', exact: true }).waitFor();
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
+    const closeGuard = page.getByRole('dialog', { name: '放弃未保存修改', exact: true });
+    await closeGuard.waitFor();
+    expect(await page.getByRole('dialog', { name: '设置', exact: true }).count()).toBe(0);
+    await closeGuard.getByRole('button', { name: '取消', exact: true }).click();
+    expect(await page.locator('.tab.is-dirty').count()).toBe(2);
+    expect(first.pageErrors).toEqual([]);
+    await destroyTestApplication(application);
+    const second = await launchWithWorkspace(workspace, first.userData);
+    expect(await second.page.locator('html').getAttribute('data-theme')).toBe('dark');
+    await second.page.keyboard.press('Control+,');
+    expect(await second.page.getByLabel('TXT 字体', { exact: true }).inputValue()).toBe('system');
+    expect(await second.page.getByLabel('TXT 字号', { exact: true }).inputValue()).toBe('18');
+    expect(await second.page.getByLabel('启动方式', { exact: true }).inputValue()).toBe(
+      'workspace',
+    );
+    expect(await second.page.getByRole('tab').count()).toBe(0); // WP3 has not been implemented.
+  }, 30_000);
+
+  it('WP2 real write failure keeps preview and old restore record until retry succeeds', async () => {
+    const workspace = await createWorkspace();
+    const profile = await mkdtemp(resolve(isolatedRoot, 'settings-failure-'));
+    temporaryRoots.push(profile);
+    const settingsFile = resolve(profile, 'settings.json');
+    const stateFile = resolve(profile, 'state.json');
+    const state = {
+      ...defaultState(),
+      lastWorkspace: {
+        rootPath: workspace,
+        tabRelativePaths: ['sample.txt'],
+        activeRelativePath: 'sample.txt',
+      },
+    };
+    await writeFile(settingsFile, JSON.stringify(defaultSettings()));
+    await writeFile(stateFile, JSON.stringify(state));
+    const { page } = await launchWithWorkspace(workspace, profile);
+    await chmod(settingsFile, 0o444);
+    try {
+      await page.keyboard.press('Control+,');
+      await page.getByLabel('主题', { exact: true }).selectOption('dark');
+      await page.getByLabel('启动方式', { exact: true }).selectOption('blank');
+      await page.getByText('重试', { exact: true }).waitFor();
+      expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
+      expect(JSON.parse(await readFile(settingsFile, 'utf8'))).toEqual(defaultSettings());
+      expect(JSON.parse(await readFile(stateFile, 'utf8'))).toEqual(state);
+      expect(await page.getByText('此模式尚未保存。当前有效方式：恢复工作区与标签。').count()).toBe(
+        1,
+      );
+      await page.screenshot({
+        path: resolve(projectRoot, '.local-data/test/task-013/wp2/settings-write-failure.png'),
+        mask: [page.getByLabel('当前数据目录'), page.locator('.ws-info-path')],
+      });
+    } finally {
+      await chmod(settingsFile, 0o666);
+    }
+    await page.getByText('重试', { exact: true }).click();
+    await page.getByText('设置已保存', { exact: true }).waitFor();
+    expect(JSON.parse(await readFile(settingsFile, 'utf8'))).toMatchObject({
+      theme: 'dark',
+      startupMode: 'blank',
+    });
+    expect(JSON.parse(await readFile(stateFile, 'utf8')).lastWorkspace).toBeNull();
+  }, 30_000);
+
   it('WP1 real paths, durable preferences, and stale-session rejection through preload', async () => {
     const workspace = await createWorkspace();
     await writeFile(resolve(workspace, 'sample.txt'), 'unchanged body');
@@ -185,6 +418,11 @@ describe('Electron E2E：隔离工作区', () => {
     await writeFile(resolve(profile, 'settings.json'), originalSettings);
     await writeFile(resolve(profile, 'state.json'), originalState);
     const running = await launchWithWorkspace(workspace, profile);
+    await running.page.getByRole('button', { name: '设置或恢复记录异常 · 查看' }).click();
+    expect(await running.page.getByRole('alert').count()).toBe(2);
+    expect(await running.page.getByText('重置 state.json…', { exact: true }).count()).toBe(0);
+    expect(await running.page.getByLabel('TXT 字号', { exact: true }).inputValue()).toBe('13');
+    await running.page.keyboard.press('Escape');
     expect(await running.page.evaluate(() => window.desktop.appState.get())).toMatchObject({
       status: 'ok',
       snapshot: { files: { settings: { status: 'invalid' }, state: { status: 'unsupported' } } },

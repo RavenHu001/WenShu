@@ -112,7 +112,7 @@
   height: 22px;
   padding: 0 9px;
   color: var(--color-text-secondary);
-  background: #eef0f3;
+  background: var(--color-workspace);
   border-top: 1px solid var(--color-border);
   font-size: var(--font-size-xs);
 }
@@ -160,7 +160,7 @@
   display: grid;
   width: 42px;
   height: 42px;
-  color: #fff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border-radius: var(--radius-lg);
   font-size: 20px;
@@ -262,7 +262,7 @@
   gap: 5px;
   min-height: 28px;
   padding: 4px 10px;
-  color: #fff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-sm);
