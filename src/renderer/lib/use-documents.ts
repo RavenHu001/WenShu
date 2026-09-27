@@ -145,6 +145,8 @@ export interface DocumentsController {
   readonly commitTrashResult: (relativePath: string, result: WorkspaceMutationResult) => void;
   /** 工作区成功切换：清空全部标签与运行时，使旧工作区结果失效。 */
   readonly invalidateWorkspace: () => void;
+  /** Close/unmount invalidates reads without replacing the visible tab model. */
+  readonly invalidatePendingReads: () => void;
 }
 
 function txtRuntimeEntry(): DocumentTabRuntime {
@@ -204,6 +206,10 @@ export function useDocuments(): DocumentsController {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      epochRef.current++;
+      for (const resolves of openWaitersRef.current.values())
+        for (const resolve of resolves) resolve(null);
+      openWaitersRef.current.clear();
     };
   }, []);
 
@@ -1062,7 +1068,13 @@ export function useDocuments(): DocumentsController {
     commit(invalidateTabsModel());
   }, [commit]);
 
+  const invalidatePendingReads = useCallback(() => {
+    epochRef.current++;
+    for (const tabId of openWaitersRef.current.keys()) resolveOpenWaiters(tabId, null);
+  }, [resolveOpenWaiters]);
+
   return {
+    invalidatePendingReads,
     model,
     openFile,
     openTextFile,

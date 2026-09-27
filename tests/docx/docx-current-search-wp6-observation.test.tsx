@@ -21,6 +21,7 @@ import { TextStyle, FontSize } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import { DOCX_MAX_MODEL_SERIALIZED_BYTES, type DocxDocumentModel } from '../../src/shared/docx';
 import { docxModelToTiptapJson } from '../../src/shared/docx-convert';
 import {
@@ -331,7 +332,7 @@ describe('WP6：泄漏观察（第 8.8 节；重复订阅 / 装饰清理 / 控�
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mockDesktopApp();
     const heapBefore = process.memoryUsage().heapUsed;
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });

@@ -262,7 +262,7 @@ function validTabs(paths: unknown, active: unknown, limit: number): paths is str
     (active === null || (typeof active === 'string' && paths.includes(active)))
   );
 }
-export function validState(value: unknown): value is AppState {
+function validStateRecord(value: unknown, stored: boolean): value is AppState {
   if (
     !exactObject(value, ['version', 'window', 'sidebar', 'lastWorkspace']) ||
     value.version !== 1 ||
@@ -275,10 +275,20 @@ export function validState(value: unknown): value is AppState {
     w === null ||
     (exactObject(w, ['rootPath', 'tabRelativePaths', 'activeRelativePath']) &&
       validLocalRoot(w.rootPath) &&
-      validTabs(w.tabRelativePaths, w.activeRelativePath, RESTORE_TAB_LIMIT) &&
-      new Set(w.tabRelativePaths.map((p) => p.toLowerCase())).size === w.tabRelativePaths.length)
+      (stored
+        ? Array.isArray(w.tabRelativePaths) &&
+          w.tabRelativePaths.length <= STATE_MAX_BYTES / 5 &&
+          w.tabRelativePaths.every(validTabPath) &&
+          (w.activeRelativePath === null || validTabPath(w.activeRelativePath))
+        : validTabs(w.tabRelativePaths, w.activeRelativePath, RESTORE_TAB_LIMIT) &&
+          new Set(w.tabRelativePaths.map((p) => p.toLowerCase())).size ===
+            w.tabRelativePaths.length))
   );
 }
+/** Published state stays canonical and capped. Bounded disk input may need selection/deduplication. */
+export const validState = (value: unknown): value is AppState => validStateRecord(value, false);
+export const validStoredState = (value: unknown): value is AppState =>
+  validStateRecord(value, true);
 export function validCheckpoint(value: unknown): value is SessionCheckpoint {
   return (
     exactObject(value, [
@@ -332,6 +342,10 @@ export function selectRestoreTabs(
 /** Sole mode policy, reused by load, preference writes, and checkpoints. */
 export function projectStartupState(state: AppState, mode: StartupMode): AppState {
   if (!state.lastWorkspace) return state;
+  const selected = selectRestoreTabs(
+    state.lastWorkspace.tabRelativePaths,
+    state.lastWorkspace.activeRelativePath,
+  );
   return mode === 'blank'
     ? { ...state, lastWorkspace: null }
     : mode === 'workspace'
@@ -339,5 +353,12 @@ export function projectStartupState(state: AppState, mode: StartupMode): AppStat
           ...state,
           lastWorkspace: { ...state.lastWorkspace, tabRelativePaths: [], activeRelativePath: null },
         }
-      : state;
+      : {
+          ...state,
+          lastWorkspace: {
+            ...state.lastWorkspace,
+            tabRelativePaths: selected.paths,
+            activeRelativePath: selected.active,
+          },
+        };
 }

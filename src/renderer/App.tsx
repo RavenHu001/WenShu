@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useDocuments } from './lib/use-documents';
 import { useWorkspace } from './lib/use-workspace';
+import { useStartupRestore } from './lib/use-startup-restore';
 import { useWorkspaceSearch } from './lib/use-workspace-search';
 import {
   activeTab,
@@ -78,6 +79,7 @@ export const App = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+  const documents = useDocuments();
   const {
     model,
     openFile,
@@ -94,10 +96,43 @@ export const App = ({
     saveAsTab,
     commitRelocateResult,
     commitTrashResult,
-  } = useDocuments();
+  } = documents;
   // 工作区状态所有权上移：同一 epoch 同时供文档失效与搜索结果校验（WP0 冻结项 11）；
   // mutationEpoch 由文件管理操作确认成功后递增（TASK-009 §4.11）
   const workspace = useWorkspace({ onWorkspaceSelected: invalidateWorkspace });
+  const restoration = useStartupRestore({
+    loaded: settings.loaded,
+    snapshot: settings.snapshot,
+    workspace,
+    documents,
+  });
+  const restorationRef = useRef(restoration);
+  restorationRef.current = restoration;
+  useEffect(() => {
+    // Native window close remains available; application shortcuts and inert content are suspended.
+    const block = (event: Event) => {
+      if (!restorationRef.current.busy) return;
+      const target = event.target;
+      if (
+        (target instanceof Element && target.closest('[inert]')) ||
+        (event instanceof KeyboardEvent &&
+          (event.ctrlKey || event.metaKey || /^F\d+$/.test(event.key)))
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    for (const name of ['keydown', 'click', 'contextmenu', 'drop', 'beforeinput'])
+      window.addEventListener(name, block, true);
+    return () => {
+      for (const name of ['keydown', 'click', 'contextmenu', 'drop', 'beforeinput'])
+        window.removeEventListener(name, block, true);
+    };
+  }, []);
+  const requestWindowClose = useCallback(async () => {
+    await restorationRef.current.prepareClose();
+    await window.desktop.window.requestClose();
+  }, []);
   /** 文件管理成功后的对账扫描不插入临时状态行，避免文件树上下跳动造成窗口闪烁。 */
   const refreshWorkspaceAfterMutation = useCallback(
     () => workspace.refreshWorkspace({ background: true }),
@@ -207,7 +242,7 @@ export const App = ({
         return;
       }
       if (!dirtyRef.current) {
-        void window.desktop.window.requestClose();
+        void requestWindowClose();
         return;
       }
       if (savingRef.current) {
@@ -365,7 +400,7 @@ export const App = ({
       guardResolveRef.current?.(true);
       guardResolveRef.current = null;
     } else if (current.kind === 'close-window') {
-      void window.desktop.window.requestClose();
+      void requestWindowClose();
     } else if (current.kind === 'reload') {
       reloadTab(current.tabId);
     } else if (current.kind === 'mixed-line-endings') {
@@ -431,10 +466,12 @@ export const App = ({
 
   // 工作区成功切换 → 清空全部标签并使旧工作区未完成的结果失效（useWorkspace 已调用）
   const handleOpenWorkspace = useCallback(async (): Promise<void> => {
+    if (restorationRef.current.busy) return;
     // 未保存修改保护：守卫拒绝时不得打开原生目录选择器
     if (!(await handleOpenWorkspaceGuard())) {
       return;
     }
+    restorationRef.current.beforeManualOpen();
     await workspace.openWorkspace();
   }, [handleOpenWorkspaceGuard, workspace.openWorkspace]);
 
@@ -838,8 +875,10 @@ export const App = ({
   };
 
   return (
-    <div className="app-shell">
-      <header className="titlebar">
+    <div
+      className={`app-shell${restoration.busy || restoration.notice || restoration.writeError ? ' app-shell--restore-status' : ''}`}
+    >
+      <header className="titlebar" inert={restoration.busy}>
         <span className="brand-mark">文枢</span>
         <AppMenuBar
           actions={{
@@ -882,7 +921,43 @@ export const App = ({
         )}
       </header>
 
+      {(restoration.busy || restoration.notice || restoration.writeError) && (
+        <div className="restore-status" role="status" aria-live="polite">
+          <span>
+            {restoration.phase === 'workspace'
+              ? '正在恢复工作区…'
+              : restoration.phase === 'tabs'
+                ? '正在恢复标签…'
+                : restoration.notice}
+          </span>
+          {restoration.phase === 'tabs' && (
+            <button className="ws-btn" onClick={restoration.stop}>
+              停止恢复
+            </button>
+          )}
+          {restoration.phase === 'error' && (
+            <>
+              <button className="ws-btn" onClick={() => void restoration.restore()}>
+                重试恢复
+              </button>
+              <button className="ws-btn" onClick={() => void handleOpenWorkspace()}>
+                打开其他文件夹
+              </button>
+            </>
+          )}
+          {restoration.writeError && (
+            <>
+              <span>{restoration.writeError}</span>
+              <button className="ws-btn" onClick={restoration.retryWrite}>
+                重试保存恢复记录
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <main
+        inert={restoration.busy}
         className={`workspace${sidebarCollapsed ? ' workspace--sidebar-collapsed' : ''}`}
         style={workspaceStyle}
       >
@@ -929,6 +1004,7 @@ export const App = ({
 
         <section className="editor-area">
           <DocumentPane
+            interactionBlocked={restoration.busy}
             tabs={model.state.tabs}
             activeTabId={model.state.activeTabId}
             onActivateTab={activateTab}

@@ -12,7 +12,7 @@
 - 执行自动检查、手工验收和生产构建验证：[测试指南](./development/TESTING.md)。
 - 理解产品范围、架构和安全约束：[项目定义与技术基线](./architecture/PROJECT_BASELINE.md)。
 - 追溯具体功能的规划、实施和验收：[任务档案索引](./tasks/README.md)。
-- 当前实施中：[Task 13：基础设置与启动恢复](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)；WP0–WP2 完成：数据目录、JSON 存储、基础设置与主题已接入；自动恢复和布局/关闭集成未完成，见[交接报告](./tasks/task-013/TASK_013_COMPLETION_REPORT.md)。
+- 当前实施中：[Task 13：基础设置与启动恢复](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)；WP0–WP3 完成：数据目录、JSON 存储、基础设置与主题已接入；工作区/标签恢复与中途关闭保护已接入，最终布局/关闭集成未完成，见[交接报告](./tasks/task-013/TASK_013_COMPLETION_REPORT.md)。
 
 ## 文档分类
 

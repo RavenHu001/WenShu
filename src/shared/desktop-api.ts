@@ -9,7 +9,11 @@ export interface DesktopRuntimeInfo {
   readonly appVersion: string;
 }
 
-import type { OpenWorkspaceResult, RefreshWorkspaceResult } from './workspace';
+import type {
+  OpenWorkspaceResult,
+  RefreshWorkspaceResult,
+  RestoreWorkspaceResult,
+} from './workspace';
 import type { AppStateApi } from './app-state';
 import type {
   ReadTextDocumentResult,
@@ -56,6 +60,7 @@ export interface DesktopApi {
   readonly runtime: DesktopRuntimeInfo;
   readonly workspace: {
     readonly open: () => Promise<OpenWorkspaceResult>;
+    readonly restoreLast: () => Promise<RestoreWorkspaceResult>;
     readonly refresh: () => Promise<RefreshWorkspaceResult>;
     /**
      * 排他新建空 UTF-8 TXT（TASK-009 WP3）：请求只含 mutationId、父目录与叶名称；
@@ -76,14 +81,14 @@ export interface DesktopApi {
     readonly trash: (request: TrashWorkspaceEntryRequest) => Promise<WorkspaceMutationResult>;
   };
   readonly document: {
-    /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */
+    /** 文件树或恢复记录中的规范相对路径；主进程每次重新完成全部校验。 */
     readonly readText: (relativePath: string) => Promise<ReadTextDocumentResult>;
     /**
      * 只接受一个结构化保存请求：相对路径、正文、预期版本与可选的换行规范化确认。
      * 主进程会拒绝多余字段（根路径、绝对目标、临时路径、编码、替换策略等）。
      */
     readonly saveText: (request: SaveTextDocumentRequest) => Promise<SaveTextDocumentResult>;
-    /** 只接受文件树快照中的规范工作区相对路径，主进程会重新完成全部校验。 */
+    /** 文件树或恢复记录中的规范相对路径；主进程每次重新完成全部校验。 */
     readonly readDocx: (relativePath: string) => Promise<ReadDocxDocumentResult>;
     /**
      * 只接受一个结构化 DOCX 保存请求：相对路径、预期版本、模型与可选的兼容性确认

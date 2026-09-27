@@ -13,6 +13,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EditorView } from '@codemirror/view';
 import { undo } from '@codemirror/commands';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -231,7 +232,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await act(async () => {
@@ -259,7 +260,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('b');
     await act(async () => {
@@ -281,7 +282,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await act(async () => {
@@ -313,7 +314,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await act(async () => {
@@ -341,7 +342,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await act(async () => {
@@ -369,7 +370,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await act(async () => {
@@ -407,7 +408,7 @@ describe('搜索结果打开与定位（第 4.9 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('x');
     await act(async () => {
@@ -447,7 +448,7 @@ describe('定位过期校验（第 4.9.3 - 4.9.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await act(async () => {

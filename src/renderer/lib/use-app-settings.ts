@@ -180,6 +180,7 @@ export function useAppSettings(initial?: SettingsLoad) {
   }, [adopt]);
   return {
     preferences,
+    loaded: loaded !== undefined,
     snapshot: loaded?.status === 'ok' ? loaded.snapshot : null,
     busy,
     resetting,

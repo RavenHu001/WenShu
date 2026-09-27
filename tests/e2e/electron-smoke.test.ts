@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun } from 'docx';
+import { Document, Packer, Paragraph, Table, TableCell, TableRow, TextRun } from 'docx';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import JSZip from 'jszip';
 import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -61,6 +61,7 @@ async function createWorkspace(): Promise<string> {
 async function launchWithWorkspace(
   workspace: string,
   existingProfile?: string,
+  manualOpen = true,
 ): Promise<{
   page: Page;
   pageErrors: string[];
@@ -93,14 +94,29 @@ async function launchWithWorkspace(
   }, workspace);
 
   const page = await application.firstWindow();
+  page.setDefaultTimeout(10_000);
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('crash', () => console.info(`Electron E2E renderer crashed: ${electronStderr.join('')}`));
   // `firstWindow()` 可在 loadFile 导航开始前返回 Electron 的 about:blank 初始文档。
   await page.waitForURL(/^file:/, { timeout: 10_000 });
-  const openWorkspace = page.getByRole('button', { name: '打开文件夹' });
-  await openWorkspace.waitFor({ state: 'visible', timeout: 10_000 });
-  await openWorkspace.click();
+  await page.locator('.app-shell').waitFor();
+  if (manualOpen) {
+    // Existing profiles may now restore themselves. Do not replace their restored tabs.
+    const state = await page.evaluate(() => window.desktop.appState.get());
+    if (
+      state.status !== 'ok' ||
+      !state.snapshot.state.lastWorkspace ||
+      state.snapshot.files.state.error
+    ) {
+      const openWorkspace =
+        state.status === 'ok' && state.snapshot.files.state.error
+          ? page.getByRole('button', { name: '打开其他文件夹', exact: true })
+          : page.getByRole('button', { name: '打开文件夹' });
+      await openWorkspace.waitFor({ state: 'visible', timeout: 10_000 });
+      await openWorkspace.click();
+    }
+  }
   return { page, pageErrors, application, userData };
 }
 
@@ -122,6 +138,232 @@ async function expectOoxml(path: string): Promise<void> {
   expect(archive.file('[Content_Types].xml')).not.toBeNull();
   expect(archive.file('word/document.xml')).not.toBeNull();
 }
+
+async function closeNormally(application: ElectronApplication): Promise<void> {
+  const closed = application.waitForEvent('close');
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
+  await closed;
+}
+
+describe('TASK-013 WP3 real restart and restoration', () => {
+  it('reopens protected/degraded DOCX with fresh compatibility and leaves missing roots retryable', async () => {
+    const workspace = await createWorkspace();
+    const profile = await mkdtemp(resolve(isolatedRoot, 'restore-errors-'));
+    temporaryRoots.push(profile);
+    const protectedZip = await JSZip.loadAsync(await createSimpleDocx());
+    protectedZip.file(
+      'word/settings.xml',
+      '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:documentProtection w:edit="readOnly" w:enforcement="1"/></w:settings>',
+    );
+    const protectedBytes = await protectedZip.generateAsync({ type: 'nodebuffer' });
+    const degradedBytes = await Packer.toBuffer(
+      new Document({
+        sections: [
+          {
+            children: [
+              new Table({
+                rows: [
+                  new TableRow({
+                    children: [new TableCell({ children: [new Paragraph('table cell')] })],
+                  }),
+                ],
+              }),
+              new Paragraph('retained body'),
+            ],
+          },
+        ],
+      }),
+    );
+    await writeFile(resolve(workspace, 'protected.docx'), protectedBytes);
+    await writeFile(resolve(workspace, 'degraded.docx'), degradedBytes);
+    const state = {
+      ...defaultState(),
+      lastWorkspace: {
+        rootPath: workspace,
+        tabRelativePaths: ['protected.docx', 'degraded.docx'],
+        activeRelativePath: 'degraded.docx',
+      },
+    };
+    await writeFile(resolve(profile, 'state.json'), JSON.stringify(state));
+    const first = await launchWithWorkspace(workspace, profile, false);
+    await first.page.getByRole('button', { name: '确认继续编辑并保存', exact: true }).click();
+    await first.page.getByText('已确认继续编辑', { exact: true }).waitFor();
+    await closeNormally(first.application);
+    const second = await launchWithWorkspace(workspace, profile, false);
+    await second.page.getByRole('button', { name: '确认继续编辑并保存', exact: true }).waitFor();
+    await second.page.getByRole('tab', { name: 'protected.docx', exact: true }).click();
+    await second.page.getByText('文档为只读状态', { exact: true }).waitFor();
+    expect(
+      await second.page
+        .locator('.docx-editor-host:not([hidden]) .tiptap')
+        .getAttribute('contenteditable'),
+    ).toBe('false');
+    expect(await second.page.locator('.tab.is-dirty').count()).toBe(0);
+    expect(await readFile(resolve(workspace, 'protected.docx'))).toEqual(protectedBytes);
+    expect(await readFile(resolve(workspace, 'degraded.docx'))).toEqual(degradedBytes);
+    await closeNormally(second.application);
+    const missing = resolve(workspace, 'missing-root');
+    const original = JSON.stringify({
+      ...state,
+      lastWorkspace: { ...state.lastWorkspace, rootPath: missing },
+    });
+    await writeFile(resolve(profile, 'state.json'), original);
+    const third = await launchWithWorkspace(workspace, profile, false);
+    await third.page.getByRole('button', { name: '重试恢复', exact: true }).waitFor();
+    expect(
+      await third.page.getByRole('button', { name: '打开其他文件夹', exact: true }).isVisible(),
+    ).toBe(true);
+    expect(await readFile(resolve(profile, 'state.json'), 'utf8')).toBe(original);
+    await mkdir(missing);
+    await third.page.getByRole('button', { name: '重试恢复', exact: true }).click();
+    await third.page.getByText('无法读取文件 degraded.docx', { exact: true }).waitFor();
+    expect(await third.page.getByRole('tab').count()).toBe(2);
+    expect([...first.pageErrors, ...second.pageErrors, ...third.pageErrors]).toEqual([]);
+  }, 30_000);
+  it('records committed mixed tabs, discards only unsaved text, reloads current disk bytes and persists three modes', async () => {
+    const workspace = await createWorkspace();
+    await mkdir(resolve(workspace, 'sub'));
+    await writeFile(resolve(workspace, 'same.txt'), 'old disk');
+    await writeFile(resolve(workspace, 'sub/same.txt'), 'second path');
+    await writeFile(resolve(workspace, 'empty.txt'), '');
+    await writeFile(resolve(workspace, 'book.docx'), await createSimpleDocx());
+    const first = await launchWithWorkspace(workspace);
+    for (const name of ['same.txt', 'book.docx', 'empty.txt']) await openFile(first.page, name);
+    await first.page.getByRole('button', { name: 'sub', exact: true }).click();
+    await first.page.getByTestId('ft-sub/same.txt').click();
+    await first.page.getByRole('tab', { name: 'sub/same.txt', exact: true }).waitFor();
+    await first.page.getByRole('tab', { name: 'book.docx', exact: true }).click();
+    await first.page.locator('.tiptap').filter({ visible: true }).waitFor();
+    await first.page.getByRole('tab', { name: 'same.txt', exact: true }).first().click();
+    await first.page.locator('.cm-content').fill('unsaved draft');
+    await first.page.locator('.tab.is-dirty').waitFor();
+    await first.application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.close(),
+    );
+    const guard = first.page.getByRole('dialog', { name: '放弃未保存修改', exact: true });
+    await guard.getByRole('button', { name: '取消', exact: true }).click();
+    expect(await first.page.locator('.cm-content').textContent()).toBe('unsaved draft');
+    await first.application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.close(),
+    );
+    const closed = first.application.waitForEvent('close');
+    await guard.getByRole('button', { name: '放弃修改', exact: true }).click();
+    await closed;
+    const statePath = resolve(first.userData, 'state.json');
+    const state = JSON.parse(await readFile(statePath, 'utf8'));
+    expect(state.lastWorkspace).toEqual({
+      rootPath: workspace,
+      tabRelativePaths: ['same.txt', 'book.docx', 'empty.txt', 'sub/same.txt'],
+      activeRelativePath: 'same.txt',
+    });
+    expect(JSON.stringify(state)).not.toContain('unsaved draft');
+    await writeFile(resolve(workspace, 'same.txt'), 'external disk update');
+    await rm(resolve(workspace, 'empty.txt'));
+    const second = await launchWithWorkspace(workspace, first.userData, false);
+    await second.page.locator('main:not([inert]) .cm-content').waitFor();
+    expect(await second.page.getByRole('tab').allTextContents()).toEqual([
+      'same.txt',
+      'book.docx',
+      'empty.txt',
+      'same.txt',
+    ]);
+    expect(await second.page.locator('.cm-content').textContent()).toBe('external disk update');
+    expect(await second.page.locator('.tab.is-dirty').count()).toBe(0);
+    await second.page.getByRole('tab', { name: 'empty.txt，发生错误', exact: true }).click();
+    await second.page.getByText('无法读取文件 empty.txt', { exact: true }).waitFor();
+    await writeFile(resolve(workspace, 'empty.txt'), 'now exists');
+    await second.page.getByRole('button', { name: '重试', exact: true }).click();
+    await second.page.locator('.cm-content').filter({ hasText: 'now exists' }).waitFor();
+    await second.page.keyboard.press('Control+,');
+    await second.page.getByLabel('启动方式', { exact: true }).selectOption('workspace');
+    await second.page.getByText('设置已保存', { exact: true }).waitFor();
+    await second.page.keyboard.press('Escape');
+    await closeNormally(second.application);
+    expect(JSON.parse(await readFile(statePath, 'utf8')).lastWorkspace.tabRelativePaths).toEqual(
+      [],
+    );
+    const third = await launchWithWorkspace(workspace, first.userData, false);
+    await third.page.locator('main:not([inert]) .ws-info-path').waitFor();
+    expect(await third.page.getByRole('tab').count()).toBe(0);
+    await third.page.keyboard.press('Control+,');
+    await third.page.getByLabel('启动方式', { exact: true }).selectOption('blank');
+    await third.page.getByText('设置已保存', { exact: true }).waitFor();
+    await third.page.keyboard.press('Escape');
+    await closeNormally(third.application);
+    expect(JSON.parse(await readFile(statePath, 'utf8')).lastWorkspace).toBeNull();
+    const fourth = await launchWithWorkspace(workspace, first.userData, false);
+    await fourth.page.getByText('尚未打开文件夹', { exact: true }).waitFor();
+    expect(await fourth.page.getByRole('tab').count()).toBe(0);
+    expect([
+      ...first.pageErrors,
+      ...second.pageErrors,
+      ...third.pageErrors,
+      ...fourth.pageErrors,
+    ]).toEqual([]);
+  }, 30_000);
+
+  it('closing incomplete real DOCX reads keeps full record; stopping keeps only visible/loading tabs', async () => {
+    const workspace = await createWorkspace();
+    const profile = await mkdtemp(resolve(isolatedRoot, 'restore-batch-'));
+    temporaryRoots.push(profile);
+    // A real bounded DOCX workload provides an observable read phase without mocking or cancelling reads.
+    const bytes = await Packer.toBuffer(
+      new Document({
+        sections: [
+          {
+            children: Array.from(
+              { length: 1200 },
+              (_, i) => new Paragraph(`Synthetic restoration paragraph ${i}`),
+            ),
+          },
+        ],
+      }),
+    );
+    const paths = Array.from({ length: 30 }, (_, i) => `document-${i}.docx`);
+    await Promise.all(paths.map((path) => writeFile(resolve(workspace, path), bytes)));
+    const original = JSON.stringify({
+      ...defaultState(),
+      lastWorkspace: {
+        rootPath: workspace,
+        tabRelativePaths: paths,
+        activeRelativePath: paths.at(-1),
+      },
+    });
+    await writeFile(resolve(profile, 'state.json'), original);
+    const first = await launchWithWorkspace(workspace, profile, false);
+    await first.page.getByRole('button', { name: '停止恢复', exact: true }).waitFor();
+    expect(await first.page.locator('main').getAttribute('inert')).toBe('');
+    await first.page.keyboard.press('Control+,');
+    expect(await first.page.getByRole('dialog').count()).toBe(0);
+    expect(await readFile(resolve(profile, 'state.json'), 'utf8')).toBe(original);
+    await closeNormally(first.application);
+    expect(await readFile(resolve(profile, 'state.json'), 'utf8')).toBe(original);
+    const second = await launchWithWorkspace(workspace, profile, false);
+    await second.page.getByRole('button', { name: '停止恢复', exact: true }).click();
+    await second.page
+      .getByText('已停止恢复；保留当前已打开和正在读取的标签。', { exact: true })
+      .waitFor();
+    const count = await second.page.getByRole('tab').count();
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThan(paths.length);
+    await second.page.locator('.docx-editor-host:not([hidden]) .tiptap').waitFor();
+    expect(await second.page.getByRole('tab').count()).toBe(count);
+    const evidence = resolve(projectRoot, '.local-data/test/task-013/wp3');
+    await mkdir(evidence, { recursive: true });
+    await second.application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.setSize(900, 600),
+    );
+    await second.page.screenshot({
+      path: resolve(evidence, 'stopped-900x600.png'),
+      mask: [second.page.locator('.ws-info-path')],
+    });
+    await closeNormally(second.application);
+    const partial = JSON.parse(await readFile(resolve(profile, 'state.json'), 'utf8'));
+    expect(partial.lastWorkspace.tabRelativePaths).toEqual(paths.slice(0, count));
+    expect(partial.lastWorkspace.activeRelativePath).toBe(paths[count - 1]);
+    expect([...first.pageErrors, ...second.pageErrors]).toEqual([]);
+  }, 30_000);
+});
 
 describe('Electron E2E：隔离工作区', () => {
   it('WP2 real settings dialog, theme/font persistence, TXT/DOCX history and visual sizes', async () => {
@@ -308,7 +550,7 @@ describe('Electron E2E：隔离工作区', () => {
     expect(await second.page.getByLabel('启动方式', { exact: true }).inputValue()).toBe(
       'workspace',
     );
-    expect(await second.page.getByRole('tab').count()).toBe(0); // WP3 has not been implemented.
+    expect(await second.page.getByRole('tab').count()).toBe(0); // workspace-only mode excludes tabs.
   }, 30_000);
 
   it('WP2 real write failure keeps preview and old restore record until retry succeeds', async () => {
@@ -333,7 +575,10 @@ describe('Electron E2E：隔离工作区', () => {
       await page.keyboard.press('Control+,');
       await page.getByLabel('主题', { exact: true }).selectOption('dark');
       await page.getByLabel('启动方式', { exact: true }).selectOption('blank');
-      await page.getByText('重试', { exact: true }).waitFor();
+      await page
+        .getByRole('dialog', { name: '设置', exact: true })
+        .getByText('重试', { exact: true })
+        .waitFor();
       expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
       expect(JSON.parse(await readFile(settingsFile, 'utf8'))).toEqual(defaultSettings());
       expect(JSON.parse(await readFile(stateFile, 'utf8'))).toEqual(state);
@@ -347,7 +592,10 @@ describe('Electron E2E：隔离工作区', () => {
     } finally {
       await chmod(settingsFile, 0o666);
     }
-    await page.getByText('重试', { exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '设置', exact: true })
+      .getByText('重试', { exact: true })
+      .click();
     await page.getByText('设置已保存', { exact: true }).waitFor();
     expect(JSON.parse(await readFile(settingsFile, 'utf8'))).toMatchObject({
       theme: 'dark',

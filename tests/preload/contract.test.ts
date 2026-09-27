@@ -269,13 +269,16 @@ describe('preload 窄接口契约', () => {
   it('workspace.open / refresh 仍映射固定通道', () => {
     void desktop.workspace.open();
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:open');
+    void desktop.workspace.restoreLast();
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:restore-last');
+    expect(desktop.workspace.restoreLast.length).toBe(0);
 
     electronMock.invoke.mockClear();
     void desktop.workspace.refresh();
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:refresh');
   });
 
-  it('workspace 命名空间固定暴露 open/refresh/createText/createDocx/createDirectory/reveal/relocate/trash 八个方法', () => {
+  it('workspace 命名空间固定暴露九个方法，包括无参数 restoreLast', () => {
     expect(Object.keys(desktop.workspace).sort()).toEqual([
       'createDirectory',
       'createDocx',
@@ -283,6 +286,7 @@ describe('preload 窄接口契约', () => {
       'open',
       'refresh',
       'relocate',
+      'restoreLast',
       'reveal',
       'trash',
     ]);

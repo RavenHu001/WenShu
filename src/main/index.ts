@@ -86,7 +86,7 @@ startApplication(
       callback(false);
     });
 
-    registerWorkspaceIpc();
+    registerWorkspaceIpc(store);
     registerDocumentIpc();
     registerDocxIpc();
     registerSearchIpc();

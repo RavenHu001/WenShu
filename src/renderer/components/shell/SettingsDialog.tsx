@@ -90,7 +90,7 @@ export function SettingsDialog({
             </select>
           </div>
           <p>启动恢复重新打开磁盘文件，未保存内容仍需手动保存。</p>
-          <p>本版本仅保存启动方式，暂不自动恢复工作区或标签。</p>
+          <p>启动时按已保存的方式重新打开工作区与磁盘文件。</p>
           {snapshot && preferences.startupMode !== snapshot.effectiveStartupMode && (
             <p role="status">
               此模式尚未保存。当前有效方式：{startupLabels[snapshot.effectiveStartupMode]}。

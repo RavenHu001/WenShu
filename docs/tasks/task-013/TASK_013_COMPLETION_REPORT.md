@@ -4,9 +4,9 @@
 
 [任务规划](./TASK_013_SETTINGS_STARTUP_RESTORE.md) · [任务档案](../README.md)
 
-> **状态：实施中。WP0、WP1、WP2 已完成。** 2026-09-27 本轮只实施 WP2：基础设置与主题，交接后结束；未开始 WP3/WP4/WP5。
-> 数据目录、JSON 存储、设置对话框、主题与 TXT 显示偏好已接入；启动方式已保存，工作区/标签自动恢复及最终布局/关闭集成尚未实现。Task 12 发布边界不变。
-> 第 1–8 节保留 WP0/WP1 的历史基线与结果；WP2 见第 9 节。
+> **状态：实施中。WP0–WP3 已完成。** 2026-09-27 本轮只实施 WP3：工作区与标签恢复，交接后结束；未开始 WP4/WP5。
+> 三种启动方式、工作区/标签磁盘重读与恢复期间数据保护已接入；窗口布局及完整关闭/失败反馈联调仍待 WP4。Task 12 发布边界不变。
+> 第 1–9 节保留 WP0–WP2 的历史结果；WP3 见第 10 节。
 
 ## 1. WP0 基线与改动范围
 
@@ -289,3 +289,60 @@ WP4 接手 `waitForPendingPreferences()`（等完 renderer 已排队请求，再
 本包未改 preload/共享 DTO。样式接口为 data-theme、两个 TXT CSS 变量和语义 tokens。截图脚本改为 Node + Playwright 启动真实产品，每轮使用 `.local-data/screenshots/profile-*`，保留 DEVICE_SCALE/HIGH_CONTRAST/ZOOM_FACTOR/MATRIX_ONLY 环境选项，增加输出目录覆盖。
 
 后续仍需完整产品 portable/NSIS 重启/升级/卸载、安装版设置按钮到下次原生引导的整包联调、Windows 系统高对比度/实际缩放和 Windows 10 实机。WP0/WP1 路径证据继续适用，不冒充本轮整包终验，不用另一套存储设计替代。本包交接后结束，不自动开始 WP3。
+
+## 10. WP3：工作区与标签恢复（完成）
+
+2026-09-27 从 `15d7a90`（WP2）开始，分支 `TASK-13`、工作树干净，无适用 AGENTS.md。完整核对规划、统一提示词、WP0–WP2 报告与实际接口；WP1 的数据根、写队列、有效模式和主进程身份没有前置阻塞。继续使用两个 JSON 文件和已有 controller，无新增依赖、localStorage、状态框架、正文缓存或任意路径 IPC。本轮未开始 WP4。
+
+### 10.1 接口、安全与记录契约
+
+- 新增 `DesktopApi.workspace.restoreLast()` → `workspace:restore-last`，参数数量必须为零，仅接受主 frame；根只取 `AppStateStore.getRestoreRecord()`。成功返回 `{status:'selected',workspace,workspaceSessionId,restore:{tabRelativePaths,activeRelativePath,warnings}}`；没有记录为 `not-recorded`，过期为 `cancelled`，失败为 `{status:'error',error:{code,message}}`。目录错误统一 `WORKSPACE_UNAVAILABLE`，请求错误 `INVALID_REQUEST`，坏状态文件沿用 WP1 错误码，均不含原始异常/绝对路径。
+- `workspace-ipc.ts` 的手动打开和恢复共用扫描提交函数；扫描前后复验普通根目录、逐段祖先链接/realpath，排除当前数据根；扫描后检查主进程 generation 和窗口存活，再签发新 UUID。取消/失败保留旧根和原记录。refresh 保留身份并拒绝旧根结果。
+- 标签先按语法/类型/4096 字符与 512 KiB 文件预算校验，大小写去重；最多选 100 个，保留活动项与所选项原顺序。磁盘读取输入可含有界重复/超限列表或不在列表内的合法活动路径；`validStoredState` 接受这种可规范化输入，`validState` 继续要求发布格式唯一且 ≤100。`get()` 返回规范化投影，main-only `getRestoreRecord()` 保留原有界列表用于 `TAB_LIMIT` 提示；单纯加载/get/flush 不改原件。危险语法、额外字段、损坏/未知版本仍拒绝且禁止自动覆写。
+- 已存在的链接、目录或内部/数据目录路径在主进程过滤并返回 `UNSAFE_PATH`；缺失/拒绝访问/一般读取故障保留调度位置。每次实际读取继续执行既有 TXT/DOCX 安全读取，无创建缺失文件、自动保存或兼容性确认。活动路径无效时选第一个保留标签；无标签显示欢迎区。
+- `useWorkspace` 保留成功结果原样携带的 `workspaceSessionId`，提供同步 `isCurrentSession` 和 `cancelPendingOpen`。renderer 快照与标签同批绑定该 token，不再查询新 token 来修饰旧标签；主进程入队/发布前的旧身份拒绝继续有效。
+- `projectStartupState`/AppStateStore 仍是唯一模式政策：blank 清除并停止记录根，workspace 只存根，workspace-and-tabs 才存列表。恢复只使用 durable `effectiveStartupMode`；设置失败的预览不改变调度。
+
+### 10.2 恢复阶段、停止与关闭保护
+
+`use-startup-restore.ts` 实现 waiting → workspace → tabs → ready，以及 error/closing。设置加载后只调度一次；首次 effect 微任务在 StrictMode 清理后才启动，卸载和新批次递增 generation，`useWorkspace` 自身代次/会话与 `useDocuments` 原 epoch/tabId/requestId 继续校验迟到结果。
+
+根成功提交后逐个 `openFile`，分配新的运行时标签并读当前磁盘版本。失败保持原位置 read-error，继续后续标签；read-only 仍只读，degraded 重新确认。没有恢复旧正文、revision、搜索、选区、历史或确认。
+
+- waiting/workspace/tabs 阶段不发 checkpoint。主界面和菜单 inert，拦截应用快捷键/文件操作；TXT 用公开 Compartment 临时切换 readOnly/editable，DOCX 使用既有 editable 接口。没有重建编辑器或写正文；原生窗口关闭仍可用。只有 tabs 阶段显示“停止恢复”。
+- 主动停止同步作废批次，取消后续调度和最后激活，不取消已经发出的单次读取；保留已打开/加载中标签并解除快照门禁。该读取仍由原 controller 正常完成，不追加额外标签或切换活动项。
+- 恢复中直接关闭先作废批次、待提交根扫描和读取结果，不提交部分标签；旧 lastWorkspace 完整保留。`prepareClose()` 在普通 ready 状态才提交当前元数据，并等 IPC 被接受后调用原 requestClose；未保存取消不调用 prepareClose，放弃仍经过原确认，saving 保护保持。main 既有退出 drain 负责已接受队列。
+- 元数据只从已提交 model 投影路径、顺序与活动路径，500 ms 合并；正文输入、dirty、读取完成、搜索和编辑器对象不触发快照。写错误有独立“重试保存恢复记录”，不使用文档保存状态。WP3 保留磁盘 sidebar 值，避免把尚未恢复的 UI 默认布局写回；window 字段不改。
+
+### 10.3 实际验证与归因
+
+所有命令经项目 `scripts/npm.cmd` / `scripts/node.cmd`。未修改任何 TEMP/TMP，真实 Electron 全用 `.local-data/test/e2e` 中的 `--user-data-dir`，没有访问真实 profile。沿用本机 Windows 11 build 26200 环境，不声称 Windows 10 实测；WP0/WP1 平台路径证据仍适用。
+
+| 命令/检查                                                                                                   | 结果                                                                                                |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 修改产品前 `npm.cmd run check`，随后 `npm.cmd run build`                                                    | 均退出 0；79 文件、1243 通过、10 既有链接权限条件跳过；使用普通进程权限避开已归因的沙箱 worker 限制 |
+| `npm.cmd exec -- vitest run tests/app-state tests/preload/contract.test.ts`                                 | 7 文件、90 项通过；新增主进程恢复 14 项、renderer 恢复 11 项                                        |
+| 受影响编辑/搜索组件定向复验                                                                                 | 4 文件、106 项通过，保留旧断言                                                                      |
+| 完整 `npm.cmd run check`                                                                                    | 退出 0；81 文件、1268 通过、10 既有条件跳过；typecheck/lint/format/103 包 NOTICE 通过               |
+| 随后 `npm.cmd run build`                                                                                    | 退出 0；main 196.82 kB、preload 5.04 kB、renderer CSS 61.83 kB / JS 2297.12 kB                      |
+| 随后 `npm.cmd run test:e2e`                                                                                 | 最终 11/11 通过；新增三个实际恢复场景约 1.82 / 2.51 / 1.42 秒，总测试 13.03 秒                      |
+| `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never` | 退出 0；仅本地 unpacked，不安装/发布、不重建 portable/NSIS                                          |
+| `npm.cmd run package:verify -- --mode=dir`                                                                  | 退出 0；ASAR 12687281 bytes，禁止数据/测试项为 0；审计列出的旧 portable/NSIS 不是本轮产物           |
+
+定向覆盖：真实根缺失/junction/目录类型、坏路径、重复/超限/活动项保留、主进程扫描竞争与旧 token、StrictMode、顺序/错误/只读/降级标签、关闭/停止/切换/卸载迟到回包、初始写入抑制、停止后继续正常记录、正文输入不 checkpoint、元数据失败重试。现有安全读取/查找/搜索/兼容性/保存/关闭测试全部回归。
+
+真实 E2E 从 UI 手动打开混合 TXT/DOCX、同名不同路径和空文件，正常关闭/重启，验证外部修改后读入当前磁盘正文；缺失标签重试；dirty 关闭取消保留正文、放弃只恢复磁盘；三种模式连续重启。真实受保护 DOCX 仍不可编辑，degraded 在重启前确认、重启后再次要求确认，文件字节不变。缺失根有重试/正常打开入口，重新建立合成根后重试成功。
+
+真实批量 DOCX 恢复中，关闭前后旧 state.json 字节一致；另一次明确停止后，正在读取的标签正常完成，最终仅保存可见部分顺序/活动项。没有使用读取 mock 或增加取消 IPC。900×600 停止状态截图在 `.local-data/test/task-013/wp3/stopped-900x600.png`，已检查文字、按钮和 DOCX 可读性，路径仅在证据中遮罩。WP2 的 900×600/1280×820 显示场景仍包含在 11 项 E2E 中。
+
+失败也保留：早期 TypeScript 收窄和测试 Map 元组推断修正；首轮完整回归 126 项失败，原因是旧 App 夹具在设置加载前直接交互，改为显式传入已加载的 blank 模式夹具，未删除行为断言或弱化产品门禁。初版 E2E 误选同名文件、把隐藏搜索页的 role=tab 算入文档标签，以及未区分设置/错误标签“重试”按钮；用完整路径/具体对话框定位修正。动作等待统一为既有 10 秒、用例仍为 30 秒，没有放宽 timeout。定向 `-t` 命令的过滤跳过不计入最终 11/11。
+
+日志在 `.local-data/wp3-*.log`，合成目录/截图/包均忽略且不提交。没有新增 `.skip`、依赖或安全配置降级。
+
+### 10.4 交给 WP4
+
+- 接手 `useStartupRestore.prepareClose`/record 门禁、App 的 dirty/saving 协议及 WP2 `waitForPendingPreferences()`；完成最终布局/快照、renderer 请求到主进程 flush 的完整收尾及所有失败的重试/继续退出反馈。当前 main 已接受队列的错误提示不是这项完整联调的替代。
+- 接手 AppStateStore `updateWindow`、sidebar 与显示器可见范围校正；WP3 没有应用或记录实时窗口/侧栏布局。
+- 快照已自然观察既有已提交标签路径模型；WP4 仍负责重命名、移动、另存为、删除/partial failure 与最终关闭的系统性持久化联调，不另写路径迁移或模式政策。
+- 必须保留恢复中关闭的完整旧记录保护；只有完成恢复或用户明确停止才能采纳新现场，不得在 WP4 的布局/关闭 checkpoint 中绕过此门禁。
+- WP3 没有未解决核心前置阻塞。最终产品 portable/NSIS 重启/升级/卸载、系统级高对比度/缩放、Windows 10 实机仍留 WP5/后续环境验收，不冒充本轮通过。Task 13 整体仍为“实施中”。

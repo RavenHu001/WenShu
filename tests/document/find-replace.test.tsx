@@ -14,6 +14,7 @@ import { EditorView } from '@codemirror/view';
 import { undo, redo } from '@codemirror/commands';
 import { findNext, findPrevious, replaceAll, replaceNext } from '@codemirror/search';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -207,7 +208,7 @@ function pressModKey(key: string, shift = false): void {
 describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
   it('编辑器未获得焦点时，Ctrl+F / Ctrl+H 仍打开当前 TXT 的查找与替换', async () => {
     mockDesktop({ 'a.txt': 'hello world' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -226,7 +227,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
 
   it('Ctrl+F 打开查找面板；Ctrl+H 打开面板并聚焦替换输入', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -248,7 +249,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
 
   it('无需二次点击，切换到查找与替换标签后直接显示完整面板', async () => {
     mockDesktop({ 'a.txt': 'hello world' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -266,7 +267,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
 
   it('查找：上一个/下一个导航、大小写选项；不修改正文、不制造 dirty', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -296,7 +297,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
 
   it('大小写选项：区分大小写时只匹配精确文本', async () => {
     mockDesktop({ 'a.txt': 'Hello hello' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -327,7 +328,7 @@ describe('当前文件查找（第 4.2 节与 8.6 节）', () => {
 describe('当前文件替换（第 4.2 节与 8.6 节）', () => {
   it('替换当前项：修改正文、制造 dirty、可撤销/重做并显式保存', async () => {
     const api = mockDesktop({ 'a.txt': 'hello world\nhello again' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -369,7 +370,7 @@ describe('当前文件替换（第 4.2 节与 8.6 节）', () => {
 
   it('全部替换：作为单次编辑操作撤销；无匹配不修改正文、不制造 dirty', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -406,7 +407,7 @@ describe('当前文件替换（第 4.2 节与 8.6 节）', () => {
 describe('查找会话隔离与清理（第 4.2 节）', () => {
   it('多标签查找状态、选区和历史隔离：切换标签不串状态', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again', 'b.txt': 'nothing here' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
     await openFile('b.txt');
@@ -442,7 +443,7 @@ describe('查找会话隔离与清理（第 4.2 节）', () => {
 
   it('关闭标签后重开：查找会话随编辑器会话清理', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 
@@ -467,7 +468,7 @@ describe('查找会话隔离与清理（第 4.2 节）', () => {
 describe('快捷键回归（第 8.6 节）', () => {
   it('Ctrl+W 仍关闭标签；输入、撤销与重做不受查找扩展影响', async () => {
     mockDesktop({ 'a.txt': 'hello world\nhello again' });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await openFile('a.txt');
 

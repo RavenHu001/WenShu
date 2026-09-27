@@ -4,9 +4,9 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md)
 
-> **Status: in progress. WP0, WP1, and WP2 complete.** This run on 2026-09-27 implements only WP2, basic settings and themes, and stops at handoff; WP3/WP4/WP5 have not started.
-> Directories, JSON storage, the settings dialog, themes, and TXT display preferences are connected. Startup modes are saved; automatic workspace/tab restoration and final layout/close integration are not implemented. Task 12 release boundaries remain unchanged.
-> Sections 1–8 preserve historical WP0/WP1 results; section 9 records WP2.
+> **Status: in progress. WP0–WP3 complete.** This run on 2026-09-27 implements only WP3, workspace and tab restoration, and stops at handoff; WP4/WP5 have not started.
+> All three startup modes, disk-based workspace/tab reopening, and incomplete-restore data protection are connected. Window layout and complete close/failure integration remain for WP4. Task 12 release boundaries are unchanged.
+> Sections 1–9 preserve historical WP0–WP2 results; section 10 records WP3.
 
 ## 1. WP0 baseline and scope
 
@@ -289,3 +289,60 @@ WP4 takes waitForPendingPreferences() (drain renderer requests before flushing m
 WP2 changes no preload/shared DTO. Display seams are data-theme, two TXT CSS variables, and semantic tokens. Capture now uses Node + Playwright to start the real product with fresh .local-data/screenshots/profile-* directories. DEVICE_SCALE/HIGH_CONTRAST/ZOOM_FACTOR/MATRIX_ONLY environment options remain; an output-directory override was added.
 
 Later verification remains: complete product portable/NSIS restart/upgrade/uninstall, installed settings-button-to-next-native-bootstrap integration, Windows system high contrast/physical scaling, and Windows 10 hardware. WP0/WP1 path evidence remains valid, not a new final-package acceptance. No substitute storage design was introduced. This run stops at WP2 handoff without starting WP3.
+
+## 10. WP3: workspace and tab restoration (complete)
+
+On 2026-09-27, started from `15d7a90` (WP2), on `TASK-13` with a clean worktree and no applicable AGENTS.md. Reviewed the complete plan/prompt, WP0–WP2 evidence and actual contracts. WP1 directories, queues, durable mode and main-issued identities have no blocking prerequisites. This package retains the two JSON files and existing controllers, without new dependencies, localStorage, state frameworks, body caches or arbitrary-path IPC. WP4 has not started.
+
+### 10.1 Interfaces and safety
+
+- Added zero-argument `DesktopApi.workspace.restoreLast()` → `workspace:restore-last`, checking argument count/main frame. The root comes only from `AppStateStore.getRestoreRecord()`. Success is `{status:'selected',workspace,workspaceSessionId,restore:{tabRelativePaths,activeRelativePath,warnings}}`; other outcomes are `not-recorded`, `cancelled`, or `{status:'error',error:{code,message}}`. Root errors use WORKSPACE_UNAVAILABLE, invalid requests use INVALID_REQUEST, and bad-state errors retain WP1 codes. No raw exceptions/absolute paths in errors.
+- Manual open and restore share validation/scanning/commit in workspace-ipc.ts: ordinary root/ancestors/links/realpath checked before and after scanning; current data subtree excluded; generation/window liveness checked before issuing a fresh UUID. Failure/cancellation preserves the old root/record. Refresh preserves identity and rejects stale-root results.
+- Syntax/type/4096-character and 512 KiB file budgets remain. Selection deduplicates case-insensitively and caps restoration at 100, retaining the active item and selected items' original order. `validStoredState` accepts bounded duplicates/excess entries and a syntactically valid active path absent from the list for normalization. `validState` still requires canonical unique/capped output. `get()` returns canonical projection; main-only `getRestoreRecord()` retains the bounded original list for TAB_LIMIT reporting. Load/get/unchanged flush never rewrites it. Dangerous syntax, extra fields, corrupt/newer files remain rejected and protected.
+- Existing links, wrong types and internal/data paths are filtered with UNSAFE_PATH. Missing/inaccessible/general read failures retain their positions. Actual reads still use the original TXT/DOCX safety checks; no missing-file creation, auto-save or compatibility confirmation. Invalid activity falls back to the first retained tab; no tabs shows welcome.
+- `useWorkspace` retains the token from the selected result, with synchronous `isCurrentSession` and `cancelPendingOpen`. Checkpoints capture that token together with paths, never querying a newer token for an old list. Main admission/publication identity guards remain.
+- AppStateStore/projectStartupState own the sole mode policy: blank clears/stops workspace recording, workspace retains root only, workspace-and-tabs retains paths. Restore uses durable effectiveStartupMode, never failed preference previews.
+
+### 10.2 Phases, stop and close protection
+
+`use-startup-restore.ts` implements waiting → workspace → tabs → ready, plus error/closing. It schedules once after settings load; a microtask prevents discarded StrictMode setup from starting IPC. Unmount/new batches invalidate generation; workspace generation/session and existing document epoch/tabId/requestId guards reject late results.
+
+After root commit, sequential openFile calls allocate fresh tabs and disk snapshots. Read errors remain in place and subsequent files continue; read-only stays read-only and degraded requires new confirmation. No bodies, old revisions, search, selection/history or confirmations are restored.
+
+- No checkpoint in waiting/workspace/tabs. Main/menu are inert; application shortcuts and file mutations are blocked. TXT uses a public Compartment for temporary readOnly/editable configuration; DOCX uses its existing editable seam. No editor reconstruction/body writes. Native close remains available; Stop Restore appears only in the tab phase.
+- Explicit Stop synchronously invalidates the batch, preventing further scheduling/final activation. Open/loading tabs remain, snapshot suppression ends, and the already-started read completes through its original controller without extra tabs or focus changes. No new single-read cancellation protocol.
+- Closing incomplete restore invalidates batch/pending scan/read results and submits no partial replacement. Old lastWorkspace remains complete. Ready-state prepareClose submits current metadata and waits for IPC acceptance before existing requestClose. Dirty cancellation never calls it; discard/saving guards remain. Existing main quit drain handles accepted writes.
+- Metadata projects only committed paths/order/activity with 500 ms coalescing. Body input, dirty/read completion, search and editor objects do not trigger checkpoints. Separate retryable record-write feedback does not impersonate document saving. Stored sidebar values/window fields are preserved until WP4 applies live layout.
+
+### 10.3 Actual verification
+
+All commands use project scripts/npm.cmd or scripts/node.cmd. No TEMP/TMP changes or real profile access. Electron tests use isolated `.local-data/test/e2e` and `--user-data-dir`. The host remains Windows 11 build 26200, not Windows 10 evidence; WP0/WP1 platform/path evidence remains applicable.
+
+| Command/check                                                                                               | Result                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pre-edit check, then build                                                                                  | Both exit 0; 79 files, 1243 passes, 10 existing link-permission skips; normal process permissions avoid the previously attributed sandbox worker limitation |
+| `npm.cmd exec -- vitest run tests/app-state tests/preload/contract.test.ts`                                 | 7 files, 90 passes; 14 new main restore and 11 renderer restore cases                                                                                       |
+| Affected editor/search component verification                                                               | 4 files, 106 passes; existing assertions retained                                                                                                           |
+| Full `npm.cmd run check`                                                                                    | Exit 0; 81 files, 1268 passes, 10 existing conditional skips; typecheck/lint/format/103-package NOTICE pass                                                 |
+| Subsequent `npm.cmd run build`                                                                              | Exit 0; main 196.82 kB, preload 5.04 kB, renderer CSS 61.83 kB / JS 2297.12 kB                                                                              |
+| Subsequent `npm.cmd run test:e2e`                                                                           | Final 11/11 pass; new restore cases about 1.82 / 2.51 / 1.42 seconds; total tests 13.03 seconds                                                             |
+| `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never` | Exit 0; local unpacked only, no installation/publication or portable/NSIS rebuild                                                                           |
+| `npm.cmd run package:verify -- --mode=dir`                                                                  | Exit 0; ASAR 12687281 bytes, no forbidden data/test items. Previously present portable/NSIS files listed by audit are not this run's artifacts              |
+
+Tests cover real missing/junction/wrong-type roots, unsafe paths, duplicate/excess lists and active retention, main scan races/stale tokens, StrictMode, ordered/error/read-only/degraded tabs, close/stop/switch/unmount late results, initial suppression, resumed recording after stop, no body-triggered checkpoint, and metadata failure/retry. Existing safe-read/find/search/compatibility/save/close regressions all pass.
+
+Real E2E manually opens mixed TXT/DOCX, same names at different paths and empty files, closes/restarts normally, then reads external disk changes. It exercises missing-file retry, dirty-close cancellation/discard and all three modes across restarts. Protected DOCX remains uneditable; degraded confirmation made before restart is required again after restart; file bytes stay unchanged. Missing-root UI provides retry/normal-open entry points, and retry succeeds once the synthetic root is recreated.
+
+A real DOCX batch closed during restoration leaves state.json byte-for-byte unchanged. Explicit Stop in a second run permits the in-flight read to finish and saves only retained order/activity. No read mock or cancellation IPC. The inspected 900×600 stopped-state screenshot is `.local-data/test/task-013/wp3/stopped-900x600.png`: text, controls and DOCX are readable, with paths masked only in evidence. WP2's 900×600/1280×820 cases remain in the 11 E2E tests.
+
+Failures retained: early TypeScript union narrowing/Map tuple inference fixes; the first complete regression had 126 failures because old App fixtures interacted before preferences loaded. They now explicitly receive loaded blank-mode preferences, preserving assertions and product gating. Initial E2E selected the wrong same-name file, counted hidden search-panel role=tab nodes, or ambiguously selected Settings versus read-error Retry. Full paths and scoped dialogs fixed the fixtures. Actions use the existing 10-second wait budget and cases remain 30 seconds, with no timeout increase. Filtered `-t` skips do not count as final 11/11.
+
+Logs are `.local-data/wp3-*.log`; data/screenshots/packages remain ignored and uncommitted. No new `.skip`, dependency or security downgrade.
+
+### 10.4 WP4 handoff
+
+- Continue from useStartupRestore.prepareClose/record gating, App dirty/saving coordination and WP2 waitForPendingPreferences(). Complete final layout/checkpoint, renderer-request-to-main-flush draining and retry/continue-exit feedback for all failures. Existing accepted-queue feedback is not complete closing integration.
+- Wire AppStateStore.updateWindow, live sidebar and display work-area correction. WP3 neither applies nor records live window/sidebar layout.
+- Projection naturally observes committed path models; WP4 still owns systematic persisted rename/move/Save As/delete/partial-failure and final-close integration. Reuse existing transitions and the single main mode policy.
+- Future layout/close checkpoints must preserve complete old lastWorkspace during incomplete restore. Only completion or explicit Stop may adopt the visible replacement.
+- No unresolved core WP3 prerequisite. Final product portable/NSIS restart/upgrade/uninstall, OS-level high contrast/scaling and Windows 10 hardware remain for WP5/later environment acceptance. Task 13 remains in progress.

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 /**
  * TASK-007 WP5：DOCX 富文本编辑器、格式工具栏、兼容性 UI 与混合标签组件测试（任务第 8.6 节）。
  * 覆盖：文件树 .docx 选择、加载/只读/degraded/错误状态、编辑/撤销/重做/无变化事务、
@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { Editor } from '@tiptap/core';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -174,7 +175,7 @@ async function openWorkspace(entries: readonly WorkspaceEntry[]): Promise<Deskto
     status: 'selected',
     workspace: snapshot(entries),
   } as OpenWorkspaceResult);
-  render(<App />);
+  render(<App initialSettings={blankStartup} />);
   await act(async () => {
     fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
   });
@@ -267,7 +268,7 @@ describe('文件树 .docx 选择与加载（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -301,7 +302,7 @@ describe('文件树 .docx 选择与加载（第 8.6 节）', () => {
       workspace: snapshot([entry('empty.docx')]),
     } as OpenWorkspaceResult);
 
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -432,7 +433,7 @@ describe('兼容性：read-only / degraded 与确认（第 4.2 / 8.6 节）', ()
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -466,7 +467,7 @@ describe('兼容性：read-only / degraded 与确认（第 4.2 / 8.6 节）', ()
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -510,7 +511,7 @@ describe('兼容性：read-only / degraded 与确认（第 4.2 / 8.6 节）', ()
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -542,7 +543,7 @@ describe('DOCX 保存与冲突提示（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -582,7 +583,7 @@ describe('DOCX 保存与冲突提示（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -622,7 +623,7 @@ describe('DOCX 保存与冲突提示（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('b.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });

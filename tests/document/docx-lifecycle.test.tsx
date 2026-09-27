@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 /**
  * TASK-007 WP6：DOCX 保存闭环、生命周期保护与混合场景测试（任务第 8.6 节跨组件）。
  * 覆盖：Ctrl+S、备份提示、保存中/成功/冲突、dirty 关闭/工作区切换/窗口关闭确认、
@@ -10,6 +10,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { Editor } from '@tiptap/core';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -206,7 +207,7 @@ async function openWorkspace(api: DesktopMock, entries: readonly WorkspaceEntry[
     status: 'selected',
     workspace: snapshot(entries),
   } as OpenWorkspaceResult);
-  render(<App />);
+  render(<App initialSettings={blankStartup} />);
   await act(async () => {
     fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
   });

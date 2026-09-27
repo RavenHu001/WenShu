@@ -4,7 +4,7 @@
 
 [开发与测试](./README.md) · [文档中心](../README.md)
 
-本文档说明 Task 1 至 Task 12 的自动检查、Windows 桌面冒烟与人工验收。Task 11 在不改变 Task 1–10 文件/保存/搜索生命周期的前提下新增统一中文外壳、设计 token 与 SVG、可调/可折叠侧栏、文件树上下文菜单与键盘入口、同工作区内部拖拽、DOCX 连续居中画布、工具栏溢出、搜索结果层级和 toast。自动保存、文件系统监听与会话恢复仍不属于已有能力。Task 7–10 的详细既有清单继续保留在 3.5–3.8；Task 11 的桌面外壳、缩放、无障碍和视觉基线见 2.10 与 3.9。Task 12 的打包门禁、理论兼容性和实机验证边界见 2.11，并以 [TASK-012 完成报告](../tasks/task-012/TASK_012_COMPLETION_REPORT.md) 为最终证据来源。
+本文档说明 Task 1 至 Task 12 的自动检查、Windows 桌面冒烟与人工验收。Task 11 在不改变 Task 1–10 文件/保存/搜索生命周期的前提下新增统一中文外壳、设计 token 与 SVG、可调/可折叠侧栏、文件树上下文菜单与键盘入口、同工作区内部拖拽、DOCX 连续居中画布、工具栏溢出、搜索结果层级和 toast。自动保存与文件系统监听仍不属于已有能力；Task 13 WP3 已加入工作区与磁盘标签恢复，见第 7 节。Task 7–10 的详细既有清单继续保留在 3.5–3.8；Task 11 的桌面外壳、缩放、无障碍和视觉基线见 2.10 与 3.9。Task 12 的打包门禁、理论兼容性和实机验证边界见 2.11，并以 [TASK-012 完成报告](../tasks/task-012/TASK_012_COMPLETION_REPORT.md) 为最终证据来源。
 
 ## 1. 前置条件
 
@@ -558,14 +558,20 @@ Task 10 已实施并持续验证：
 
 不要并行运行 `check` 和 `build`：electron-vite 构建期间会创建临时配置文件，与 ESLint 扫描并发时可能产生无意义的文件竞争。
 
-## 7. Task 13 WP1 数据目录与存储
+## 7. Task 13 数据目录、设置与恢复
 
 定向运行 `.\scripts\npm.cmd exec -- vitest run tests/app-state`。产品 E2E 的工作区/profile 在 `.local-data/test/e2e`；`--user-data-dir=<P>` 同时隔离 settings/state 和 Electron runtime，session 在 `<P>/session`。截图启动器现通过 Playwright 启动真实产品主进程，每轮使用 `.local-data/screenshots/profile-*`；沿用显式测试路径覆盖，不再提供截图专用设置服务。
 
-原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1 提供持久化服务，WP2 已接设置 UI；正文恢复与最终布局/关闭联调仍属后续包。
+原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1 提供持久化服务，WP2 已接设置 UI；WP3 已接工作区与磁盘标签恢复，最终布局/关闭联调仍属后续包。
 
 ### WP2 设置与显示验证
 
 定向命令：`scripts/npm.cmd exec -- vitest run tests/shell/settings.test.tsx tests/document/settings-display.test.tsx`。覆盖真实编辑器状态/选区/撤销重做保持、设置请求顺序、失败预览/重试、模式生效值、坏文件重置确认、焦点圈定和系统主题订阅释放。E2E 使用真实产品服务，覆盖偏好重启、只读 settings 写失败不清旧记录、重试、TXT/DOCX 显示与磁盘字节不变、坏文件反馈。
 
 E2E 的 WP2 截图在 `.local-data/test/task-013/wp2`，不提交或打包；数据路径遮罩仅用于证据，产品仍显示真实路径。900×600 的设置可纵向滚动，高对比度采用 Chromium forced-colors 模拟；不等同 Windows 系统高对比度切换。截图脚本现用 `scripts/node.cmd scripts/capture-ui-baselines.mjs`，可给该验证进程设置 `WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2`，避免覆盖历史 Task 11 图片。构建完成后运行；不要用 Electron 执行该 Node 启动器。
+
+### WP3 工作区与标签恢复验证
+
+定向命令：`scripts/npm.cmd exec -- vitest run tests/app-state tests/preload/contract.test.ts`。新增 25 项覆盖主进程根校验/扫描代次、零参数 IPC、旧会话快照拒绝、StrictMode 单次调度、顺序/活动标签、错误/只读/降级、超限裁剪、停止/关闭/切换/卸载竞争、初始写入抑制与后续正常记录。恢复阶段界面 inert；不涉及恢复的 App 组件测试显式传入已加载的 blank 偏好夹具，与产品启动前加载设置的入口一致。
+
+构建后运行 `scripts/npm.cmd run test:e2e`，当前 11 项使用真实 Electron 和隔离 profile，覆盖三种模式重启、混合文件当前磁盘内容、缺失文件/根重试、兼容性重新确认，以及批量 DOCX 恢复中关闭保留旧 state.json 字节、主动停止后保存可见部分。停止截图在 `.local-data/test/task-013/wp3`。本阶段不恢复未保存内容或精确位置；窗口布局、完整关闭 flush/失败反馈和文件路径变化联调交给 WP4，完整 portable/NSIS 与 Windows 10 实机限制见中英文完成报告。

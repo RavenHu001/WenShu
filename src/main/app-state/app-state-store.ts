@@ -9,7 +9,7 @@ import {
   validCheckpoint,
   validPreferences,
   validSettings,
-  validState,
+  validStoredState,
   validWindow,
   SETTINGS_MAX_BYTES,
   STATE_MAX_BYTES,
@@ -173,7 +173,7 @@ export class AppStateStore {
     return new FileQueue(
       join(this.options.root, 'state.json'),
       STATE_MAX_BYTES,
-      validState,
+      validStoredState,
       defaultState,
       this.options.writeFactory,
       this.options.coalesceMs ?? 500,
@@ -207,6 +207,14 @@ export class AppStateStore {
         canReselect: this.options.mode === 'installed',
       },
     });
+  }
+  /** Only restore needs the bounded original list to report truncation. No renderer path input. */
+  getRestoreRecord() {
+    return structuredClone(
+      this.mode === 'workspace-and-tabs'
+        ? this.state.value.lastWorkspace
+        : projectStartupState(this.state.value, this.mode).lastWorkspace,
+    );
   }
   async updatePreferences(value: unknown): Promise<StateWriteResult> {
     if (this.resetting || !validPreferences(value)) return stateFailure('INVALID_REQUEST');

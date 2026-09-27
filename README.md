@@ -4,7 +4,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Task 13 实施中，WP0–WP2 完成。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
+> **当前阶段：Task 13 实施中，WP0–WP3 完成。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
 
 ## 发布与许可
 
@@ -72,7 +72,7 @@ WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Wi
 - DOCX 使用居中 820 px 上限的连续写作画布（不承诺分页），工具栏按历史、字符、段落、列表与对齐分组，窄宽度进入“更多格式”溢出；TXT 保持全高纯文本布局；
 - 成功文件操作显示限时可关闭 toast；错误、冲突与 partial failure 不自动消失；高对比度与减少动画具有 CSS 适配入口。
 
-通过“视图 → 设置…”或 `Ctrl+,` 可即时调整浅色/深色/跟随系统、TXT 系统/等宽/衬线字体与 12–24 px 字号。默认跟随系统、等宽 13 px；DOCX 保留白色画布和原正文格式。设置显示实际数据目录、固定打开入口和安装版下次启动重选入口。三种启动方式已持久化，自动恢复工作区/标签仍待 WP3；未保存正文仍须手动保存。
+通过“视图 → 设置…”或 `Ctrl+,` 可即时调整浅色/深色/跟随系统、TXT 系统/等宽/衬线字体与 12–24 px 字号。默认跟随系统、等宽 13 px；DOCX 保留白色画布和原正文格式。设置显示实际数据目录、固定打开入口和安装版下次启动重选入口。三种启动方式已生效：空白、仅工作区、工作区与标签。恢复按顺序重新读取磁盘文件，支持错误标签重试与停止；未保存正文仍须手动保存。
 
 数据根为开发 `.local-data/dev`、portable 启动器旁 `WenShuData` 或安装版原生选择的独立目录；安装版系统用户目录只保留 ≤8 KiB 定位文件。不承诺系统/portable 临时解包零 C 盘写入。
 
@@ -102,8 +102,8 @@ WP8 已完成当前范围的 33/33 项验收：MIT 源码发布准备完成；Wi
 
 ### 尚未实现
 
-- 标签页拖拽排序、固定、批量关闭与状态恢复；
-- TXT/DOCX 自动保存与会话恢复；
+- 标签页拖拽排序、固定、批量关闭与精确位置恢复；
+- TXT/DOCX 自动保存与未保存正文/草稿恢复；
 - 工作区替换、批量替换、正则/模糊/语义搜索与持久全文索引；
 - 复杂 Word 格式（图片/表格/页眉页脚/批注/修订编辑、精确分页、宏）与完整无损往返；
 - 文件系统监听和自动刷新（外部变化需手动刷新）；
@@ -205,7 +205,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.md)）。
 - [x] [Task 12：Windows Alpha 发布工程](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.md)）。
 
-- [ ] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（实施中；WP0–WP2 完成，已提供数据目录、JSON 存储、主题/TXT 显示与设置对话框；恢复调度和布局/关闭集成未完成；见[交接报告](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.md)）。
+- [ ] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（实施中；WP0–WP3 完成，已提供数据目录、JSON 存储、主题/TXT 显示与设置对话框；工作区/标签恢复与中途关闭保护已接入，最终布局/关闭集成未完成；见[交接报告](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/architecture/PROJECT_BASELINE.md)为准。
 
