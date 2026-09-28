@@ -4,9 +4,9 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md)
 
-> **Status: in progress. WP0–WP3 complete.** This run on 2026-09-27 implements only WP3, workspace and tab restoration, and stops at handoff; WP4/WP5 have not started.
-> All three startup modes, disk-based workspace/tab reopening, and incomplete-restore data protection are connected. Window layout and complete close/failure integration remain for WP4. Task 12 release boundaries are unchanged.
-> Sections 1–9 preserve historical WP0–WP2 results; section 10 records WP3.
+> **Status: awaiting acceptance. WP0–WP4 complete.** This run on 2026-09-27 implements only WP4, layout and close integration, and stops at handoff. WP5 final release verification has not run.
+> Settings, disk-file restoration, layout, and close-failure feedback are connected and ready for WP5. Unexecuted platform/release matrices are not marked passed. Task 12 release boundaries are unchanged.
+> Sections 1–10 preserve WP0–WP3 history; section 11 records WP4.
 
 ## 1. WP0 baseline and scope
 
@@ -346,3 +346,59 @@ Logs are `.local-data/wp3-*.log`; data/screenshots/packages remain ignored and u
 - Projection naturally observes committed path models; WP4 still owns systematic persisted rename/move/Save As/delete/partial-failure and final-close integration. Reuse existing transitions and the single main mode policy.
 - Future layout/close checkpoints must preserve complete old lastWorkspace during incomplete restore. Only completion or explicit Stop may adopt the visible replacement.
 - No unresolved core WP3 prerequisite. Final product portable/NSIS restart/upgrade/uninstall, OS-level high contrast/scaling and Windows 10 hardware remain for WP5/later environment acceptance. Task 13 remains in progress.
+
+## 11. WP4: layout and close integration (complete, awaiting WP5 acceptance)
+
+Started from `ac60524` on branch `TASK-13`, 2026-09-27, with a clean worktree and no applicable AGENTS.md. Reviewed the complete plan/development prompt, WP0–WP3 evidence and actual persistence, preferences, restoration and close interfaces. No dependency, third configuration file, content cache, second path-migration engine or release action was added. WP5 is outside this run.
+
+### 11.1 Layout and narrow contracts
+
+- `src/main/window/window-layout.ts` uses Electron DIP normal bounds and current display workArea. It chooses the display with greatest intersection, or centers on the primary display when none intersects. Dimensions fit the work area subject to the original 900×600 minimum; position is clamped into view. If the work area is smaller than the minimum, the title bar remains at its upper-left corner. Invalid/nonfinite values use safe defaults; invalid state.json still cannot be overwritten automatically. Maximization is applied before showing; minimization, fullscreen, display IDs and scaleFactor are not persisted.
+- Real Windows testing found native size adjustment: requested width 1100 became normal width 1102, and directly restoring constructor dimensions caused cumulative drift. `applyWindowBounds` uses public setBounds/getNormalBounds before showing, correcting measured differences in at most three calls while honoring OS minimums. No fixed pixel compensation or multiplication by scale factor. Three product starts verified actual normal bounds and maximize/restore round trips.
+- Move/resize/maximize/unmaximize/restore update main-owned window fields through the existing state queue. Closing samples once more and removes listeners. Fullscreen does not replace normal bounds; minimization retains the preceding maximized flag. Checked the locked Electron types and [official BrowserWindow API](https://www.electronjs.org/docs/latest/api/browser-window#wingetnormalbounds).
+- The only new fixed capability is `appState.updateSidebar({width,collapsed})`, channel `app-state:update-sidebar`, using StateWriteResult and an exact allowlist with integer width 180–420. It accepts no path, window coordinates or generic key. appState now has eight fixed methods. `use-sidebar-layout.ts` adopts loaded layout once and coalesces actual changes; it also works without a workspace/in blank mode. Startup always selects the files panel.
+- Layout-only writes do not submit tab lists. `projectStartupState` remains the single mode policy. Its layout projection preserves the complete pending restoration list while still clearing/trimming blank/root-only records. Ordinary display-preference success no longer unnecessarily trims saved tabs; only an actual durable mode change triggers the mode-transition write. Corrupt/future-version files remain blocked under layout updates and flush.
+- Connected the already-advertised Ctrl+B shell shortcut. Input/editable contexts keep their own keys, including DOCX bold. Separator Home/End/arrows and collapse controls remain available.
+
+### 11.2 Complete close sequence and failure feedback
+
+1. Native close asks the renderer for its latest model. Saving blocks exit first. In-flight file mutations ask the user to finish the operation before closing, avoiding a snapshot before final paths commit. Dirty documents still require discard/cancel; cancellation preserves content, selection, history and session and resets the request. Discard confirmation rechecks saving.
+2. Once approved, `useStartupRestore.prepareClose()` freezes the batch, scan/read controllers and timers. Only ready state, including explicit Stop, captures final tab metadata. Incomplete/error restoration sends no checkpoint and preserves the original lastWorkspace. Capture happens once; retries cannot adopt late or partial models.
+3. Wait for renderer preference requests and in-flight directory/reset actions, then submit the actual sidebar. Failed final checkpoint/sidebar IPC opens the separate “退出前记录未保存” modal with Retry/Continue Exit; editor content remains in memory. Metadata acceptance is never presented as document-save success.
+4. Fixed window.requestClose locks finalization in main, invalidates scan generations while retaining accepted checkpoint identity, samples normal bounds/maximized, stops layout listeners and awaits both file queues. appState IPC rejects later requests during finalization; duplicate approval/cancellation cannot bypass the drain.
+5. A flush failure opens a parented native error dialog with Retry/Continue Exit. Retry drains again; explicit Continue preserves the last successful files. Escape defaults to the retry choice rather than silently discarding metadata. Only success/explicit continuation destroys the window. The old duplicate before-quit drain was removed to avoid reporting after window destruction or repeatedly blocking exit.
+
+The first dirty notification also acknowledges the mounted renderer close listener, replaying one native close that arrived during loading. Forced destroy/process termination can retain only the last successful metadata; no last-millisecond or unsaved-content guarantee. Installed-mode reselection remains a next-start flag: close waits for the action, and dirty cancellation neither restarts nor moves data. WP1's real native cancellation/flag-clear/old-root evidence still applies.
+
+### 11.3 Paths and actual verification
+
+Snapshots still project the existing committed `useDocuments` model: segment-boundary directory changes, file rename/move, Save As with a new disk snapshot and trash removing affected tabs. Failure, cancellation and partial failure never trigger guessed migration. There is no second path-rewrite engine. Content input does not alter the metadata key or cause recording; stale-session token rejection remains intact.
+
+| Command/check, through local scripts                                                        | Actual result                                                                                             |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Before changes: `npm.cmd run check` → `npm.cmd run build`                                   | Both exit 0; 81 files, 1268 passed, 10 existing conditional skips                                         |
+| Focused window/storage/restore/settings/file-management/editor regression                   | 27 files, 326 passed, 3 existing conditional skips; later close/reselection/settings additions: 77 passed |
+| Complete `npm.cmd run check`                                                                | 83 files, 1286 passed, 10 existing conditional skips; types/lint/format/103-package NOTICE passed         |
+| Subsequent interrupted-mode-policy regression: `vitest run tests/app-state/storage.test.ts` | 30/30 passed, including two added blank/root-only layout-write cases                                      |
+| Subsequent final `npm.cmd run build`                                                        | Exit 0; main 201.01 kB, preload 5.12 kB, CSS 61.83 kB, renderer JS 2304.12 kB                             |
+| Final `npm.cmd run test:e2e`                                                                | 14/14 passed, 20.20 seconds test time; includes all three new WP4 scenarios and the prior 11 regressions  |
+
+Host: Windows 11 build 26200, Electron 43.6.0. All profiles/synthetic files stay under `.local-data/test/e2e` or Task 13 isolation directories. No TEMP/TMP, real profile or dependency changes. The real file-management case uses UI directory rename→move, TXT Save As, rejected duplicate rename/cancel and deletion to the recycle bin. Normal close/restart restores only committed paths; the `dir2` prefix sibling and Save As source bytes remain intact.
+
+The layout case starts the product three times and covers offscreen/oversized records, normal/maximized/restored bounds, sidebar 180/420/collapse, dark theme/font size, mixed TXT/DOCX and the files panel together. Read-only state.json uses real Windows chmod/replacement failure: the window remains alive while failed, restored write permission permits retry, and a separate explicit Continue leaves old bytes intact. Native dialog choices are driven by fixed test responses/acknowledgment, not claimed as manual native-error-dialog inspection. Removed-display/different-workArea algorithms pass; physical unplugging and full OS scaling changes were not performed.
+
+WP3's incomplete-batch close assertion now compares the complete lastWorkspace while allowing newly implemented window/sidebar finalization, instead of requiring the entire state.json bytes to stay identical. Tab protection remains strict. Three startup modes, Stop/close, dirty cancel/discard, read-only/degraded files, safe reading and existing editor regressions remain covered.
+
+Recorded failures: initial Electron event-union/overload and test overload/RTL typing fixes; the first final check stopped only on formatting and passed after correction. Initial E2E had three failures: a nested tab selected by basename, actual Windows bounds differing from requested dimensions, and a serialized test response containing dynamic import timing out during exit. Corrected full relative-path locators, measured bounds and external permission restoration/explicit acknowledgment. Also found the menu advertised Ctrl+B without wiring and added it; fixed size drift as above. No increase to the existing 30-second case/10-second action budgets and no new skips.
+
+### 11.4 WP5 handoff and unexecuted acceptance
+
+Core features can enter WP5 with no known implementation prerequisite blocking it. Continue from window-layout.ts, window-close.ts, App close gates, use-startup-restore.ts, use-sidebar-layout.ts and the same AppStateStore; do not create another mode policy, path engine or persistence system. The final release matrix has not run, and the following are not passed:
+
+- Final product portable/NSIS restart, upgrade/uninstall and external-data retention; settings button→next native selection→cancel back to old root end-to-end manual packaged flow. WP1 native evidence plus this run's state/dirty integration cases do not replace it.
+- Physical display removal, OS 100%/125%/150% scaling changes, system high contrast/screen readers and Windows 10 hardware. This run uses Windows 11 at the host's current scaling plus pure algorithms/existing simulation cases.
+- Forced termination/power-loss matrix, actual crash dump/log production, system-path directory deltas and final ASAR/portable/NSIS release auditing. No packages were rebuilt, installed, uninstalled or published this run.
+
+Final lint, format:check, git diff --check and changed Markdown local-link checks passed. No remaining Electron/WenShu process was observed, and the diff adds no dependency or package artifacts.
+
+Logs `.local-data/wp4-*.log` and generated test artifacts remain ignored and excluded from source/packages. Task 13 is awaiting acceptance; this run stops at handoff.

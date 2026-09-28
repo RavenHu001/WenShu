@@ -29,7 +29,7 @@ beforeEach(() => {
   handlers = new Map(mock.handle.mock.calls.map(([name, handler]) => [name, handler]));
 });
 describe('app-state narrow IPC', () => {
-  it('exposes exactly seven capabilities and rejects extra arguments and unowned frames', async () => {
+  it('exposes exactly eight capabilities and rejects extra arguments and unowned frames', async () => {
     expect([...handlers.keys()].sort()).toEqual([
       'app-state:checkpoint',
       'app-state:choose-data-directory-on-next-start',
@@ -38,6 +38,7 @@ describe('app-state narrow IPC', () => {
       'app-state:open-data-directory',
       'app-state:reset-invalid-file',
       'app-state:update-preferences',
+      'app-state:update-sidebar',
     ]);
     const get = handlers.get('app-state:get')!;
     expect(await get(event)).toEqual({ status: 'ok', snapshot: { marker: true } });

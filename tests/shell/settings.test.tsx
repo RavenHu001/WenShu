@@ -58,6 +58,10 @@ beforeEach(() => {
       return { status: 'saved', warnings: [] };
     }),
     checkpoint: vi.fn<AppStateApi['checkpoint']>(),
+    updateSidebar: vi.fn<AppStateApi['updateSidebar']>(async () => ({
+      status: 'queued',
+      warnings: [],
+    })),
     flush: vi.fn<AppStateApi['flush']>(async () => ({ status: 'unchanged', warnings: [] })),
     openDataDirectory: vi.fn<AppStateApi['openDataDirectory']>(async () => ({ status: 'ok' })),
     chooseDataDirectoryOnNextStart: vi.fn<AppStateApi['chooseDataDirectoryOnNextStart']>(

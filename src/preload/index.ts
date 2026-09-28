@@ -23,6 +23,8 @@ const desktopApi: DesktopApi = Object.freeze({
     updatePreferences: (value: AppPreferences) =>
       ipcRenderer.invoke('app-state:update-preferences', value),
     checkpoint: (value: SessionCheckpoint) => ipcRenderer.invoke('app-state:checkpoint', value),
+    updateSidebar: (value: import('../shared/app-state').SidebarState) =>
+      ipcRenderer.invoke('app-state:update-sidebar', value),
     flush: () => ipcRenderer.invoke('app-state:flush'),
     openDataDirectory: () => ipcRenderer.invoke('app-state:open-data-directory'),
     chooseDataDirectoryOnNextStart: () =>

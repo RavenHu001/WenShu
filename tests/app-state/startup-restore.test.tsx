@@ -133,6 +133,63 @@ function mount() {
   );
 }
 describe('one startup batch and metadata gate', () => {
+  it('projects only committed file/directory paths, preserving segment boundaries and failed-operation records', async () => {
+    api.restoreLast.mockResolvedValue(
+      selected(['dir/a.txt', 'dir/book.docx', 'dir2/keep.txt'], 'dir/a.txt'),
+    );
+    const { result } = mount();
+    await waitFor(() => expect(result.current.restore.phase).toBe('ready'));
+    await waitFor(() => expect(api.checkpoint).toHaveBeenCalled());
+    const original = result.current.documents.model.state.tabs;
+    act(() =>
+      result.current.documents.commitRelocateResult('dir', {
+        status: 'error',
+        mutationId: 1,
+        error: { code: 'TARGET_EXISTS', message: 'exists' },
+      }),
+    );
+    expect(result.current.documents.model.state.tabs).toBe(original);
+    act(() =>
+      result.current.documents.commitRelocateResult('dir', {
+        status: 'succeeded',
+        mutationId: 2,
+        kind: 'directory',
+        relativePath: 'moved',
+      }),
+    );
+    await waitFor(() =>
+      expect(api.checkpoint).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          tabRelativePaths: ['moved/a.txt', 'moved/book.docx', 'dir2/keep.txt'],
+          activeRelativePath: 'moved/a.txt',
+        }),
+      ),
+    );
+    act(() =>
+      result.current.documents.commitRelocateResult('moved/a.txt', {
+        status: 'succeeded',
+        mutationId: 3,
+        kind: 'text',
+        relativePath: 'renamed.txt',
+      }),
+    );
+    act(() =>
+      result.current.documents.commitTrashResult('moved', {
+        status: 'succeeded',
+        mutationId: 4,
+        kind: 'directory',
+        relativePath: 'moved',
+      }),
+    );
+    await act(() => result.current.restore.prepareClose());
+    expect(api.checkpoint).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tabRelativePaths: ['renamed.txt', 'dir2/keep.txt'],
+        activeRelativePath: 'renamed.txt',
+      }),
+    );
+    expect(result.current.documents.model.state.tabs[0]?.id).toBe(original[0]?.id);
+  });
   it('StrictMode opens mixed paths once in order with fresh snapshots, failed positions and saved activity', async () => {
     const paths = [
       'a/same.txt',

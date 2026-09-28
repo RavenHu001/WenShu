@@ -4,9 +4,9 @@
 
 [任务规划](./TASK_013_SETTINGS_STARTUP_RESTORE.md) · [任务档案](../README.md)
 
-> **状态：实施中。WP0–WP3 已完成。** 2026-09-27 本轮只实施 WP3：工作区与标签恢复，交接后结束；未开始 WP4/WP5。
-> 三种启动方式、工作区/标签磁盘重读与恢复期间数据保护已接入；窗口布局及完整关闭/失败反馈联调仍待 WP4。Task 12 发布边界不变。
-> 第 1–9 节保留 WP0–WP2 的历史结果；WP3 见第 10 节。
+> **状态：待验收。WP0–WP4 已完成。** 2026-09-27 本轮只实施 WP4：布局与关闭集成，交接后结束；未执行 WP5 最终发布验证。
+> 设置、磁盘标签恢复、布局与关闭失败反馈已接入，可进入 WP5。未执行的真实平台/发布矩阵不标为通过，Task 12 发布边界不变。
+> 第 1–10 节保留 WP0–WP3 历史结果；WP4 见第 11 节。
 
 ## 1. WP0 基线与改动范围
 
@@ -346,3 +346,59 @@ WP4 接手 `waitForPendingPreferences()`（等完 renderer 已排队请求，再
 - 快照已自然观察既有已提交标签路径模型；WP4 仍负责重命名、移动、另存为、删除/partial failure 与最终关闭的系统性持久化联调，不另写路径迁移或模式政策。
 - 必须保留恢复中关闭的完整旧记录保护；只有完成恢复或用户明确停止才能采纳新现场，不得在 WP4 的布局/关闭 checkpoint 中绕过此门禁。
 - WP3 没有未解决核心前置阻塞。最终产品 portable/NSIS 重启/升级/卸载、系统级高对比度/缩放、Windows 10 实机仍留 WP5/后续环境验收，不冒充本轮通过。Task 13 整体仍为“实施中”。
+
+## 11. WP4：布局与关闭集成（完成，待 WP5 验收）
+
+2026-09-27 从 `ac60524` 开始，分支 `TASK-13`，工作树干净，无适用 AGENTS.md。核对完整规划/开发提示词、WP0–WP3 结果与实际存储、设置、恢复及关闭接口。没有新增依赖、第三份配置、正文缓存、路径迁移引擎或发布行为；本轮不实施 WP5。
+
+### 11.1 布局与窄契约
+
+- `src/main/window/window-layout.ts` 使用 Electron 的 DIP normal bounds 与当前 display workArea；选择相交面积最大的显示器，没有交集则在主屏居中。宽高夹在工作区与原最小 900×600 之间，位置夹到可见区域；工作区小于最小尺寸时保留最小尺寸并把标题栏放在工作区左上。非法/非有限值使用安全默认值，原非法 state.json 仍受禁止覆写保护。最大化在显示前应用；最小化、全屏、屏幕 ID、scaleFactor 不持久化。
+- 本机真实测试发现 Windows 原生窗口尺寸调整：请求宽 1100 时 normal bounds 为 1102；按构造尺寸直接恢复曾让宽度继续漂移。`applyWindowBounds` 在显示前通过公开 setBounds/getNormalBounds 对实测差值最多校正三次，尊重系统最小尺寸，不硬编码像素补偿或乘缩放系数。三次产品启动验证了实际 normal bounds 与最大化/还原的往返。
+- move/resize/maximize/unmaximize/restore 只更新主进程窗口字段，复用 state 队列合并；关闭最后采样后撤掉监听。全屏不覆盖 normal bounds，最小化保留此前最大化标志。依据锁定 Electron 类型与 [BrowserWindow 官方 API](https://www.electronjs.org/docs/latest/api/browser-window#wingetnormalbounds)。
+- 新增唯一固定能力 `appState.updateSidebar({width,collapsed})` → `app-state:update-sidebar`；沿用 StateWriteResult，精确白名单与 180–420 整数范围，不接受路径、窗口坐标或通用键。appState 共八个固定方法。`use-sidebar-layout.ts` 初始化只采纳一次已加载布局，实际修改才合并保存；无工作区/空白模式也有效，每次仍进入文件侧栏。
+- 布局更新不提交标签列表。`projectStartupState` 仍独占模式政策；布局使用不规范化待恢复列表的投影，保留完整旧 lastWorkspace，但 blank/root-only 仍清除/裁剪记录。普通显示偏好成功不再触发无关列表裁剪；只有模式实际改变才执行模式变更写入。损坏/未知版本布局更新与 flush 继续返回错误，不覆写原件。
+- 补齐菜单已经标注的 Ctrl+B 外壳快捷键；输入框/可编辑区的按键仍留给编辑器，DOCX 粗体不被侧栏抢占。分隔条 Home/End/方向键及折叠入口保持。
+
+### 11.2 完整关闭顺序与失败反馈
+
+1. 原生 close 先询问 renderer 的最新模型。saving 优先阻止退出；文件 mutation 在途提示完成后再关闭，避免在最终路径尚未提交时取快照。dirty 仍先放弃/取消；取消保留正文、选区、撤销与会话，并复位关闭请求。确认放弃也再次检查 saving。
+2. 获准关闭后 `useStartupRestore.prepareClose()` 冻结批次、扫描/读取 controller 和计时器；只有 ready（含主动停止）捕获最终标签投影。恢复尚未完成/error 状态不 checkpoint，旧 lastWorkspace 保留。最终快照只捕获一次，重试不会采纳迟到模型。
+3. 等完 renderer 设置队列及在途目录/重置动作，再提交实际侧栏。最终 checkpoint/侧栏 IPC 失败显示独立模态“退出前记录未保存”，提供重试/继续退出，正文仍在内存中。此处的成功只表示元数据被接受，不表示正文保存。
+4. 固定 window.requestClose 到主进程后锁定本次退出，作废主进程扫描代次，保留已接受快照的会话身份，采样 normal bounds/maximized 并停止布局监听，然后 await 两个文件的 flush。appState IPC 在最终阶段拒绝后续请求；重复关闭/取消不绕过在途收尾。
+5. flush 失败时主进程父窗口原生错误框提供“重试 / 继续退出”；重试重新 drain，继续退出保留最后成功落盘文件。取消/Escape 默认留在重试选择，不自动丢数据。成功或明确继续后才销毁窗口。原 before-quit 的重复 drain 已移除，防止窗口先销毁才报错或反复拦截。
+
+首个 dirty 通知同时确认 renderer 已订阅关闭事件；加载期间过早的原生关闭会重发一次，不丢失请求。强制 destroy/结束进程只可能留下最后成功落盘的元数据，不保证最后毫秒，也不恢复未保存正文。安装版重选仍只写标志：设置动作完成后退出才结束，dirty 取消不会触发重启/搬迁；原生取消清标志并回旧根的 WP1 平台证据继续适用。
+
+### 11.3 路径与实际验证
+
+路径仍从既有 `useDocuments` 成功提交的标签模型投影：目录段边界迁移、文件重命名/移动、save-as 新磁盘快照、trash 关闭受影响标签。失败、取消和 partial failure 不凭猜测迁移。没有新增第二套路径重写逻辑；正文输入不改变元数据 key，不触发记录，旧会话 token 门禁保持。
+
+| 命令/验证（均经本地 scripts）                                     | 实际结果                                                                      |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 修改前 `npm.cmd run check` → `npm.cmd run build`                  | 均退出 0；81 文件、1268 通过、10 既有条件跳过                                 |
+| 窗口/存储/恢复/设置/文件管理/编辑器定向回归                       | 27 文件、326 通过、3 既有条件跳过；随后关闭/重选/设置追加回归 77 项通过       |
+| 完整 `npm.cmd run check`                                          | 83 文件、1286 通过、10 既有条件跳过；类型、lint、format、103 包 NOTICE 通过   |
+| 随后新增模式中断回归 `vitest run tests/app-state/storage.test.ts` | 30/30 通过，包含 blank/root-only 布局写入策略两项新增用例                     |
+| 随后最终 `npm.cmd run build`                                      | 退出 0；main 201.01 kB、preload 5.12 kB、CSS 61.83 kB、renderer JS 2304.12 kB |
+| 最终 `npm.cmd run test:e2e`                                       | 14/14 通过，测试时间 20.20 秒；包含三个新增 WP4 场景和原有 11 项回归          |
+
+Windows 11 build 26200、Electron 43.6.0；全部 profile/合成文件在 `.local-data/test/e2e` 或 Task 13 隔离子目录，未修改 TEMP/TMP、真实 profile 或依赖。真实文件操作用例通过 UI 执行目录重命名→移动、TXT 另存为、重名失败后取消、删除到回收站，正常关闭/重启后只恢复已提交路径，`dir2` 同前缀兄弟不受影响，另存为源磁盘字节保留。
+
+真实布局用例连续三次启动，覆盖离屏/过大记录、normal/maximized/还原、侧栏 180/420 与折叠、深色/字号、混合 TXT/DOCX 和文件侧栏一起恢复。只读 state.json 使用真实 Windows chmod/替换失败：失败期间窗口仍在，恢复写权限后重试落盘；另一次继续退出保持旧字节。测试用固定原生对话框返回/应答驱动选择，不声称本轮人工操作了该原生错误框。已拔屏幕与不同 workArea 的算法用例通过，未做物理拔屏或全系统缩放切换。
+
+WP3 批量恢复中关闭的断言改为完整 lastWorkspace 内容一致，同时允许本包新增的窗口/侧栏字段正常收尾；不再要求整个 state.json 字节不变。这不是放宽标签保护。三种模式、恢复停止后记录、dirty 取消/放弃、只读/降级、安全读取和已有编辑器回归保持。
+
+失败记录：初版事件名 union 与 Electron overload 类型、测试对话框 overload/RTL 参数修正；第一轮最终 check 仅格式未过，格式修正后通过。初版 E2E 3 项失败：嵌套标签错误使用 basename、Windows 实测 bounds 与请求尺寸不同、含动态 import 的测试序列化应答停在退出等待；改用完整相对路径、实测 bounds 和测试进程外恢复权限/显式应答后通过。另发现菜单 Ctrl+B 只有标注无接线并补齐；尺寸漂移按上节修复。没有放宽用例 30 秒/动作 10 秒预算或新增跳过。
+
+### 11.4 WP5 接手与尚未执行
+
+本包各功能已具备进入 WP5 的条件，无已知核心实现阻塞。接手 `window-layout.ts`、`window-close.ts`、App 关闭门禁、`use-startup-restore.ts`、`use-sidebar-layout.ts` 和同一 AppStateStore；不要再建模式政策、路径迁移或存储系统。完整最终发布矩阵尚未执行，以下不得标为通过：
+
+- 最终产品 portable/NSIS 的重启、升级/卸载、独立数据目录保留，以及设置按钮→下次原生选址→取消回旧根的整包人工联调。WP1 真原生选址/取消证据与本轮状态/dirty 集成用例不能替代它。
+- 物理多屏拔插、系统 100%/125%/150% 缩放切换、系统高对比度/屏幕阅读器和 Windows 10 实机；当前仅本机 Windows 11、当前缩放的真实窗口与纯算法/已有模拟用例。
+- 强杀/断电矩阵、实际 crash dump/log 产生、系统路径目录增量及最终 ASAR/portable/NSIS 发布审计；本轮没有重建包、安装/卸载或发布。
+
+收尾 lint、format:check、git diff --check 与变更 Markdown 本地链接检查通过；未观察到 Electron/WenShu 遗留进程，差异没有新增依赖或包产物。
+
+日志 `.local-data/wp4-*.log` 与测试产物均忽略，不提交/打包。Task 13 整体为“待验收”，本轮交接后结束。

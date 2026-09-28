@@ -1,10 +1,9 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, session } from 'electron';
-import type { AppPreferences } from '../shared/app-state';
+import { app, BrowserWindow, dialog, Menu, nativeTheme, session, screen } from 'electron';
 import { join, resolve } from 'node:path';
 import { startApplication } from './app-state/startup';
 import { AppStateStore } from './app-state/app-state-store';
 import { registerAppStateIpc } from './app-state/app-state-ipc';
-import { getWorkspaceIdentity } from './workspace/workspace-session';
+import { beginWorkspaceOpen, getWorkspaceIdentity } from './workspace/workspace-session';
 import { appIdentity } from '../shared/app-metadata';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
@@ -13,14 +12,26 @@ import { registerSearchIpc } from './search/search-ipc';
 import { registerFileManagementIpc } from './workspace/file-management-ipc';
 import { registerSaveAsIpc } from './document/save-as-ipc';
 import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/window-close';
+import {
+  restoreWindowLayout,
+  applyWindowBounds,
+  trackWindowLayout,
+  WINDOW_MIN_WIDTH,
+  WINDOW_MIN_HEIGHT,
+} from './window/window-layout';
 
-const createMainWindow = (preferences: AppPreferences): BrowserWindow => {
+const createMainWindow = (store: AppStateStore): BrowserWindow => {
+  const { settings: preferences, state } = store.get();
+  const layout = restoreWindowLayout(
+    state.window,
+    screen.getAllDisplays().map((display) => display.workArea),
+    screen.getPrimaryDisplay().workArea,
+  );
   const window = new BrowserWindow({
     title: appIdentity.productName,
-    width: 1280,
-    height: 820,
-    minWidth: 900,
-    minHeight: 600,
+    ...layout.normalBounds!,
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     show: false,
     backgroundColor:
       preferences.theme === 'dark' ||
@@ -36,14 +47,38 @@ const createMainWindow = (preferences: AppPreferences): BrowserWindow => {
     },
   });
 
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => {
+    applyWindowBounds(window, layout.normalBounds!);
+    if (layout.maximized) window.maximize();
+    window.show();
+  });
 
   // Task 1 不需要外部导航或弹窗；默认拒绝可减少未来内容注入后的攻击面。
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
 
   // 窗口关闭协调：未保存修改时由渲染进程确认后才放行关闭
-  registerWindowCloseProtection(window);
+  const stopLayout = trackWindowLayout(window, store);
+  registerWindowCloseProtection(window, async () => {
+    // Keep the accepted session identity for queued checkpoints; only invalidate scans.
+    beginWorkspaceOpen();
+    stopLayout();
+    while (!window.isDestroyed()) {
+      const result = await store.flush();
+      if (result.status !== 'error') return;
+      const choice = await dialog.showMessageBox(window, {
+        title: '文枢记录未保存',
+        type: 'error',
+        message: result.error.message,
+        detail:
+          '本次设置或恢复记录未保存。原有文件与当前编辑内容仍保留；继续退出不会保存未保存正文。',
+        buttons: ['重试', '继续退出'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (choice.response === 1) return;
+    }
+  });
 
   const developmentUrl = process.env['ELECTRON_RENDERER_URL'];
   if (!app.isPackaged && developmentUrl) {
@@ -94,45 +129,11 @@ startApplication(
     registerSaveAsIpc();
     registerWindowCloseIpc();
 
-    mainWindow = createMainWindow(store.get().settings);
-
-    // Drain already accepted metadata only. WP4 owns final layout/checkpoint and dirty-close integration.
-    let draining = false;
-    let bypassOnce = false;
-    app.on('before-quit', (event) => {
-      if (bypassOnce) {
-        bypassOnce = false;
-        return;
-      }
-      if (!draining && !Object.values(store.get().files).some((file) => file.pending)) return;
-      event.preventDefault();
-      if (draining) return;
-      draining = true;
-      void store.flush().then(async (result) => {
-        if (result.status === 'error') {
-          const choice = await dialog.showMessageBox({
-            title: '文枢记录未保存',
-            type: 'error',
-            message: result.error.message,
-            detail: '本次设置或恢复记录未保存。原有文件和正文不受影响。',
-            buttons: ['重试', '退出'],
-            cancelId: 0,
-          });
-          if (choice.response === 0) {
-            draining = false;
-            app.quit();
-            return;
-          }
-          bypassOnce = true;
-        }
-        draining = false;
-        app.quit();
-      });
-    });
+    mainWindow = createMainWindow(store);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow(store.get().settings);
+        mainWindow = createMainWindow(store);
       }
     });
   },

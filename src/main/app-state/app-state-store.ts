@@ -8,6 +8,7 @@ import {
   stateFailure,
   validCheckpoint,
   validPreferences,
+  validSidebar,
   validSettings,
   validStoredState,
   validWindow,
@@ -188,9 +189,10 @@ export class AppStateStore {
       this.options.writeFactory,
       this.options.coalesceMs ?? 500,
       (settings) => {
+        const changed = this.mode !== settings.startupMode;
         this.mode = settings.startupMode;
         // Only a durable preference may clear/trim persisted workspace metadata.
-        this.state.request(projectStartupState(this.state.value, this.mode));
+        if (changed) this.state.request(projectStartupState(this.state.value, this.mode));
       },
     );
   }
@@ -283,10 +285,19 @@ export class AppStateStore {
       ? result
       : { ...result, warnings: selected.truncated ? ['TAB_LIMIT'] : [] };
   }
-  /** Main-only WP4 seam. No renderer can submit window coordinates. Not wired in WP1. */
+  /** Layout-only updates preserve the complete saved workspace, including during restoration. */
+  updateSidebar(sidebar: unknown): StateWriteResult {
+    if (!validSidebar(sidebar) || this.resetting) return stateFailure('INVALID_REQUEST');
+    return this.state.request(
+      projectStartupState({ ...this.state.value, sidebar }, this.mode, false),
+    );
+  }
+  /** Main only; no renderer can submit window coordinates. */
   updateWindow(window: WindowState): StateWriteResult {
     if (!validWindow(window) || this.resetting) return stateFailure('INVALID_REQUEST');
-    return this.state.request(projectStartupState({ ...this.state.value, window }, this.mode));
+    return this.state.request(
+      projectStartupState({ ...this.state.value, window }, this.mode, false),
+    );
   }
   async flush(): Promise<StateWriteResult> {
     const preferences = await this.settings.flush();

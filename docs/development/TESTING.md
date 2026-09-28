@@ -562,7 +562,7 @@ Task 10 已实施并持续验证：
 
 定向运行 `.\scripts\npm.cmd exec -- vitest run tests/app-state`。产品 E2E 的工作区/profile 在 `.local-data/test/e2e`；`--user-data-dir=<P>` 同时隔离 settings/state 和 Electron runtime，session 在 `<P>/session`。截图启动器现通过 Playwright 启动真实产品主进程，每轮使用 `.local-data/screenshots/profile-*`；沿用显式测试路径覆盖，不再提供截图专用设置服务。
 
-原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1 提供持久化服务，WP2 已接设置 UI；WP3 已接工作区与磁盘标签恢复，最终布局/关闭联调仍属后续包。
+原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1–WP4 已接持久化、设置、磁盘恢复及布局/关闭；WP5 最终平台/发布矩阵未执行。
 
 ### WP2 设置与显示验证
 
@@ -574,4 +574,10 @@ E2E 的 WP2 截图在 `.local-data/test/task-013/wp2`，不提交或打包；数
 
 定向命令：`scripts/npm.cmd exec -- vitest run tests/app-state tests/preload/contract.test.ts`。新增 25 项覆盖主进程根校验/扫描代次、零参数 IPC、旧会话快照拒绝、StrictMode 单次调度、顺序/活动标签、错误/只读/降级、超限裁剪、停止/关闭/切换/卸载竞争、初始写入抑制与后续正常记录。恢复阶段界面 inert；不涉及恢复的 App 组件测试显式传入已加载的 blank 偏好夹具，与产品启动前加载设置的入口一致。
 
-构建后运行 `scripts/npm.cmd run test:e2e`，当前 11 项使用真实 Electron 和隔离 profile，覆盖三种模式重启、混合文件当前磁盘内容、缺失文件/根重试、兼容性重新确认，以及批量 DOCX 恢复中关闭保留旧 state.json 字节、主动停止后保存可见部分。停止截图在 `.local-data/test/task-013/wp3`。本阶段不恢复未保存内容或精确位置；窗口布局、完整关闭 flush/失败反馈和文件路径变化联调交给 WP4，完整 portable/NSIS 与 Windows 10 实机限制见中英文完成报告。
+构建后运行 `scripts/npm.cmd run test:e2e`。WP3 原有 11 项使用真实 Electron 和隔离 profile，覆盖三种模式重启、混合文件当前磁盘内容、缺失文件/根重试、兼容性重新确认，以及批量 DOCX 恢复中关闭保留完整旧 lastWorkspace、主动停止后保存可见部分。停止截图在 `.local-data/test/task-013/wp3`。不恢复未保存内容或精确位置；WP4 允许窗口/侧栏字段独立收尾，不再要求整个 state.json 字节不变。
+
+### WP4 布局与关闭验证
+
+定向运行 `scripts/npm.cmd exec -- vitest run tests/window tests/app-state tests/shell/settings.test.tsx tests/document/components.test.tsx tests/preload/contract.test.ts tests/workspace tests/document/settings-display.test.tsx`。验证 DIP workArea/离屏/最小尺寸/异常值、窗口监听释放、侧栏初始化与 clamp、模式政策、关闭队列与早期关闭重发、dirty/saving、重选标志和路径投影。普通正文输入不新增 checkpoint；不能通过新通道提交路径或窗口坐标。
+
+最新 E2E 14 项包含三个 WP4 真产品场景：目录重命名/移动/另存为/回收站删除后重启、设置与混合标签/最大化/normal bounds/侧栏三次启动、真实只读 state 替换失败重试及继续退出保留旧文件。原生错误框选择由测试应答驱动；平台矩阵没有因此完成。物理拔屏、全系统缩放/高对比度、Windows 10、最终 portable/NSIS 重启/升级/卸载和完整路径审计留 WP5，见完成报告第 11 节。所有证据均使用仓库隔离目录，不修改全局 TEMP/TMP。

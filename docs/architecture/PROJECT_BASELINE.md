@@ -491,7 +491,7 @@ Task 7 已由 Mammoth 负责语义导入（`mammoth.convertToHtml({buffer}, {tra
 | electron-store | 设置、最近工作区和窗口状态持久化 |
 
 上表 electron-store 是原技术建议，当前未安装。Task 13 已固定使用 Node.js 文件 API 与两个版本化
-JSON（settings/state），不新增存储依赖。WP0–WP3 已完成数据根初始化、存储、设置对话框、主题与 TXT 显示偏好；启动模式由主进程持久化并统一清除/裁剪记录，工作区/标签恢复和中途关闭保护已实施，最终布局/关闭集成尚未完成，见
+JSON（settings/state），不新增存储依赖。WP0–WP4 已完成数据根初始化、存储、设置对话框、主题与 TXT 显示偏好；启动模式由主进程持久化并统一清除/裁剪记录，工作区/标签恢复和中途关闭保护已实施，布局与关闭集成已完成，WP5 最终矩阵尚未执行，见
 [Task 13 交接报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md)。
 
 初期不使用 SQLite。只有在未来需要大规模全文索引、文档关系、历史版本或 Agent 日志时再评估引入。

@@ -72,6 +72,57 @@ afterEach(async () => {
 });
 
 describe('fixed settings/state persistence', () => {
+  it.each(['blank', 'workspace'] as const)(
+    'layout writes still honor durable %s policy after a prior interrupted policy write',
+    async (startupMode) => {
+      const lastWorkspace = {
+        rootPath: workspace!.rootPath,
+        tabRelativePaths: ['a.txt'],
+        activeRelativePath: 'a.txt',
+      };
+      writeFileSync(join(root, 'state.json'), JSON.stringify({ ...defaultState(), lastWorkspace }));
+      writeFileSync(
+        join(root, 'settings.json'),
+        JSON.stringify({ ...defaultSettings(), startupMode }),
+      );
+      const service = store();
+      service.updateSidebar({ width: 300, collapsed: true });
+      await service.flush();
+      expect(JSON.parse(readFileSync(join(root, 'state.json'), 'utf8')).lastWorkspace).toEqual(
+        startupMode === 'blank'
+          ? null
+          : { ...lastWorkspace, tabRelativePaths: [], activeRelativePath: null },
+      );
+    },
+  );
+  it('layout-only close preserves the full old workspace during restoration, even for oversized selection', async () => {
+    const lastWorkspace = {
+      rootPath: workspace!.rootPath,
+      tabRelativePaths: Array.from({ length: 105 }, (_, i) => `${i}.txt`),
+      activeRelativePath: '104.txt',
+    };
+    writeFileSync(join(root, 'state.json'), JSON.stringify({ ...defaultState(), lastWorkspace }));
+    const service = store();
+    workspace = { ...workspace!, id: randomUUID() };
+    expect(service.updateSidebar({ width: 420, collapsed: true }).status).toBe('queued');
+    service.updateWindow({
+      normalBounds: { x: 10, y: 20, width: 1000, height: 700 },
+      maximized: true,
+    });
+    expect((await service.flush()).status).toBe('saved');
+    const disk = JSON.parse(readFileSync(join(root, 'state.json'), 'utf8'));
+    expect(disk.lastWorkspace).toEqual(lastWorkspace);
+    expect(disk.sidebar).toEqual({ width: 420, collapsed: true });
+    expect(disk.window.maximized).toBe(true);
+    await service.updatePreferences(preferenceInput());
+    expect(JSON.parse(readFileSync(join(root, 'state.json'), 'utf8')).lastWorkspace).toEqual(
+      lastWorkspace,
+    );
+    expect(service.updateSidebar({ width: 421, collapsed: false }).status).toBe('error');
+    expect(service.updateSidebar({ width: 180, collapsed: false, rootPath: root }).status).toBe(
+      'error',
+    );
+  });
   it('preserves the original when Windows rejects replacing a read-only target', async () => {
     if (process.platform !== 'win32') return; // Windows replacement semantics, not a POSIX permission claim.
     const path = join(root, 'state.json');

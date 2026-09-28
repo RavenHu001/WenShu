@@ -4,6 +4,9 @@ import {
   validTabPath,
   type AppStateSnapshot,
   type SessionCheckpoint,
+  stateFailure,
+  type SidebarState,
+  type StateWriteResult,
 } from '../../shared/app-state';
 import type { DocumentsController } from './use-documents';
 import type { WorkspaceController } from './use-workspace';
@@ -14,6 +17,7 @@ interface Options {
   readonly snapshot: AppStateSnapshot | null;
   readonly workspace: WorkspaceController;
   readonly documents: DocumentsController;
+  readonly sidebar?: SidebarState;
 }
 
 /** One startup batch; the existing document controller owns each individual read. */
@@ -163,8 +167,8 @@ export function useStartupRestore(options: Options) {
       tabRelativePaths: tabs.map((tab) => tab.relativePath),
       activeRelativePath:
         tabs.find((tab) => tab.id === documents.model.state.activeTabId)?.relativePath ?? null,
-      // WP4 applies/records live layout. WP3 must not overwrite it with initial UI defaults.
-      sidebar: snapshot.state.sidebar,
+      // App supplies initialized live layout; standalone callers retain the loaded value.
+      sidebar: current.current.sidebar ?? snapshot.state.sidebar,
     };
   };
   const metadataRef = useRef(metadata);
@@ -203,19 +207,28 @@ export function useStartupRestore(options: Options) {
     };
   }, [key, mode, phase, record]);
 
-  const prepareClose = useCallback(async () => {
+  const finalCheckpoint = useRef<SessionCheckpoint | null>(null);
+  const prepareClose = useCallback(async (): Promise<StateWriteResult> => {
     if (timer.current) clearTimeout(timer.current);
-    // Incomplete/error startup never submits an empty or partial replacement.
-    const pending = phaseRef.current === 'ready' ? record(false) : queue.current;
+    // Capture once, before invalidating reads. Retry cannot adopt a late/partial model.
+    if (phaseRef.current !== 'closing')
+      finalCheckpoint.current = phaseRef.current === 'ready' ? metadataRef.current() : null;
     generation.current++;
     current.current.workspace.cancelPendingOpen();
     current.current.documents.invalidatePendingReads();
     changePhase('closing');
-    await pending; // Main's existing quit drain owns accepted writes and failure feedback.
-  }, [record, changePhase]);
+    await queue.current;
+    try {
+      return finalCheckpoint.current
+        ? await window.desktop.appState.checkpoint(finalCheckpoint.current)
+        : { status: 'unchanged', warnings: [] };
+    } catch {
+      return stateFailure('WRITE_FAILED');
+    }
+  }, [changePhase]);
   return {
     phase,
-    busy: phase === 'workspace' || phase === 'tabs' || phase === 'waiting',
+    busy: phase === 'workspace' || phase === 'tabs' || phase === 'waiting' || phase === 'closing',
     notice,
     writeError,
     restore,

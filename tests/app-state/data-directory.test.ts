@@ -112,6 +112,8 @@ describe('data root plans and native guide decisions', () => {
   });
   it('reselection is only a flag; cancellation clears it and restarts the old root', async () => {
     locator(join(root, 'chosen 中文'));
+    const sentinel = join(root, 'chosen 中文', 'untouched.txt');
+    writeFileSync(sentinel, 'old data stays here');
     const ready = planDataDirectory(environment);
     if (ready.status !== 'ready') throw new Error('ready required');
     expect(await markReselect(ready)).toEqual({ status: 'ok' });
@@ -123,6 +125,8 @@ describe('data root plans and native guide decisions', () => {
       version: 1,
       dataRoot: join(root, 'chosen 中文'),
     });
+    expect(planDataDirectory(environment).status).toBe('ready');
+    expect(readFileSync(sentinel, 'utf8')).toBe('old data stays here');
   });
   it('missing old root is never recreated and cancelled replacement returns to retry/exit', async () => {
     const missing = join(root, 'missing');

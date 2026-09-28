@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { EditorView } from '@codemirror/view';
 import { undo } from '@codemirror/commands';
 import { App } from '../../src/renderer/App';
 import { blankStartup } from '../app-state/blank-startup-fixture';
+import type { AppStateApi } from '../../src/shared/app-state';
 import { EditorSessionHost } from '../../src/renderer/components/document/EditorSessionHost';
 import { useEditorSessions } from '../../src/renderer/lib/use-editor-sessions';
 import { useTextDocuments } from '../../src/renderer/lib/use-text-documents';
@@ -843,6 +844,95 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
 
     expect(windowApi.requestClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('WP4 installed reselect stays deferred and dirty cancellation keeps the editor and undo session', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      windowApi,
+    );
+    if (blankStartup.status !== 'ok') throw new Error('fixture');
+    const initial = {
+      ...blankStartup,
+      snapshot: {
+        ...blankStartup.snapshot,
+        dataDirectory: { path: '/synthetic', mode: 'installed' as const, canReselect: true },
+      },
+    };
+    const chooseDataDirectoryOnNextStart = vi.fn(async () => ({ status: 'ok' as const }));
+    Object.assign(window.desktop, {
+      appState: { get: async () => initial, chooseDataDirectoryOnNextStart },
+    });
+    render(<App initialSettings={initial} />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+unsaved');
+    const view = editorView();
+    await userEvent.keyboard('{Control>},{/Control}');
+    await userEvent.click(screen.getByRole('button', { name: '下次启动重新选择数据目录' }));
+    await screen.findByText('已标记：下次启动重新选择。当前数据不搬迁。');
+    expect(chooseDataDirectoryOnNextStart).toHaveBeenCalledTimes(1);
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    await act(async () => windowApi.triggerCloseRequested());
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(editorView()).toBe(view);
+    expect(view!.state.doc.toString()).toContain('+unsaved');
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    expect(windowApi.cancelClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('WP4 quick close waits for queued preferences and failed final checkpoint offers retry or continue', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      async () => ({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+        workspaceSessionId: '11111111-1111-4111-8111-111111111111',
+      }),
+      undefined,
+      windowApi,
+    );
+    if (blankStartup.status !== 'ok') throw new Error('fixture');
+    const initial = {
+      ...blankStartup,
+      snapshot: { ...blankStartup.snapshot, effectiveStartupMode: 'workspace-and-tabs' as const },
+    };
+    let finish!: (value: Awaited<ReturnType<AppStateApi['updatePreferences']>>) => void;
+    const checkpoint = vi.fn<AppStateApi['checkpoint']>().mockResolvedValue({
+      status: 'error',
+      error: { code: 'WRITE_FAILED', message: 'final metadata failed', retryable: true },
+    });
+    Object.assign(window.desktop, {
+      appState: {
+        get: async () => initial,
+        checkpoint,
+        flush: async () => ({ status: 'saved', warnings: [] }),
+        updatePreferences: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      },
+    });
+    render(<App initialSettings={initial} />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await userEvent.keyboard('{Control>},{/Control}');
+    await userEvent.selectOptions(screen.getByLabelText('主题'), 'dark');
+    await act(async () => windowApi.triggerCloseRequested());
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    await act(async () => finish({ status: 'saved', warnings: [] }));
+    await screen.findByRole('dialog', { name: '退出前记录未保存' });
+    expect(editorView()!.state.doc.toString()).toBe('内容:a.txt');
+    checkpoint.mockResolvedValue({ status: 'queued', warnings: [] });
+    await userEvent.click(screen.getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(windowApi.requestClose).toHaveBeenCalledTimes(1));
+    expect(checkpoint).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tabRelativePaths: ['a.txt'] }),
+    );
   });
 
   it('窗口 dirty 上报跟随编辑变化', async () => {

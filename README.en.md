@@ -4,7 +4,7 @@
 
 WenShu is a local desktop workspace for managing multiple documents, designed for personal writing, organizing creative settings, and maintaining reference material. It uses an ordinary folder as its workspace and provides a file tree, multiple tabs, and a central editor similar to a code editor, so related documents can be managed, searched, and edited together.
 
-> **Current stage: Task 13 in progress; WP0–WP3 complete.** The source code is licensed under the MIT License and may be published on GitHub. Windows portable/NSIS packages remain unsigned internal Draft artifacts and are not offered as public downloads. There are no plans to publish the project on the Microsoft Store. Microsoft Artifact Signing + GitHub OIDC is only an optional future task if public binaries are released.
+> **Current stage: Task 13 awaiting acceptance; WP0–WP4 complete.** The source code is licensed under the MIT License and may be published on GitHub. Windows portable/NSIS packages remain unsigned internal Draft artifacts and are not offered as public downloads. There are no plans to publish the project on the Microsoft Store. Microsoft Artifact Signing + GitHub OIDC is only an optional future task if public binaries are released.
 
 ## Release and licensing
 
@@ -199,7 +199,7 @@ Production build output is written to `out/`. Internal Windows packaging and aud
 - [x] [Task 11: desktop shell, information architecture, and editing experience rework](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.en.md). Implementation, automated quality gates, and final manual Windows acceptance all passed; see the [completion report](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.en.md).
 - [x] [Task 12: Windows Alpha release engineering](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.en.md). All 33/33 items in the current scope passed. MIT source publication preparation and unsigned Windows 10 x64 internal Alpha engineering are complete. Actual-machine validation is deferred to a later development phase; see the [completion report](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.en.md).
 
-- [ ] [Task 13: basic settings and startup restore](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). In progress: WP0–WP3 complete, including directory initialization, JSON persistence, and basic settings/themes. Workspace/tab restoration and incomplete-restore close protection are implemented; final layout/close integration remains pending. See the [handoff report](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
+- [ ] [Task 13: basic settings and startup restore](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). Awaiting acceptance: WP0–WP4 complete, including directory initialization, JSON persistence, and basic settings/themes. Workspace/tab restoration and incomplete-restore close protection are implemented; layout and close integration are implemented; the WP5 final matrix has not run. See the [handoff report](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
 
 The task documents and [project technical baseline](./docs/architecture/PROJECT_BASELINE.en.md) define the detailed scope and technical constraints. These development records are available in Chinese and English.
 

@@ -3,8 +3,9 @@ import { stateFailure } from '../../shared/app-state';
 import { AppStateStore } from './app-state-store';
 import { markReselect, type DirectoryPlan } from './data-directory';
 import { ordinaryDirectory } from './app-state-files';
+import { isWindowFinalizing } from '../window/window-close';
 
-/** Only the application's own top-level renderer can use these seven fixed capabilities. */
+/** Only the application's own top-level renderer can use these fixed capabilities. */
 export function registerAppStateIpc(
   store: AppStateStore,
   plan: Extract<DirectoryPlan, { status: 'ready' }>,
@@ -20,6 +21,7 @@ export function registerAppStateIpc(
       if (
         !window ||
         window.isDestroyed() ||
+        isWindowFinalizing(window.webContents.id) ||
         event.sender !== window.webContents ||
         event.senderFrame !== window.webContents.mainFrame ||
         args.length !== count
@@ -35,6 +37,7 @@ export function registerAppStateIpc(
   handle('app-state:get', 0, () => ({ status: 'ok', snapshot: store.get() }));
   handle('app-state:update-preferences', 1, (value) => store.updatePreferences(value));
   handle('app-state:checkpoint', 1, (value) => store.checkpoint(value));
+  handle('app-state:update-sidebar', 1, (value) => store.updateSidebar(value));
   handle('app-state:flush', 0, () => store.flush());
   handle('app-state:open-data-directory', 0, async () => {
     try {

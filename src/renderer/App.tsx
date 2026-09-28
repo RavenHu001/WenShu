@@ -34,7 +34,9 @@ import { SettingsDialog } from './components/shell/SettingsDialog';
 import { useAppSettings, type SettingsLoad } from './lib/use-app-settings';
 import { StatusBar } from './components/shell/StatusBar';
 import { ToastRegion, type ToastMessage } from './components/common/ToastRegion';
-import { clampSidebarWidth, SIDEBAR_DEFAULT_WIDTH } from './lib/sidebar-size';
+import { clampSidebarWidth } from './lib/sidebar-size';
+import { useSidebarLayout } from './lib/use-sidebar-layout';
+import { ModalDialog } from './components/common/ModalDialog';
 
 /** App 层定位身份：编辑器目标外继续绑定来源搜索与标签。 */
 type AppLocateTarget = EditorLocateTarget & {
@@ -68,17 +70,41 @@ export const App = ({
   readonly initialSettings?: SettingsLoad;
 }): React.JSX.Element => {
   const settings = useAppSettings(initialSettings);
+  const sidebarLayout = useSidebarLayout(settings.snapshot?.state.sidebar);
+  const { width: sidebarWidth, collapsed: sidebarCollapsed } = sidebarLayout.sidebar;
+  const setSidebarWidth = sidebarLayout.setWidth;
+  const setSidebarCollapsed = sidebarLayout.setCollapsed;
+  const closeServices = useRef({ settings, sidebarLayout });
+  closeServices.current = { settings, sidebarLayout };
+  const [closeError, setCloseError] = useState('');
+  const closing = useRef(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) return;
       if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key === ',') {
         event.preventDefault();
         if (!document.querySelector('[role="dialog"]')) setSettingsOpen(true);
       }
+      // Keep DOCX's bold shortcut and text-input editing local to their editors.
+      if (
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'b' &&
+        !document.querySelector('[role="dialog"]') &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest('input, textarea, [contenteditable="true"]')
+        )
+      ) {
+        event.preventDefault();
+        setSidebarCollapsed((value) => !value);
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [setSidebarCollapsed]);
   const documents = useDocuments();
   const {
     model,
@@ -105,6 +131,7 @@ export const App = ({
     snapshot: settings.snapshot,
     workspace,
     documents,
+    sidebar: sidebarLayout.sidebar,
   });
   const restorationRef = useRef(restoration);
   restorationRef.current = restoration;
@@ -130,7 +157,17 @@ export const App = ({
     };
   }, []);
   const requestWindowClose = useCallback(async () => {
-    await restorationRef.current.prepareClose();
+    closing.current = true;
+    setCloseError('');
+    const checkpoint = await restorationRef.current.prepareClose();
+    await closeServices.current.settings.waitForPendingPreferences();
+    const layout = await closeServices.current.sidebarLayout.prepareClose();
+    const failure =
+      checkpoint.status === 'error' ? checkpoint : layout.status === 'error' ? layout : null;
+    if (failure) {
+      setCloseError(failure.error.message);
+      return;
+    }
     await window.desktop.window.requestClose();
   }, []);
   /** 文件管理成功后的对账扫描不插入临时状态行，避免文件树上下跳动造成窗口闪烁。 */
@@ -157,12 +194,12 @@ export const App = ({
   });
   const completedSearchRequestId =
     search.state.result?.status === 'completed' ? search.state.result.requestId : null;
+  const mutationRunning = useRef(false);
+  mutationRunning.current = fileManagement.state.status === 'running';
   /** 当前可定位的 completed 搜索身份；异步链始终读最新值。 */
   const completedSearchRequestIdRef = useRef<number | null>(completedSearchRequestId);
   completedSearchRequestIdRef.current = completedSearchRequestId;
   const [activity, setActivity] = useState<ActivityPanel>('files');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
   const toastCounterRef = useRef(0);
@@ -234,15 +271,24 @@ export const App = ({
 
   useEffect(() => {
     const unsubscribe = window.desktop.window.onCloseRequested(() => {
+      if (closing.current) return;
+      if (mutationRunning.current) {
+        setToasts((items) => [
+          ...items,
+          {
+            id: ++toastCounterRef.current,
+            tone: 'warning',
+            message: '文件操作尚未完成，请完成后再关闭窗口。',
+          },
+        ]);
+        void window.desktop.window.cancelClose();
+        return;
+      }
       // Keep the existing dirty/saving confirmation visible above settings.
       setSettingsOpen(false);
       if (pendingRef.current !== null) {
         // 已有确认流程在途：不覆盖尚未处理的目标，复位主进程询问状态
         void window.desktop.window.cancelClose();
-        return;
-      }
-      if (!dirtyRef.current) {
-        void requestWindowClose();
         return;
       }
       if (savingRef.current) {
@@ -253,6 +299,10 @@ export const App = ({
           source: 'close-window',
         };
         setPending(pendingRef.current);
+        return;
+      }
+      if (!dirtyRef.current) {
+        void requestWindowClose();
         return;
       }
       pendingRef.current = { kind: 'close-window', dirtyTabCount: dirtyCountRef.current };
@@ -400,6 +450,15 @@ export const App = ({
       guardResolveRef.current?.(true);
       guardResolveRef.current = null;
     } else if (current.kind === 'close-window') {
+      if (savingRef.current) {
+        pendingRef.current = {
+          kind: 'saving-tab-blocked',
+          tabId: modelRef.current.state.tabs.find((tab) => tab.saving)?.id ?? '',
+          source: 'close-window',
+        };
+        setPending(pendingRef.current);
+        return;
+      }
       void requestWindowClose();
     } else if (current.kind === 'reload') {
       reloadTab(current.tabId);
@@ -926,9 +985,11 @@ export const App = ({
           <span>
             {restoration.phase === 'workspace'
               ? '正在恢复工作区…'
-              : restoration.phase === 'tabs'
-                ? '正在恢复标签…'
-                : restoration.notice}
+              : restoration.phase === 'closing'
+                ? '正在保存设置与布局并退出…'
+                : restoration.phase === 'tabs'
+                  ? '正在恢复标签…'
+                  : restoration.notice}
           </span>
           {restoration.phase === 'tabs' && (
             <button className="ws-btn" onClick={restoration.stop}>
@@ -1084,6 +1145,33 @@ export const App = ({
       )}
       {settingsOpen && (
         <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} />
+      )}
+      {sidebarLayout.error && !closing.current && (
+        <div role="alert">
+          {sidebarLayout.error}
+          <button className="ws-btn" onClick={() => void sidebarLayout.retry()}>
+            重试保存布局
+          </button>
+        </div>
+      )}
+      {closeError && (
+        <ModalDialog title="退出前记录未保存">
+          <p>{closeError}。原有记录与当前编辑内容仍保留；继续退出不会保存未保存正文。</p>
+          <div className="confirm-actions">
+            <button className="ws-btn" onClick={() => void requestWindowClose()}>
+              重试
+            </button>
+            <button
+              className="ws-btn"
+              onClick={() => {
+                setCloseError('');
+                void window.desktop.window.requestClose();
+              }}
+            >
+              继续退出
+            </button>
+          </div>
+        </ModalDialog>
       )}
       <ToastRegion
         toasts={toasts}

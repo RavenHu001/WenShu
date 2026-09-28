@@ -49,6 +49,7 @@ export function useAppSettings(initial?: SettingsLoad) {
   const [actionError, setActionError] = useState<StateError | null>(null);
   const [retryKind, setRetryKind] = useState<'open' | 'reselect' | StateFileName>('open');
   const queue = useRef(Promise.resolve());
+  const actions = useRef(new Set<Promise<unknown>>());
   const revision = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
@@ -144,11 +145,14 @@ export function useAppSettings(initial?: SettingsLoad) {
       setRetryKind(kind);
       try {
         const api = window.desktop.appState;
-        const result = await (kind === 'open'
-          ? api.openDataDirectory()
-          : kind === 'reselect'
-            ? api.chooseDataDirectoryOnNextStart()
-            : api.resetInvalidFile(kind));
+        const operation =
+          kind === 'open'
+            ? api.openDataDirectory()
+            : kind === 'reselect'
+              ? api.chooseDataDirectoryOnNextStart()
+              : api.resetInvalidFile(kind);
+        actions.current.add(operation);
+        const result = await operation.finally(() => actions.current.delete(operation));
         if (!mounted.current) return;
         if (result.status === 'error') setActionError(result.error);
         else {
@@ -190,12 +194,13 @@ export function useAppSettings(initial?: SettingsLoad) {
     update,
     action,
     reload,
-    // WP4 must await renderer requests before asking the main-process queues to flush.
+    // Close awaits renderer requests before asking the main-process queues to flush.
     waitForPendingPreferences: async () => {
       let pending: Promise<void>;
       do {
         pending = queue.current;
         await pending;
+        await Promise.allSettled([...actions.current]);
       } while (pending !== queue.current);
     },
     retry: () => (loaded?.status === 'ok' ? update({}) : void reload()),

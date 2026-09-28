@@ -39,6 +39,7 @@ describe('preload 窄接口契约', () => {
       'openDataDirectory',
       'resetInvalidFile',
       'updatePreferences',
+      'updateSidebar',
     ]);
     await desktop.appState.get();
     expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:get');
@@ -71,6 +72,11 @@ describe('preload 窄接口契约', () => {
     } as const;
     await desktop.appState.checkpoint(checkpoint);
     expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:checkpoint', checkpoint);
+    await desktop.appState.updateSidebar(checkpoint.sidebar);
+    expect(electronMock.invoke).toHaveBeenLastCalledWith(
+      'app-state:update-sidebar',
+      checkpoint.sidebar,
+    );
   });
   beforeEach(() => {
     electronMock.invoke.mockClear();

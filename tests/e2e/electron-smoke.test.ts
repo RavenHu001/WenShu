@@ -145,6 +145,234 @@ async function closeNormally(application: ElectronApplication): Promise<void> {
   await closed;
 }
 
+describe('TASK-013 WP4 layout and close integration', () => {
+  it('restarts at committed rename/move/save-as paths and removes trashed tabs without touching siblings', async () => {
+    const workspace = await createWorkspace();
+    for (const directory of ['dir', 'dir2', 'target']) await mkdir(resolve(workspace, directory));
+    for (const file of ['dir/a.txt', 'dir2/keep.txt', 'trash.txt'])
+      await writeFile(resolve(workspace, file), `disk:${file}`);
+    const first = await launchWithWorkspace(workspace);
+    const page = first.page;
+    await page.getByTestId('ft-dir').click();
+    await page.getByTestId('ft-dir/a.txt').click();
+    await page.getByTestId('ft-dir2').click();
+    await page.getByTestId('ft-dir2/keep.txt').click();
+    await page.getByTestId('ft-trash.txt').click();
+    const command = async (path: string, label: string) => {
+      await page.getByTestId(`ft-${path}`).click({ button: 'right' });
+      await page.getByRole('menuitem', { name: label, exact: true }).click();
+    };
+    await command('dir', '重命名');
+    await page.getByTestId('fm-name-input').fill('renamed');
+    await page.getByTestId('fm-input-confirm').click();
+    await page.getByTestId('ft-renamed').waitFor();
+    await command('renamed', '移动到…');
+    await page.getByTestId('fm-target-target').click();
+    await page.getByTestId('fm-target-confirm').click();
+    await page.getByTestId('ft-renamed').waitFor({ state: 'detached' });
+    await page.getByRole('tab', { name: 'target/renamed/a.txt', exact: true }).click();
+    await page.keyboard.press('Control+Shift+s');
+    await page.getByTestId('fm-target-root').click();
+    await page.getByTestId('fm-target-confirm').click();
+    await page.getByTestId('fm-name-input').fill('saved.txt');
+    await page.getByTestId('fm-input-confirm').click();
+    await page.getByRole('tab', { name: 'saved.txt', exact: true }).waitFor();
+    // Failed rename cannot move any committed path; cancellation leaves the source unchanged.
+    await command('saved.txt', '重命名');
+    await page.getByTestId('fm-name-input').fill('trash.txt');
+    await page.getByTestId('fm-input-confirm').click();
+    await page.getByRole('alert').filter({ hasText: '目标已存在' }).waitFor();
+    await page.getByTestId('fm-input-cancel').click();
+    await command('trash.txt', '删除到回收站');
+    await page.getByTestId('fm-trash-confirm').click();
+    await page.getByTestId('ft-trash.txt').waitFor({ state: 'detached' });
+    await closeNormally(first.application);
+    const state = JSON.parse(await readFile(resolve(first.userData, 'state.json'), 'utf8'));
+    expect(state.lastWorkspace.tabRelativePaths).toEqual(['saved.txt', 'dir2/keep.txt']);
+    const second = await launchWithWorkspace(workspace, first.userData);
+    await second.page.getByRole('tab', { name: 'saved.txt', exact: true }).waitFor();
+    await second.page.getByRole('tab', { name: 'dir2/keep.txt', exact: true }).waitFor();
+    expect(await second.page.getByRole('tab', { name: 'trash.txt', exact: true }).count()).toBe(0);
+    expect(await readFile(resolve(workspace, 'target/renamed/a.txt'), 'utf8')).toBe(
+      'disk:dir/a.txt',
+    );
+    expect(await readFile(resolve(workspace, 'saved.txt'), 'utf8')).toBe('disk:dir/a.txt');
+    await closeNormally(second.application);
+    expect([...first.pageErrors, ...second.pageErrors]).toEqual([]);
+  }, 30_000);
+  it('restarts with corrected normal bounds, maximization, sidebar, settings and mixed tabs together', async () => {
+    const workspace = await createWorkspace();
+    await writeFile(resolve(workspace, 'layout.txt'), 'disk body');
+    await writeFile(resolve(workspace, 'layout.docx'), await createSimpleDocx());
+    const profile = await mkdtemp(resolve(isolatedRoot, 'layout-'));
+    temporaryRoots.push(profile);
+    await writeFile(
+      resolve(profile, 'state.json'),
+      JSON.stringify({
+        ...defaultState(),
+        window: {
+          normalBounds: { x: -50000, y: 50000, width: 99999, height: 99999 },
+          maximized: false,
+        },
+        sidebar: { width: 180, collapsed: false },
+      }),
+    );
+    const first = await launchWithWorkspace(workspace, profile);
+    const corrected = await first.application.evaluate(({ BrowserWindow, screen }) => ({
+      bounds: BrowserWindow.getAllWindows()[0]!.getBounds(),
+      area: screen.getPrimaryDisplay().workArea,
+    }));
+    expect(corrected.bounds.x).toBe(corrected.area.x);
+    expect(corrected.bounds.y).toBe(corrected.area.y);
+    expect(corrected.bounds.width).toBe(Math.max(900, corrected.area.width));
+    await openFile(first.page, 'layout.txt');
+    await openFile(first.page, 'layout.docx');
+    await first.page.getByRole('separator').focus();
+    await first.page.keyboard.press('End');
+    expect(await first.page.getByRole('separator').getAttribute('aria-valuenow')).toBe('420');
+    await first.page.keyboard.press('Control+b');
+    await first.page.keyboard.press('Control+,');
+    await first.page.getByLabel('主题', { exact: true }).selectOption('dark');
+    await first.page.getByLabel('TXT 字号', { exact: true }).selectOption('20');
+    await first.page.keyboard.press('Escape');
+    await first.application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]!;
+      window.setBounds({ x: 30, y: 40, width: 1100, height: 700 });
+      window.maximize();
+    });
+    const actualNormal = await first.application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.getNormalBounds(),
+    );
+    await closeNormally(first.application);
+    const saved = JSON.parse(await readFile(resolve(profile, 'state.json'), 'utf8'));
+    expect(saved.window).toEqual({
+      normalBounds: actualNormal,
+      maximized: true,
+    });
+    expect(saved.sidebar).toEqual({ width: 420, collapsed: true });
+    const second = await launchWithWorkspace(workspace, profile);
+    await second.page.getByRole('tab', { name: 'layout.docx', exact: true }).waitFor();
+    expect(
+      await second.application.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.isMaximized(),
+      ),
+    ).toBe(true);
+    expect(await second.page.locator('.workspace').getAttribute('class')).toContain(
+      'workspace--sidebar-collapsed',
+    );
+    expect(await second.page.locator('html').getAttribute('data-theme')).toBe('dark');
+    expect(
+      await second.page.evaluate(() =>
+        document.documentElement.style.getPropertyValue('--txt-font-size'),
+      ),
+    ).toBe('20px');
+    expect(
+      await second.page
+        .getByRole('button', { name: '文件面板', exact: true })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    await second.page.keyboard.press('Control+b');
+    await second.page.getByRole('separator').focus();
+    await second.page.keyboard.press('Home');
+    await second.application.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]!;
+      window.unmaximize();
+      window.setBounds({ x: 50, y: 60, width: 900, height: 600 });
+    });
+    const actualSmall = await second.application.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.getNormalBounds(),
+    );
+    await closeNormally(second.application);
+    const third = await launchWithWorkspace(workspace, profile);
+    await third.page.getByRole('tab', { name: 'layout.docx', exact: true }).waitFor();
+    expect(
+      await third.application.evaluate(({ BrowserWindow }) => ({
+        bounds: BrowserWindow.getAllWindows()[0]!.getNormalBounds(),
+        maximized: BrowserWindow.getAllWindows()[0]!.isMaximized(),
+      })),
+    ).toEqual({ bounds: actualSmall, maximized: false });
+    expect(await third.page.getByRole('separator').getAttribute('aria-valuenow')).toBe('180');
+    await closeNormally(third.application);
+    expect([...first.pageErrors, ...second.pageErrors, ...third.pageErrors]).toEqual([]);
+  }, 30_000);
+
+  it('retries a real read-only state replacement on close and can explicitly continue without overwriting it', async () => {
+    const workspace = await createWorkspace();
+    await writeFile(resolve(workspace, 'first.txt'), 'first disk');
+    await writeFile(resolve(workspace, 'second.txt'), 'second disk');
+    const first = await launchWithWorkspace(workspace);
+    await openFile(first.page, 'first.txt');
+    await first.page.evaluate(() => window.desktop.appState.flush());
+    // Ensure the renderer checkpoint has also reached main before making the target read-only.
+    await first.page.waitForFunction(async () => {
+      const s = await window.desktop.appState.get();
+      return (
+        s.status === 'ok' && s.snapshot.state.lastWorkspace?.tabRelativePaths.includes('first.txt')
+      );
+    });
+    await first.page.evaluate(() => window.desktop.appState.flush());
+    const path = resolve(first.userData, 'state.json');
+    await chmod(path, 0o444);
+    try {
+      await openFile(first.page, 'second.txt');
+      await first.application.evaluate(({ dialog }) => {
+        dialog.showMessageBox = (
+          _window: unknown,
+          options?: import('electron').MessageBoxOptions,
+        ) =>
+          new Promise((resolve) => {
+            Object.assign(globalThis, {
+              wp4Prompt: options,
+              wp4Retry: () => resolve({ response: 0, checkboxChecked: false }),
+            });
+          });
+      });
+      const exited = first.application.waitForEvent('close', { timeout: 10_000 });
+      await first.application.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.close(),
+      );
+      await expect
+        .poll(() =>
+          first.application.evaluate(
+            () =>
+              (globalThis as unknown as { wp4Prompt?: { buttons: string[] } }).wp4Prompt?.buttons,
+          ),
+        )
+        .toEqual(['重试', '继续退出']);
+      expect(await first.page.locator('.app-shell').count()).toBe(1);
+      await chmod(path, 0o666);
+      await first.application.evaluate(() =>
+        (globalThis as unknown as { wp4Retry: () => void }).wp4Retry(),
+      );
+      await exited;
+      const saved = JSON.parse(await readFile(path, 'utf8'));
+      expect(saved.lastWorkspace.tabRelativePaths).toEqual(['first.txt', 'second.txt']);
+      const second = await launchWithWorkspace(workspace, first.userData);
+      await second.page.getByRole('tab', { name: 'second.txt', exact: true }).waitFor();
+      await second.page.evaluate(() => window.desktop.appState.flush());
+      const original = await readFile(path, 'utf8');
+      await chmod(path, 0o444);
+      await second.page.getByRole('separator').focus();
+      await second.page.keyboard.press('End');
+      await second.application.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async (
+          _window: unknown,
+          options?: import('electron').MessageBoxOptions,
+        ) => {
+          if (!options?.buttons?.includes('继续退出')) throw new Error('Unexpected dialog');
+          return { response: 1, checkboxChecked: false };
+        };
+      });
+      await closeNormally(second.application);
+      expect(await readFile(path, 'utf8')).toBe(original);
+      expect(await readFile(resolve(workspace, 'first.txt'), 'utf8')).toBe('first disk');
+      expect([...first.pageErrors, ...second.pageErrors]).toEqual([]);
+    } finally {
+      await chmod(path, 0o666);
+    }
+  }, 30_000);
+});
+
 describe('TASK-013 WP3 real restart and restoration', () => {
   it('reopens protected/degraded DOCX with fresh compatibility and leaves missing roots retryable', async () => {
     const workspace = await createWorkspace();
@@ -335,9 +563,13 @@ describe('TASK-013 WP3 real restart and restoration', () => {
     expect(await first.page.locator('main').getAttribute('inert')).toBe('');
     await first.page.keyboard.press('Control+,');
     expect(await first.page.getByRole('dialog').count()).toBe(0);
-    expect(await readFile(resolve(profile, 'state.json'), 'utf8')).toBe(original);
+    expect(
+      JSON.parse(await readFile(resolve(profile, 'state.json'), 'utf8')).lastWorkspace,
+    ).toEqual(JSON.parse(original).lastWorkspace);
     await closeNormally(first.application);
-    expect(await readFile(resolve(profile, 'state.json'), 'utf8')).toBe(original);
+    expect(
+      JSON.parse(await readFile(resolve(profile, 'state.json'), 'utf8')).lastWorkspace,
+    ).toEqual(JSON.parse(original).lastWorkspace);
     const second = await launchWithWorkspace(workspace, profile, false);
     await second.page.getByRole('button', { name: '停止恢复', exact: true }).click();
     await second.page

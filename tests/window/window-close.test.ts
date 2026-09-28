@@ -85,6 +85,40 @@ describe('registerWindowCloseProtection', () => {
     expect(win.closeCount).toBe(1);
   });
 
+  it('replays an early native close once when the renderer mounts', () => {
+    win.close();
+    const dirty = ipcMainMock.handle.mock.calls.find(
+      ([channel]) => channel === 'window:dirty-changed',
+    )![1];
+    dirty({ sender: win.webContents }, false);
+    dirty({ sender: win.webContents }, false);
+    expect(win.webContents.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for final metadata drain, ignores duplicate approval and cancelled-close during drain', async () => {
+    let finish!: () => void;
+    const finalize = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    registerWindowCloseProtection(win as never, finalize);
+    fromWebContentsMock.mockReturnValue(win);
+    win.close();
+    const handler = ipcMainMock.handle.mock.calls.find(
+      ([channel]) => channel === 'window:close-allowed',
+    )![1];
+    const event = { sender: win.webContents };
+    const pending = handler(event);
+    handler(event);
+    expect(finalize).toHaveBeenCalledTimes(1);
+    expect(win.closeCount).toBe(1);
+    finish();
+    await pending;
+    expect(win.closeCount).toBe(2);
+  });
+
   it('确认进行中时重复关闭事件不再重复询问（防递归）', () => {
     win.close();
     win.close();

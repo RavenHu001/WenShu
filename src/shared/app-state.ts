@@ -102,6 +102,7 @@ export interface AppStateApi {
   >;
   readonly updatePreferences: (preferences: AppPreferences) => Promise<StateWriteResult>;
   readonly checkpoint: (snapshot: SessionCheckpoint) => Promise<StateWriteResult>;
+  readonly updateSidebar: (sidebar: SidebarState) => Promise<StateWriteResult>;
   readonly flush: () => Promise<StateWriteResult>;
   readonly openDataDirectory: () => Promise<StateActionResult>;
   readonly chooseDataDirectoryOnNextStart: () => Promise<StateActionResult>;
@@ -340,8 +341,14 @@ export function selectRestoreTabs(
   };
 }
 /** Sole mode policy, reused by load, preference writes, and checkpoints. */
-export function projectStartupState(state: AppState, mode: StartupMode): AppState {
+export function projectStartupState(
+  state: AppState,
+  mode: StartupMode,
+  normalizeTabs = true,
+): AppState {
   if (!state.lastWorkspace) return state;
+  // Layout-only writes must retain the full pending restore list, but still honor blank/root-only modes.
+  if (mode === 'workspace-and-tabs' && !normalizeTabs) return state;
   const selected = selectRestoreTabs(
     state.lastWorkspace.tabRelativePaths,
     state.lastWorkspace.activeRelativePath,
