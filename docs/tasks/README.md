@@ -4,7 +4,7 @@
 
 [文档中心](../README.md) · [开发与测试](../development/README.md) · [项目基线](../architecture/PROJECT_BASELINE.md)
 
-按 Task 001–013 归档任务文档，每份均提供中英文版本。Task 13 待验收，WP0–WP4 已完成，Task 1–12 的交付结果见各自完成报告。规划说明范围、固定决策和验收标准，执行提示词保留工作包操作指引，WP（工作包）报告记录阶段证据，完成报告记录最终结果。阅读当前能力时优先查看完成报告与[项目首页](../../README.md)。
+按 Task 001–013 归档任务文档，每份均提供中英文版本。Task 13 待验收，WP0–WP4 已完成、WP5 本机验证已执行，Task 1–12 的交付结果见各自完成报告。规划说明范围、固定决策和验收标准，执行提示词保留工作包操作指引，WP（工作包）报告记录阶段证据，完成报告记录最终结果。阅读当前能力时优先查看完成报告与[项目首页](../../README.md)。
 
 这些文档保留各阶段的日期、版本、测试计数和发布决策，不能把历史规划直接视为当前待办或新的操作授权。原来位于 `docs/` 根目录的任务文件已按编号迁入对应子目录，文件名保持不变。除明确标注的历史命令输出外，文中的仓库路径已同步到现位置；命令仍在仓库根目录执行。
 
@@ -22,8 +22,8 @@
 | Task 010：DOCX 当前文件查找替换              | [规划](./task-010/TASK_010_DOCX_FIND_REPLACE.md)                 | —                                                                                                         | [WP0](./task-010/TASK_010_WP0_REPORT.md)                                                                                                                                                                                                                                                                   | [完成报告](./task-010/TASK_010_COMPLETION_REPORT.md)   |
 | Task 011：桌面外壳与编辑体验                 | [规划](./task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md) | [执行提示词](./task-011/TASK_011_DEVELOPMENT_PROMPT.md)                                                   | [WP0](./task-011/TASK_011_WP0_REPORT.md)                                                                                                                                                                                                                                                                   | [完成报告](./task-011/TASK_011_COMPLETION_REPORT.md)   |
 | Task 012：Windows Alpha 发布工程             | [规划](./task-012/TASK_012_WINDOWS_ALPHA_RELEASE.md)             | [执行提示词](./task-012/TASK_012_DEVELOPMENT_PROMPT.md)                                                   | [WP0](./task-012/TASK_012_WP0_REPORT.md) · [WP2](./task-012/TASK_012_WP2_REPORT.md) · [WP3](./task-012/TASK_012_WP3_REPORT.md) · [WP4](./task-012/TASK_012_WP4_REPORT.md) · [WP5](./task-012/TASK_012_WP5_REPORT.md) · [WP6](./task-012/TASK_012_WP6_REPORT.md) · [WP7](./task-012/TASK_012_WP7_REPORT.md) | [完成报告](./task-012/TASK_012_COMPLETION_REPORT.md)   |
-| Task 013：基础设置与启动恢复（WP0–WP4 完成） | [规划与工作包](./task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)  | [整任务](./task-013/TASK_013_DEVELOPMENT_PROMPT.md) · [分包](./task-013/TASK_013_WORK_PACKAGE_PROMPTS.md) | —                                                                                                                                                                                                                                                                                                          | [待验收报告](./task-013/TASK_013_COMPLETION_REPORT.md) |
+| Task 013：基础设置与启动恢复（环境项待验收） | [规划与工作包](./task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)  | [整任务](./task-013/TASK_013_DEVELOPMENT_PROMPT.md) · [分包](./task-013/TASK_013_WORK_PACKAGE_PROMPTS.md) | —                                                                                                                                                                                                                                                                                                          | [待验收报告](./task-013/TASK_013_COMPLETION_REPORT.md) |
 
-“—”表示没有单独归档的对应文档；相关提示词、工作包过程或证据可在规划与完成报告中查找。Task 12 没有独立 WP1 报告，运行时升级结果已收入完成报告。Task 13 完成报告记录 WP0–WP4 的实际结果：数据目录、存储、设置与主题已完成；工作区/标签恢复与中途关闭保护已接入，布局与关闭集成已完成，WP5 最终矩阵尚未执行。
+“—”表示没有单独归档的对应文档；相关提示词、工作包过程或证据可在规划与完成报告中查找。Task 12 没有独立 WP1 报告，运行时升级结果已收入完成报告。Task 13 完成报告记录 WP0–WP5 的实际结果：数据目录、存储、设置与主题已完成；工作区/标签恢复与中途关闭保护已接入，布局与关闭集成已完成，WP5 本机回归、内部打包和隔离重启/安装/卸载已验证；干净账户的正式安装引导和真实显示环境仍待验收。
 
 补充决策：[Task 12 WP7 所有者决策：签名与项目许可](./task-012/TASK_012_WP7_SIGNING_AND_LICENSE_DECISIONS.md)。面向使用者的版本说明与双语发布导航见[发布文档](../releases/README.md)。

@@ -542,7 +542,7 @@ Do not run `check` and `build` in parallel: electron-vite creates temporary conf
 
 Run `.\scripts\npm.cmd exec -- vitest run tests/app-state` for focused coverage. Product E2E workspaces/profiles live in `.local-data/test/e2e`. `--user-data-dir=<P>` isolates settings/state and Electron runtime together, with session in `<P>/session`. The capture launcher now starts the real product main process through Playwright with a fresh script-relative `.local-data/screenshots/profile-*` directory per capture; no screenshot-only settings service is used.
 
-Native bootstrap, real portable-launcher, and Windows ACL-denial checks use `scripts/verify-task-013-storage.mjs` after preparing/packaging its dedicated host. See the [WP1 report](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md#84-actual-commands-and-evidence) for commands, isolation, native interaction, and limitations. Do not modify user/system TEMP/TMP, use real profiles, or package probe data. WP1–WP4 connect persistence, settings, disk restoration and layout/close integration. The WP5 final platform/release matrix has not run.
+Native bootstrap, real portable-launcher, and Windows ACL-denial checks use `scripts/verify-task-013-storage.mjs` after preparing/packaging its dedicated host. See the [WP1 report](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md#84-actual-commands-and-evidence) for commands, isolation, native interaction, and limitations. Do not modify user/system TEMP/TMP, use real profiles, or package probe data. WP1–WP4 connect persistence, settings, disk restoration and layout/close integration. WP5 local regression, internal packaging, and isolated restart/install/uninstall checks passed; clean-account installed bootstrap and physical display checks remain pending.
 
 ### WP2 settings and display checks
 
@@ -560,4 +560,34 @@ After building, run `scripts/npm.cmd run test:e2e`. The prior 11 WP3 cases use r
 
 Focused command: `scripts/npm.cmd exec -- vitest run tests/window tests/app-state tests/shell/settings.test.tsx tests/document/components.test.tsx tests/preload/contract.test.ts tests/workspace tests/document/settings-display.test.tsx`. Covers DIP work areas/offscreen/minimum/abnormal bounds, listener cleanup, sidebar initialization/clamp, mode policy, close queues/early-close replay, dirty/saving, deferred reselection and committed path projection. Content input must not add checkpoints; the new channel accepts neither paths nor window coordinates.
 
-The current 14 E2E cases include three WP4 product scenarios: restart after directory rename/move/Save As/recycle-bin deletion; three starts with settings, mixed tabs, maximization/normal bounds and sidebar; and real read-only state replacement failure with Retry/Continue Exit preserving old files. Native error-dialog choices use test responses; this does not complete platform acceptance. Physical monitor removal, OS scaling/high contrast, Windows 10, final portable/NSIS restart/upgrade/uninstall and full path auditing remain for WP5, as recorded in completion-report section 11. Evidence uses repository isolation without global TEMP/TMP changes.
+The current 14 E2E cases include three WP4 product scenarios: restart after directory rename/move/Save As/recycle-bin deletion; three starts with settings, mixed tabs, maximization/normal bounds and sidebar; and real read-only state replacement failure with Retry/Continue Exit preserving old files. Native error-dialog choices use test responses; this does not complete platform acceptance. WP5 verified final portable/NSIS restarts, isolated same-version build replacement/uninstall, and path deltas. Physical monitor removal, OS scaling/high contrast, and clean-account installed bootstrap remain pending; see completion-report section 12. Windows 10 hardware remains deferred under Task 12. Evidence uses repository isolation without global TEMP/TMP changes.
+
+### WP5 complete-product and internal-package verification
+
+On 2026-10-08, sequential check → build → E2E all exited 0: 83 test files, 1288 passed, and 10 existing link-capability conditional skips; E2E was 14/14. `package:win` generated current internal portable/NSIS artifacts and automatically audited package allowlists/exclusions. Actual commands, inventories, failed attempts, and remaining conditions are in [completion-report section 12](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md). The host is Windows 11 build 26200.9457 at 125%, not Windows 10 hardware evidence.
+
+To rerun the complete gates, override TEMP/TMP in a separate PowerShell child from the repository root. Stop on failure without changing the parent process or user/system environment:
+
+```powershell
+pwsh.exe -NoLogo -NoProfile -Command {
+  $env:TEMP = [IO.Path]::GetFullPath('.local-data/test/task-013/wp5/temp')
+  $env:TMP = $env:TEMP
+  New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
+  .\scripts\npm.cmd run check
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  .\scripts\npm.cmd run build
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  .\scripts\npm.cmd run test:e2e
+  exit $LASTEXITCODE
+}
+```
+
+After building, run these entries separately; portable requires the existing `package:win` first. Do not run concurrently with an installer:
+
+```powershell
+.\scripts\node.cmd scripts/verify-task-013-product.mjs development
+.\scripts\node.cmd scripts/verify-task-013-product.mjs portable
+.\scripts\node.cmd scripts/verify-task-013-product.mjs installed '.local-data/test/task-013/wp5/nsis/install 中文/WenShu.exe'
+```
+
+Each run creates synthetic fixtures and child TEMP under `.local-data/test/task-013/wp5/<mode>-*`, performs three starts/normal closes, checks preferences/tab order/active tab/external disk changes/sidebar persistence, and writes `progress.json`/`evidence.json`. Development copies only the build allowlist; portable copies the current launcher and verifies adjacent WenShuData; installed accepts an EXE inside the repository verification directory and enforces `--user-data-dir`. It does not install software or replace native installed first-run validation. After `READY_FOR_NATIVE_CLOSE`, close the corresponding packaged test window normally. Failures terminate only this script's own PID tree. Fixtures, evidence, and verification scripts are excluded from packages.

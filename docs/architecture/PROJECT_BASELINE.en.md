@@ -491,7 +491,7 @@ In Task 7, Mammoth handles semantic import through the document tree from `mammo
 
 The electron-store row is an original technology suggestion; it is not installed. Task 13 fixes
 Node.js file APIs and two versioned JSON files (settings/state), with no new storage dependency.
-WP0–WP4 provide directory initialization, storage, a settings dialog, themes, and TXT display preferences. The main process owns durable startup-mode policy and record clearing/trimming; workspace/tab restoration and incomplete-restore close protection are implemented; layout and close integration are implemented; the WP5 final matrix has not run. See
+WP0–WP4 provide directory initialization, storage, a settings dialog, themes, and TXT display preferences. The main process owns durable startup-mode policy and record clearing/trimming; workspace/tab restoration and incomplete-restore close protection are implemented; layout and close integration are implemented; WP5 local regression, internal packaging, and isolated restart/install/uninstall checks passed; clean-account installed bootstrap and physical display checks remain pending. See
 the [Task 13 handoff](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
 
 Do not use SQLite initially. Reevaluate it only if future requirements include large full-text indexes, document relationships, historical versions, or Agent logs.

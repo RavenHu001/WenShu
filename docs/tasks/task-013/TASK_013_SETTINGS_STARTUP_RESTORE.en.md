@@ -4,7 +4,7 @@
 
 [Task archive](../README.en.md) · [Documentation hub](../../README.en.md)
 
-> **Status: awaiting acceptance; WP0–WP4 complete, WP5 final acceptance not executed.** Planning date: 2026-09-12. See the [completion report](./TASK_013_COMPLETION_REPORT.en.md) for WP0/WP1 on 2026-09-20 and WP2/WP3/WP4 implementation, verification, and handoff on 2026-09-27.
+> **Status: awaiting acceptance; WP0–WP4 complete, WP5 local verification executed.** Planning date: 2026-09-12. The [completion report](./TASK_013_COMPLETION_REPORT.en.md) records each work package; section 12 contains the 2026-10-08 results and remaining environment checks.
 > This task defines the product scope, implementation approach, and work packages requested by the owner, prioritizing a simple design and minimizing unnecessary writes to the C drive.
 > This is not an implementation completion report and does not change Task 12's boundary between internal binaries and public source releases.
 
@@ -176,17 +176,19 @@ Dependency order: **WP0 → WP1 → WP2/WP3 → WP4 → WP5**. WP2 and WP3 may p
 
 ## 9. Acceptance Checklist
 
+Current evidence and limitations map one-to-one to this list in [completion-report section 12](./TASK_013_COMPLETION_REPORT.en.md). Items 1, 2, and 8 remain partial pending the environment checks in section 12.5; checked items retain the stated evidence boundaries.
+
 - [ ] With development/portable/installed data roots on a non-C drive, settings, restoration records, and configurable Electron profile/cache/log/dump paths actually use that location. Check actual paths and directory changes before/after running, not just configuration code.
 - [ ] On C, installed builds add only the bounded locator and explicitly documented necessary startup/system traces. The data root is separate from the installation directory and survives upgrade/uninstall. Portable persistent data is outside the temporary extraction directory.
-- [ ] Chinese characters/spaces in the data path, unwritable directories, missing data drives, canceled initial selection, and canceled reselection all have defined outcomes. No automatic data moves or silent fallback to C occur.
-- [ ] Missing/corrupt/unknown-version/oversized configuration, extra fields, path traversal/links, and write failures cannot damage documents or expand permissions. Incomplete output never replaces the previous file.
-- [ ] The three startup modes record and restore as defined. Empty state cannot overwrite records awaiting restoration. Repeated calls, cancellation, manual opening, and stale asynchronous results cannot produce duplicate tabs or an incorrect root.
-- [ ] Behavior is covered for mixed TXT/DOCX, identical names at different paths, empty files, read errors, read-only/degraded documents, external changes, and restoration after rename/move/Save As/delete.
-- [ ] Changing settings and restoring state do not mark documents dirty, save their content, or clear current-session history. Old search state, compatibility confirmations, and tab IDs do not survive restart.
+- [x] Chinese characters/spaces in the data path, unwritable directories, missing data drives, canceled initial selection, and canceled reselection all have defined outcomes. No automatic data moves or silent fallback to C occur.
+- [x] Missing/corrupt/unknown-version/oversized configuration, extra fields, path traversal/links, and write failures cannot damage documents or expand permissions. Incomplete output never replaces the previous file.
+- [x] The three startup modes record and restore as defined. Empty state cannot overwrite records awaiting restoration. Repeated calls, cancellation, manual opening, and stale asynchronous results cannot produce duplicate tabs or an incorrect root.
+- [x] Behavior is covered for mixed TXT/DOCX, identical names at different paths, empty files, read errors, read-only/degraded documents, external changes, and restoration after rename/move/Save As/delete.
+- [x] Changing settings and restoring state do not mark documents dirty, save their content, or clear current-session history. Old search state, compatibility confirmations, and tab IDs do not survive restart.
 - [ ] Window behavior is valid after display changes/disconnection/scaling, and maximized/sidebar bounds remain valid. Settings, dark mode, and key error states are usable at 900×600 and 1280×820.
-- [ ] Canceling close, discarding changes, saving, persistence write failures, and forced termination behave as specified. No claim is made to recover unsaved content or guarantee the final millisecond of metadata.
-- [ ] Test and screenshot data roots use isolated repository directories. Respect the existing `--user-data-dir` test override or migrate every call site together. Tests must not read real user restoration records or delete workspaces/user profiles.
-- [ ] Run and pass `./scripts/npm.cmd run check`, `./scripts/npm.cmd run build`, and `./scripts/npm.cmd run test:e2e` in sequence. Because this task changes startup and data paths, also verify actual restart and storage locations in internal portable/NSIS builds.
+- [x] Canceling close, discarding changes, saving, persistence write failures, and forced termination behave as specified. No claim is made to recover unsaved content or guarantee the final millisecond of metadata.
+- [x] Test and screenshot data roots use isolated repository directories. Respect the existing `--user-data-dir` test override or migrate every call site together. Tests must not read real user restoration records or delete workspaces/user profiles.
+- [x] Run and pass `./scripts/npm.cmd run check`, `./scripts/npm.cmd run build`, and `./scripts/npm.cmd run test:e2e` in sequence. Because this task changes startup and data paths, also verify actual restart and storage locations in internal portable/NSIS builds.
 
 ## 10. Implementation References
 

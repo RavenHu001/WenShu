@@ -5,7 +5,7 @@
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md) · [Documentation hub](../../README.en.md)
 
 > Give the entire “Main prompt” below to the development Agent responsible for implementation. The plan defines scope and behavior; this prompt defines execution order and delivery requirements.
-> Written on 2026-09-12. Only the plan and execution prompt are complete; the product functionality has not been implemented.
+> Written on 2026-09-12; prompts preserve the original execution instructions. As of 2026-10-08, WP0–WP4 are implemented and WP5 local verification has run. Remaining environment checks and acceptance status are in the [completion report](./TASK_013_COMPLETION_REPORT.en.md).
 > For individual work packages, copy the corresponding [WP0–WP5 work-package prompt](./TASK_013_WORK_PACKAGE_PROMPTS.en.md), which includes prerequisites, scope, checkpoints, and handoff requirements.
 
 ---

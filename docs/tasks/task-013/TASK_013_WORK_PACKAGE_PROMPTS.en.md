@@ -4,7 +4,7 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Full-task execution prompt](./TASK_013_DEVELOPMENT_PROMPT.en.md) · [Task archive](../README.en.md)
 
-> Written on 2026-09-12. The six prompts below execute WP0–WP5 individually. Only planning and prompts are complete at present; this does not mean the features or acceptance checks are complete.
+> Written on 2026-09-12; prompts preserve the original execution instructions. As of 2026-10-08, WP0–WP4 are implemented and WP5 local verification has run. Remaining environment checks and acceptance status are in the [completion report](./TASK_013_COMPLETION_REPORT.en.md).
 
 ## How to use
 

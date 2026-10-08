@@ -4,9 +4,9 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md)
 
-> **Status: awaiting acceptance. WP0–WP4 complete.** This run on 2026-09-27 implements only WP4, layout and close integration, and stops at handoff. WP5 final release verification has not run.
-> Settings, disk-file restoration, layout, and close-failure feedback are connected and ready for WP5. Unexecuted platform/release matrices are not marked passed. Task 12 release boundaries are unchanged.
-> Sections 1–10 preserve WP0–WP3 history; section 11 records WP4.
+> **Status: awaiting acceptance. WP0–WP4 are complete; WP5 local regression and delivery checks have run.** Section 12 records the final 2026-10-08 results and remaining environment requirements. An isolated host is not full installed bootstrap acceptance in a clean Windows user environment.
+> Settings, disk restoration, layout and close-failure feedback are implemented. No product-code fix was needed in this run, and no binaries were published, tags moved or dependencies upgraded. Task 12 release/system-validation boundaries remain unchanged.
+> Sections 1–11 preserve package history; section 12 is the current acceptance record.
 
 ## 1. WP0 baseline and scope
 
@@ -402,3 +402,98 @@ Core features can enter WP5 with no known implementation prerequisite blocking i
 Final lint, format:check, git diff --check and changed Markdown local-link checks passed. No remaining Electron/WenShu process was observed, and the diff adds no dependency or package artifacts.
 
 Logs `.local-data/wp4-*.log` and generated test artifacts remain ignored and excluded from source/packages. Task 13 is awaiting acceptance; this run stops at handoff.
+
+## 12. WP5: regression, actual verification and delivery (local checks complete; environment acceptance pending)
+
+Started on 2026-10-08 from clean `6451deb` (WP4), branch `TASK-13`, with no applicable AGENTS.md. Reviewed the complete plan/prompt, bilingual WP0–WP4 reports and actual main/startup/store, workspace IPC, restore/sidebar controllers, close protocol, shared/preload contracts and tests. WP1–WP4 were not reimplemented. Product sources, dependencies, lockfile and release configuration are unchanged. One reusable product verifier and bilingual delivery documentation are retained.
+
+### 12.1 Final implementation and package status
+
+| Package | Current conclusion                                                                                                                                                               |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WP0     | Complete; startup order, portable launcher identity and installation-directory deletion findings remain valid                                                                    |
+| WP1     | Complete; three fixed roots, native bootstrap, two allowlisted files, serial safe publication/flush; native cancellation and ACL denial rechecked                                |
+| WP2     | Complete; one settings dialog, theme/TXT display, durable modes, actual data location and retry feedback                                                                         |
+| WP3     | Complete; main-owned root restoration, fresh disk reads, order/activity, generations, stop/close and checkpoint gates                                                            |
+| WP4     | Complete; DIP bounds correction, sidebar, committed-path projection, dirty/saving and final flush/failure handling                                                               |
+| WP5     | Local gates, complete-product restarts, internal packaging/isolated replacement/uninstall, native host and documentation checks executed; two environment checks in §12.5 remain |
+
+Final contracts are unchanged: version=1; settings ≤16 KiB, defaults system/monospace/13 px/workspace-and-tabs; state ≤512 KiB, at most 100 restored tabs, defaults sidebar=258/false, normalBounds=null, maximized=false and lastWorkspace=null. Main owns roots, bounds and session UUIDs; AppStateStore alone clears/trims records by durable mode. Renderer submits no roots or arbitrary keys. The eight appState methods and argument-free restoreLast are described in §11.1/10.1. Corrupt/newer originals remain write-blocked; bodies, old revisions/confirmations, search and editor objects are not persisted.
+
+### 12.2 Actual commands and results
+
+All commands use project `scripts/npm.cmd` / `scripts/node.cmd`; logs are `.local-data/wp5-*.log`. Final regression overrides TEMP/TMP only for verification subprocesses to `.local-data/test/task-013/wp5/temp`, without changing user/system environment variables.
+
+| Command/action                                                                                     | Actual result                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First `npm.cmd run check`                                                                          | Exit 1: 72 files passed/11 failed; 1170 passes, 6 failures, 113 skips and 14 worker errors. Junction EPERM, probe-cleanup EBUSY and worker spawn/RPC failures; not a pass                                |
+| Standalone junction diagnosis/recheck                                                              | Initially EPERM; after the user resumed work, the same isolated fixture succeeded in 2 ms. No tests or OS security settings changed; no unsupported claim about the underlying environment/session cause |
+| Final `npm.cmd run check`                                                                          | Exit 0: 83 files, 1288 passes, 10 existing link-capability skips; types/lint/format/103-package NOTICE passed, no unhandled errors                                                                       |
+| Subsequently `npm.cmd run build`                                                                   | Exit 0: main 201.01 kB, preload 5.12 kB, CSS 61.83 kB, renderer JS 2304.11 kB                                                                                                                            |
+| Subsequently `npm.cmd run test:e2e`                                                                | Exit 0: 14/14, 29.84 seconds test time; the earlier standalone run also passed 14/14. No timeout increases, removed assertions or reduced security settings                                              |
+| `npm.cmd run package:win`                                                                          | Exit 0; generated real portable/NSIS artifacts and automatically ran `package:verify -- --mode=win`; local only, publish never                                                                           |
+| `npm.cmd run release:manifest:unsigned` → `release:verify:unsigned`                                | Both exit 0; refreshed the locally ignored SHA256SUMS and verified both current NotSigned EXEs; no upload or publication                                                                                 |
+| Product path/restart verification                                                                  | Development, current portable and current installed EXE each passed three starts/normal closes. Installed verification uses explicit `--user-data-dir`, not native installed-bootstrap evidence          |
+| Old internal NSIS `/S /D=<test-install>` → current NSIS replacement                                | Both exit 0; old-to-new build replacement with the same version number, not a cross-version migration claim. Installed ASAR matches current unpacked SHA-256; external JSON hashes unchanged             |
+| Test uninstaller `/S _?=<test-install>`                                                            | Exit 0; all 48 external file hashes unchanged, application/registration/internal sentinel removed. The in-place uninstaller itself may remain; this is not application-data retention                    |
+| Rebuilt native host; first / first-cancel / reselect-cancel / missing-cancel / portable unwritable | All exit 0, with actual native actions rather than fixed dialog responses; events below                                                                                                                  |
+| Force termination of synthetic development instance, then restart                                  | Passed; killed only the verifier-owned PID tree. Durable JSON remained readable, disk body unchanged, unsaved input absent after restart. No power-loss or last-millisecond guarantee                    |
+
+The first check's older tmpdir-based tests created synthetic fixtures under system TEMP, without reading real restoration records or cleaning profiles. Final check redirects those fixtures into the repository too. The ten skips remain existing real-symlink capability branches in TXT/DOCX/search/etc.; Task 13 junction/hard-link and stale-session cases passed in final regression.
+
+Interrupted/failed verification attempts remain recorded: the first portable verifier looked for DevToolsActivePort in userData instead of sessionData; correcting that lookup verified the product. The old installer ended a still-running synthetic portable instance, so that attempt does not count as normal close. Serial installation/runtime checks subsequently passed all three rounds. The user stopped native automation with Escape, then explicitly requested the missing checks again. A JSON property-order comparison falsely reported default-profile changes; comparison by relative filename/size/modification time found none. None required product-code changes.
+
+### 12.3 Paths, artifacts and execution evidence
+
+Host: **Windows 11 25H2, build 26200.9457, actual display scaling 125%**. The registry's legacy ProductName is not Windows 10 evidence. Electron 43.6.0 and builder 27.0.0-alpha.8 remain unchanged.
+
+| Evidence, relative to the repository                                         | Observation                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.local-data/test/task-013/wp5/development-guGl4f/evidence.json`             | Current product build copied into an isolated project and launched from another cwd. `project/.local-data/dev/settings.json` 106 bytes/state 354 bytes; userData=`runtime`, sessionData and actual session.storagePath=`runtime/session`, logs/crashDumps below runtime                                |
+| `wp5/portable-t9gAoW/evidence.json`, under the same parent                   | Final launcher in `launcher 中文/`, actual EXE in this run's random TEMP extraction directory. Settings 106 bytes/state 351 bytes live beside the launcher in WenShuData. Three rounds leave 43 runtime files; extraction cleanup does not remove persistent data                                      |
+| `wp5/installed-WfFgHv/evidence.json`                                         | Current NSIS-installed EXE, three normal starts. Explicit `external-data` test root, userData at that root and Chromium storage in session; settings 106 bytes/state 352 bytes. This is WP1's isolation override, not default-user bootstrap proof                                                     |
+| `.local-data/test/task-013/startup/installed-first-69s2Bu/events.jsonl`      | Guide PID 3152 uses temporary runtime before ready, with zero business windows/sessions around native selection, writes 131-byte bootstrap and exits. PID 21976 sets the chosen root/runtime/session before ready, then creates the business window/session. Same-root second-instance behavior passes |
+| `startup/installed-first-cancel-eYtnP6` / `installed-reselect-cancel-R3H1lk` | First cancellation creates no locator/business state; requested-reselection cancellation clears the flag and restarts the old root without migration                                                                                                                                                   |
+| `startup/installed-missing-cancel-1vgZwr` / `portable-unwritable-T8MmS4`     | Missing-root selection cancellation returns to Retry/Exit and never creates the old root. Actual ACL denial offers moving the whole portable folder/Exit without fallback. Deny ACE removed afterward                                                                                                  |
+| `wp5/default-profile-comparison.json`                                        | Across the final portable's two restarts, three candidate default app directories have unchanged existence, filenames, sizes and modification times. Metadata-only inspection; no reading real settings/state contents or cleaning old directories                                                     |
+| `wp5/nsis/result.json` / `before-uninstall.json`                             | Installation is confined to the nsis test subtree, data outside it. All 48 external file SHA-256 hashes survive uninstall; the internal sentinel does not                                                                                                                                              |
+
+Actual session files include Local State, Preferences, Code Cache, DawnGraphiteCache, DawnWebGPUCache and Network. Before/after inventories establish real writes, not just setPath calls. Logs/crashDumps are configured and created on-demand locations; this feature starts neither a logger nor crashReporter, and actual log/dump contents were not fabricated as evidence. Bootstrap Local State resides in its own temporary runtime with best-effort cleanup. Native dialogs/installation registration and portable TEMP extraction are explicitly outside any zero-C-write promise.
+
+Internal audit: ASAR **12698541 bytes**. All five main/preload/renderer output files match the final build byte-for-byte. Actual allowlist/denylist auditing finds no settings/state/bootstrap, runtime, verification scripts/data or old capture profile in the package. Both EXEs are NotSigned and remain unpublished:
+
+- Portable: 104075546 bytes; SHA-256 `38B8D9E0CFAC3437C4345B5726F4139B485835EE86E8290E51A481BD01BD0A98`.
+- NSIS: 104382345 bytes; SHA-256 `1BAD947A80520DDE3C2762AFD7EB28862C6F2928054FEB7D776CDB0B17D78BAE`.
+
+The eight fuse values read from the current unpacked EXE match the existing hardening configuration: RunAsNode, NODE_OPTIONS and Node inspect disabled; ASAR integrity and OnlyLoadAppFromAsar enabled; cookie, V8 snapshot and file-protocol compatibility settings unchanged. Initial verifier argument-quoting/enum-import errors were corrected before the read passed; no fuse was flipped.
+
+The 14 E2E cases cover mixed/same-name/empty/error tabs, current disk bytes, renewed read-only/degraded compatibility, three modes, stop/incomplete close, path migration, layout restarts and read-only state failures. Component/live-editor tests cover saving, selection, dirty/history and failed-mode protection. This run's regenerated images under `.local-data/test/task-013/wp2` were inspected: 900×600/1280×820 settings, dark TXT/find, white DOCX/original colors/find and retry feedback. Forced-colors is Chromium emulation only. Documents are synthetic and evidence paths are masked.
+
+### 12.4 Item-by-item plan §9 acceptance
+
+| Item                                                                                  | Result           | Evidence/tests                                                                                                                               |
+| ------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Three roots and actual profile/cache/log/dump paths                                 | Partial          | §12.3 files/paths; final installed product without an override in a clean user environment remains pending                                   |
+| 2 Bounded locator, external installation data, upgrade/uninstall, portable extraction | Partial          | 131-byte native host, final-package replacement/uninstall with 48 preserved hashes, actual portable; default-user environment deltas pending |
+| 3 Chinese/spaced paths, unavailable roots, cancellation, no migration/fallback        | Pass             | Five current native-host event sets and data-directory.test.ts; full settings-entry-to-native-reselection remainder in §12.5                 |
+| 4 Corrupt/oversized/newer/extra fields/unsafe paths/write failure                     | Pass             | Storage, data-directory, restore-workspace, IPC/safe-read tests and real read-only E2E; failure/flush preserves originals                    |
+| 5 Three modes, both generation layers and initial suppression                         | Pass             | startup-restore, workspace-session, restore-workspace, storage and mode E2E                                                                  |
+| 6 Mixed tabs/compatibility/external edits/path changes                                | Pass             | 14 E2E cases plus file-management/controller/path-segment tests                                                                              |
+| 7 Display/restore does not dirty or persist runtime objects                           | Pass             | settings-display/settings/startup-restore/document-session tests and live-editor E2E                                                         |
+| 8 Displays/scaling/layout and real UI                                                 | Partial          | window-layout/sidebar-layout, actual 125%/both sizes, three layout starts; physical removal and OS switches pending                          |
+| 9 Cancel/discard/saving/write failures/forced termination                             | Pass             | window-close/App/editor tests, real E2E and force-end.json; no body or last-millisecond promise                                              |
+| 10 Test/capture isolation and override                                                | Pass, final runs | Subprocess TEMP, separate profiles/copied builds, narrow --user-data-dir; real documents untouched                                           |
+| 11 Ordered gates and internal package restarts                                        | Pass             | check→build→14/14 E2E, package:win audit, three starts each for development/portable/installed EXE; override limitation in items 1/2         |
+
+### 12.5 Reproduction and remaining real conditions
+
+Retained `scripts/verify-task-013-product.mjs` accepts `development`, `portable`, or `installed <repository-test-exe>`. Development copies only main/preload/renderer, excluding historical out capture profiles. Portable uses the current internal launcher; installed mode forces the existing test override. Fresh synthetic roots, three UI/disk rounds and inventories are created. Normally close that test window at each READY_FOR_NATIVE_CLOSE prompt; do not run an installer concurrently. Failure/operator timeout terminates only its own spawned PID tree. It neither installs nor uninstalls software, and its data/evidence is not packaged. Native bootstrap continues to use §8.4 commands; its host was rebuilt for this run.
+
+Two environment checks remain before marking the task complete:
+
+1. **Clean Windows test account or VM**: run final NSIS without --user-data-dir. Start with native first selection of an independent non-system-drive root, restart, use Settings to mark next-start reselection, check dirty cancellation/normal exit and then selection cancellation returning to the old root. Measure actual default appData for a ≤8 KiB locator and explicitly listed system traces. An actual probe confirmed that changing child APPDATA alone does not change Windows Electron appData; no false environment-variable isolation or real-bootstrap modification substituted for this check.
+2. **Controllable display environment**: physical monitor removal/switching, Windows 100%/125%/150% scaling and system high contrast/text scaling, checking reachable title bars, layout, settings/errors and DOCX. Current evidence is actual 125%, work-area algorithms and Chromium simulation. User-wide display settings were not changed without authorization.
+
+Windows 10 hardware remains deferred under Task 12's existing decision. Windows 11 evidence is not relabeled, and trusted signing/public binaries are not added as gates. Last-millisecond/power-loss behavior, actual dump production and cross-user locking gain no new guarantees from this run.
+
+Final checks: the retained product verifier passed ESLint/Prettier; its final development run `development-guGl4f` passed three normal closes. All 362 local link targets across 18 changed Markdown files exist; documentation formatting and `git diff --check` passed. Changes contain only bilingual status/delivery documentation and one verification script, with no real user paths/content, evidence artifacts, caches or dependency changes. Product source is unchanged, so final gates and internal packages refer to the same product code; passed matrices were not repeated without cause. Task 13 remains awaiting acceptance.

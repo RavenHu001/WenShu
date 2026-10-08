@@ -4,9 +4,9 @@
 
 [任务规划](./TASK_013_SETTINGS_STARTUP_RESTORE.md) · [任务档案](../README.md)
 
-> **状态：待验收。WP0–WP4 已完成。** 2026-09-27 本轮只实施 WP4：布局与关闭集成，交接后结束；未执行 WP5 最终发布验证。
-> 设置、磁盘标签恢复、布局与关闭失败反馈已接入，可进入 WP5。未执行的真实平台/发布矩阵不标为通过，Task 12 发布边界不变。
-> 第 1–10 节保留 WP0–WP3 历史结果；WP4 见第 11 节。
+> **状态：待验收。WP0–WP4 已完成，WP5 本机回归与交付检查已执行。** 2026-10-08 的最终结果与剩余真实环境条件见第 12 节；不能将隔离宿主等同于干净 Windows 用户环境中的完整安装引导。
+> 设置、磁盘标签恢复、布局与关闭失败反馈均已实现。本轮未发现需要修改产品代码的问题，没有公开二进制、移动标签或升级依赖；Task 12 发布与系统验证边界不变。
+> 第 1–11 节保留逐包历史结论；当前验收状态以第 12 节为准。
 
 ## 1. WP0 基线与改动范围
 
@@ -402,3 +402,98 @@ WP3 批量恢复中关闭的断言改为完整 lastWorkspace 内容一致，同�
 收尾 lint、format:check、git diff --check 与变更 Markdown 本地链接检查通过；未观察到 Electron/WenShu 遗留进程，差异没有新增依赖或包产物。
 
 日志 `.local-data/wp4-*.log` 与测试产物均忽略，不提交/打包。Task 13 整体为“待验收”，本轮交接后结束。
+
+## 12. WP5：回归、实际验证与交付（本机检查完成，环境项待验收）
+
+2026-10-08 从干净 `6451deb`（WP4）开始，分支 `TASK-13`，无适用 AGENTS.md。完整核对规划/开发提示词、中英文 WP0–WP4 报告以及 main、startup/store、workspace IPC、恢复/侧栏 controller、关闭协议、共享/preload 契约和实际测试。没有重做 WP1–WP4，也没有修改产品源码、依赖、锁文件或发布配置。保留一个产品验证入口，更新中英文交付文档。
+
+### 12.1 最终实现与工作包状态
+
+| 工作包 | 当前结论                                                                                                         |
+| ------ | ---------------------------------------------------------------------------------------------------------------- |
+| WP0    | 完成；启动顺序、portable 启动器目录及 NSIS 安装目录不可保留数据的结论有效                                        |
+| WP1    | 完成；三个固定数据根、原生引导、两文件白名单、串行安全替换与 flush；本轮重验原生取消和 ACL 拒写                  |
+| WP2    | 完成；单一设置对话框、主题与 TXT 显示、持久化模式、真实数据位置及失败重试                                        |
+| WP3    | 完成；只从主进程记录恢复根，重新读磁盘，顺序/活动标签、代次、停止/关闭及快照门禁                                 |
+| WP4    | 完成；DIP bounds 校正、侧栏、已提交路径投影、dirty/saving 与最终 flush/失败反馈                                  |
+| WP5    | 本机门禁、完整产品重启、内部打包/隔离安装替换/卸载、原生宿主及文档检查已执行；第 12.5 节两项真实环境验收仍未完成 |
+
+最终契约不变：version=1；settings ≤16 KiB，默认 system / monospace / 13 px / workspace-and-tabs；state ≤512 KiB，最多恢复 100 个标签，默认 sidebar=258/false、normalBounds=null、maximized=false、lastWorkspace=null。主进程持有根、窗口和会话 UUID，模式清除/裁剪只有 AppStateStore 一处；renderer 不提交根或任意配置键。八个 appState 方法及零参数 restoreLast 见第 11.1/10.1 节。损坏/更新版本原件仍阻止自动写入，正文、旧 revision/确认、搜索和编辑器对象不入记录。
+
+### 12.2 实际命令与结果
+
+以下命令均经项目 `scripts/npm.cmd` / `scripts/node.cmd`，日志为 `.local-data/wp5-*.log`。最终回归只对子进程将 TEMP/TMP 指向 `.local-data/test/task-013/wp5/temp`，没有改变用户/系统环境变量。
+
+| 命令/动作                                                                                                | 真实结果                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 首轮 `npm.cmd run check`                                                                                 | 退出 1：72 文件通过、11 文件失败；1170 通过、6 失败、113 跳过及 14 worker 错误。真实 junction 创建 EPERM、探针清理 EBUSY、worker spawn/RPC 失败；不能视为通过 |
+| 独立 junction 诊断，随后复查                                                                             | 首次仍 EPERM；用户恢复本轮工作后，同一独立夹具 2 ms 成功。未改测试或 OS 安全配置，环境/执行会话问题的底层原因未作超出证据的推断                               |
+| 最终 `npm.cmd run check`                                                                                 | 退出 0：83 文件、1288 通过、10 既有链接能力条件跳过；类型、lint、format、103 包 NOTICE 通过，0 未处理错误                                                     |
+| 随后 `npm.cmd run build`                                                                                 | 退出 0：main 201.01 kB、preload 5.12 kB、CSS 61.83 kB、renderer JS 2304.11 kB                                                                                 |
+| 随后 `npm.cmd run test:e2e`                                                                              | 退出 0：14/14，测试 29.84 秒；首轮独立 E2E 亦为 14/14。未增加 timeout、删除断言或降低安全配置                                                                 |
+| `npm.cmd run package:win`                                                                                | 退出 0；实际生成 portable/NSIS，并自动执行 `package:verify -- --mode=win`；仅本地、publish never                                                              |
+| `npm.cmd run release:manifest:unsigned` → `release:verify:unsigned`                                      | 均退出 0；更新本地忽略的 SHA256SUMS 并核验当前两个 NotSigned EXE；未上传或发布                                                                                |
+| 产品路径/重启验证                                                                                        | 开发、当前 portable、当前已安装 EXE 各三次启动/正常关闭通过；后者用明确的 `--user-data-dir` 测试覆盖，不冒充安装原生引导                                      |
+| 旧内部 NSIS `/S /D=<测试安装目录>` → 当前 NSIS 同路径替换                                                | 两次退出 0；同版本号的旧构建→新构建替换，不宣称跨版本迁移；安装 ASAR 与当前 unpacked SHA-256 一致，外置两个 JSON 哈希不变                                     |
+| 测试卸载器 `/S _?=<测试安装目录>`                                                                        | 退出 0；外置 48 文件哈希均保持，应用/注册项及安装内哨兵删除。原地卸载器自身残留不算应用数据保留                                                               |
+| 最新原生宿主重新准备/打包；first / first-cancel / reselect-cancel / missing-cancel / portable unwritable | 均退出 0，实际原生操作，无固定应答替代；事件见下表                                                                                                            |
+| 合成开发实例强制结束后重启                                                                               | 通过；仅结束本脚本 PID 及子进程，已落盘 JSON 可读、磁盘正文不变、未保存输入不恢复。不覆盖断电或最后毫秒写入保证                                               |
+
+首轮 check 中旧测试依 tmpdir 在系统临时目录建立合成夹具；没有读取真实恢复记录或清理用户 profile。最终 check 已将这些夹具一并隔离到仓库。10 条件跳过仍为既有 TXT/DOCX/搜索等真实符号链接能力分支；Task 13 的 junction/硬链接与旧会话测试在最终完整回归通过。
+
+中断/验证器错误如实保留：第一次便携探针错误地在 userData 而不是 sessionData 找 DevToolsActivePort；修正定位后产品正常。一次真实旧安装器结束了仍运行的合成便携实例，因此不计为正常关闭；安装与运行改为串行后，完整三次验证通过。用户曾用 Escape 停止原生自动化，随后明确要求继续检查。默认 profile 前后 JSON 的字段顺序误报，按文件相对名/大小/修改时间比较后差异为零。产品代码均未因此改变。
+
+### 12.3 路径、包与实际运行证据
+
+宿主是 **Windows 11 25H2，build 26200.9457，实际显示缩放 125%**；注册表旧 ProductName 字样不能用作 Windows 10 实测证据。Electron 43.6.0 / builder 27.0.0-alpha.8 没有变化。
+
+| 证据（均为仓库内相对路径）                                                   | 实测结论                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.local-data/test/task-013/wp5/development-guGl4f/evidence.json`             | 复制当前产品构建并从不同 cwd 启动：`project/.local-data/dev/settings.json` 106 bytes、state 354 bytes；userData=`runtime`，sessionData 与真实 session.storagePath=`runtime/session`；logs/crashDumps 均在 runtime 下 |
+| `wp5/portable-t9gAoW/evidence.json`（同上父目录）                            | 当前最终 launcher 在 `launcher 中文/`；EXE 实际位于本轮 TEMP 的随机解包目录；settings 106 bytes、state 351 bytes 在启动器旁 WenShuData。三次恢复后 runtime 有 43 文件，持久数据不随解包目录清理                      |
+| `wp5/installed-WfFgHv/evidence.json`                                         | 当前 NSIS 安装后 EXE 三次正常启动：显式测试根 `external-data`，userData 就是该根、session 子目录为 Chromium 存储；settings 106 bytes/state 352 bytes。此覆盖按 WP1 契约隔离，不能证明默认用户目录 bootstrap 行为     |
+| `.local-data/test/task-013/startup/installed-first-69s2Bu/events.jsonl`      | 引导 PID 3152：ready 前临时 runtime，原生选择前后零业务窗口/session；131-byte bootstrap 后退出。PID 21976：ready 前设置所选根 runtime/session，才创建业务窗口/session；同根第二实例行为通过                          |
+| `startup/installed-first-cancel-eYtnP6` / `installed-reselect-cancel-R3H1lk` | 首次取消零业务初始化、无 locator；主动重选取消清标志、重启旧根、没有搬迁                                                                                                                                             |
+| `startup/installed-missing-cancel-1vgZwr` / `portable-unwritable-T8MmS4`     | 缺失根选择取消后回重试/退出，旧根未被创建；真实 ACL 拒写只有移动整个目录提示/退出，无回退。结束后拒绝 ACE 已移除                                                                                                     |
+| `wp5/default-profile-comparison.json`                                        | 最终便携两次重启前后，三个候选默认应用目录的存在性、文件名/大小/修改时间零变化；只读元数据，不读取真实 settings/state 内容、不清理旧目录                                                                             |
+| `wp5/nsis/result.json` / `before-uninstall.json`                             | 安装目录位于隔离 nsis 子目录，外置数据均在其外；48 文件卸载前后 SHA-256 相等，安装内哨兵不保留                                                                                                                       |
+
+正常运行确实产生 `Local State`、`Preferences`、`Code Cache`、`DawnGraphiteCache`、`DawnWebGPUCache`、`Network` 等 session 文件；保留运行前/后清单，并非仅检查 setPath。logs/crashDumps 是已设置并建立的按需位置；本任务没有日志生产器或 crashReporter，未伪造日志/转储内容验证。首次引导临时 Local State 在自己的 bootstrap TEMP 中，结束后尽力清理；Windows 原生对话框/安装登记等系统痕迹和 portable TEMP 解包不属于“零 C 盘写入”承诺。
+
+内部包审计：ASAR **12698541 bytes**；五个 out/main、out/preload、out/renderer 构建文件与最终 build 逐字节一致。实际包白名单/禁止项审计通过，没有 settings/state/bootstrap、runtime、验证脚本/资料或旧截图 profile 入包。两个 EXE 均为 NotSigned，未发布：
+
+- portable：104075546 bytes；SHA-256 `38B8D9E0CFAC3437C4345B5726F4139B485835EE86E8290E51A481BD01BD0A98`。
+- NSIS：104382345 bytes；SHA-256 `1BAD947A80520DDE3C2762AFD7EB28862C6F2928054FEB7D776CDB0B17D78BAE`。
+
+从当前 unpacked EXE 实际读取的八个 fuse 与既有加固配置一致：RunAsNode、NODE_OPTIONS、Node inspect 关闭，ASAR 完整性与 OnlyLoadAppFromAsar 开启；cookie、V8 snapshot、file 协议兼容设置未变。读取工具初次参数引号和枚举导入错误修正后通过，没有翻转任何 fuse。
+
+14 项 E2E 覆盖混合/同名/空/错误标签、当前磁盘字节、read-only/degraded 新确认、三种模式、停止/恢复中关闭、路径迁移、布局重启和只读 state 失败。组件/真实编辑器测试覆盖 saving、选区、dirty、历史与模式写失败保护。实际检查 `.local-data/test/task-013/wp2` 中本轮重新生成的 900×600/1280×820 设置、深色 TXT/查找、白色 DOCX/原文颜色/查找、失败重试截图；forced-colors 仅 Chromium 模拟。截图是合成资料，路径遮罩只用于证据。
+
+### 12.4 第 9 节逐项验收对应
+
+| 项                                                     | 结论             | 对应证据/测试                                                                                        |
+| ------------------------------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| 1 三种根及实际 profile/cache/log/dump                  | 部分通过         | §12.3 实际文件/路径；完整安装版无覆盖的默认用户环境仍待验                                            |
+| 2 有界 locator、安装外置、升级/卸载、portable 解包区分 | 部分通过         | 131-byte 原生宿主、最终包安装替换/卸载 48 哈希与实际 portable；默认用户环境增量仍待验                |
+| 3 中文/空格、不可写/缺失/取消、无迁移/回退             | 通过             | 最新五组原生宿主事件、data-directory.test.ts；完整设置入口→原生重选链的余项见 §12.5                  |
+| 4 坏/超大/未知/额外字段/危险路径/写失败                | 通过             | storage、data-directory、restore-workspace、IPC/安全读取及真实只读文件 E2E；失败/flush 不覆写原件    |
+| 5 三模式与双层代次/初始抑制                            | 通过             | startup-restore、workspace-session、restore-workspace、storage 与三模式 E2E                          |
+| 6 混合标签/兼容性/外部修改/路径变化                    | 通过             | E2E 14 项及文件管理/controller/路径段边界测试                                                        |
+| 7 显示/恢复不 dirty、不保留旧运行时对象                | 通过             | settings-display、settings、startup-restore、文档会话测试与编辑器 E2E                                |
+| 8 显示器/缩放/布局与真实 UI                            | 部分通过         | window-layout、sidebar-layout、实际 125%/两尺寸、E2E 三次布局重启；物理拔屏与系统切换仍待验          |
+| 9 取消/放弃/saving/写失败/强杀                         | 通过             | window-close、App/编辑器测试、真实 E2E、force-end.json；无正文或最后毫秒保证                         |
+| 10 测试/截图隔离与覆盖                                 | 通过（最终运行） | 最终子进程 TEMP、独立 profile/复制构建、窄 --user-data-dir；未动真实资料                             |
+| 11 顺序门禁和内部包重启                                | 通过             | check→build→14/14 E2E，package:win 自动审计，开发/portable/已安装 EXE 三次启动；安装覆盖限制见项 1/2 |
+
+### 12.5 复现入口与仍需的真实条件
+
+保留 `scripts/verify-task-013-product.mjs`：`development`、`portable`、`installed <仓库内测试 EXE>` 三种参数。开发仅复制 main/preload/renderer 白名单，不复制 out 下的历史截图 profile；portable 使用当前内部启动器；installed 强制既有隔离覆盖。脚本创建全新合成根，检查三轮 UI/磁盘持久化和目录清单；出现 `READY_FOR_NATIVE_CLOSE` 时正常关闭该测试窗口，勿同时运行安装器。断言失败/人工超时只结束自己启动的 PID 树。该脚本不安装/卸载软件，产物/证据不入包。原生引导继续用第 8.4 节命令，本轮宿主已重新编译。
+
+仍需以下两项才能把整体状态改为“完成”：
+
+1. **干净 Windows 测试账户或 VM**：运行未经 `--user-data-dir` 覆盖的最终 NSIS 包；从原生首次选址开始，选择非系统盘独立根，重启并从设置标记下次重选，验证 dirty 取消/正常退出后再选址取消回旧根；量测真实默认 appData 仅有 ≤8 KiB locator 及列明系统痕迹。实测已证明仅改子进程 APPDATA 不会改变 Windows Electron 的 appData，因此没有用环境变量假隔离或触碰真实 bootstrap 来代替该验收。
+2. **可操作的显示环境**：物理多屏移除/换屏、Windows 100%/125%/150% 与系统高对比度/文本缩放切换，复核标题栏可达、布局、设置/错误反馈和 DOCX。当前只有实际 125%、workArea 算法和 Chromium 模拟；未擅自修改用户系统显示设置。
+
+Windows 10 实机仍沿用 Task 12 已明确延后的边界，不把本机 Windows 11 结果写成 Windows 10 验证，也不新增可信签名/公开二进制门禁。最后毫秒/断电、实际 crash dump 产生与跨用户锁不在本轮新增承诺内。
+
+收尾：保留的产品验证脚本通过 ESLint/Prettier，最终开发入口 `development-guGl4f` 三次正常关闭通过。18 份变更 Markdown 的 362 个本地链接目标存在；文档格式与 `git diff --check` 通过。差异仅含中英文状态/交付文档及一个验证脚本，未包含真实用户路径/内容、证据产物、缓存或依赖变化。产品源码未变化，最终门禁与内部包对应同一产品代码；没有重复执行已通过的矩阵。Task 13 保持“待验收”。
