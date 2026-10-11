@@ -18,12 +18,35 @@ export function ModalDialog({
   const restoreRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
     restoreRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const target =
-      initialFocusRef?.current ?? dialogRef.current?.querySelector<HTMLElement>(focusableSelector);
-    target?.focus();
+    let lastFocused: HTMLElement | null = null;
+    const focusInside = (): void => {
+      const target =
+        lastFocused !== null &&
+        dialog.contains(lastFocused) &&
+        lastFocused.matches(focusableSelector)
+          ? lastFocused
+          : (initialFocusRef?.current ?? dialog.querySelector<HTMLElement>(focusableSelector));
+      (target ?? dialog).focus();
+    };
+    const containFocus = (event: FocusEvent): void => {
+      // A late editor focus frame can run after this dialog opens. Only the frontmost
+      // modal owns focus; trapping Tab alone does not prevent programmatic focus escape.
+      const modals = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (modals[modals.length - 1] !== dialog) return;
+      if (event.target instanceof HTMLElement && dialog.contains(event.target)) {
+        lastFocused = event.target;
+      } else {
+        focusInside();
+      }
+    };
+    document.addEventListener('focusin', containFocus);
+    focusInside();
     return () => {
+      document.removeEventListener('focusin', containFocus);
       if (restoreRef.current?.isConnected) restoreRef.current.focus();
     };
   }, [initialFocusRef]);
@@ -59,6 +82,7 @@ export function ModalDialog({
         }}
         ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
       >
         {children}
       </div>

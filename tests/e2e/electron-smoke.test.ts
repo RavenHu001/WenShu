@@ -736,15 +736,53 @@ describe('Electron E2E：隔离工作区', () => {
     await page.getByRole('textbox', { name: '查找内容', exact: true }).fill('DOCX');
     await page.locator('.wenshu-search-current').waitFor();
     await page.screenshot({ path: resolve(evidence, 'docx-dark-find-900x600.png') });
-    await page.getByRole('button', { name: '关闭查找', exact: true }).click();
+    // Make the CI race deterministic: release Tiptap's real close-search focus frame only
+    // after Settings opens. Keep the real click/command; delay only frames from that click.
+    const deferredDocxFocus = await page.evaluateHandle(() => {
+      const frames: FrameRequestCallback[] = [];
+      const original = window.requestAnimationFrame;
+      document.querySelector<HTMLButtonElement>('[aria-label="关闭查找"]')!.addEventListener(
+        'click',
+        () => {
+          window.requestAnimationFrame = (callback) => {
+            frames.push(callback);
+            return 0;
+          };
+        },
+        { capture: true, once: true },
+      );
+      return {
+        restore: () => {
+          window.requestAnimationFrame = original;
+        },
+        count: () => frames.length,
+        release: () => frames.splice(0).forEach((frame) => frame(performance.now())),
+      };
+    });
+    try {
+      await page.getByRole('button', { name: '关闭查找', exact: true }).click();
+    } finally {
+      await deferredDocxFocus.evaluate((pending) => pending.restore());
+    }
+    expect(await deferredDocxFocus.evaluate((pending) => pending.count())).toBeGreaterThan(0);
     await page.emulateMedia({ forcedColors: 'active' });
     await page.keyboard.press('Control+,');
+    await dialog.waitFor();
+    await page.waitForFunction(() =>
+      document
+        .querySelector('[role="dialog"][aria-label="设置"]')
+        ?.contains(document.activeElement),
+    );
+    await deferredDocxFocus.evaluate((pending) => pending.release());
+    await deferredDocxFocus.dispose();
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
     await page.screenshot({
       path: resolve(evidence, 'settings-high-contrast.png'),
       mask: [page.getByLabel('当前数据目录'), page.locator('.ws-info-path')],
     });
     expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(true);
     await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
     await page.emulateMedia({ forcedColors: 'none' });
     await page.getByRole('button', { name: '视图', exact: true }).click();
     await page.getByRole('menuitem', { name: '设置…', exact: true }).click();
