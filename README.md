@@ -4,7 +4,7 @@
 
 文枢是一款面向个人创作、设定整理和资料维护的本地多文档桌面工作台。它以普通文件夹作为工作区，采用类似代码编辑器的文件树、多标签页和中央编辑区域，目标是让一组相关文档能够被集中管理、搜索与编辑。
 
-> **当前阶段：Task 13 待验收，WP0–WP4 完成，WP5 本机验证已执行。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
+> **当前阶段：Task 13 已完成（所有者验收确认），WP0–WP4 完成，WP5 本机验证已执行。** 项目源码采用 MIT License，可以通过 GitHub 公开；Windows portable/NSIS 只保留为未签名内部 Draft，不作为公开下载。项目不计划上架 Microsoft Store；Microsoft Artifact Signing + GitHub OIDC 仅作为未来公开二进制时的可选工作。
 
 ## 发布与许可
 
@@ -205,7 +205,7 @@ Electron 二进制文件需要显式准备，`npm ci` 不会完成这一步。`n
 - [x] [Task 11：桌面应用外壳、信息架构与编辑体验重构](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.md)（代码实现、自动质量门禁与 Windows 人工终验全部通过，见[完成报告](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.md)）。
 - [x] [Task 12：Windows Alpha 发布工程](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.md)（当前范围 33/33 项通过；MIT 源码发布准备完成，Windows 10 x64 未签名内部 Alpha 工程完成；实机验证留待后续开发阶段，见[完成报告](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.md)）。
 
-- [ ] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（待验收；WP0–WP4 完成，已提供数据目录、JSON 存储、主题/TXT 显示与设置对话框；工作区/标签恢复与中途关闭保护已接入，布局与关闭集成已完成，WP5 本机回归、内部打包和隔离重启/安装/卸载已验证；干净账户的正式安装引导和真实显示环境仍待验收；见[交接报告](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.md)）。
+- [x] [Task 13：基础设置与启动恢复](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.md)（已完成，所有者验收确认；WP0–WP4 完成，已提供数据目录、JSON 存储、主题/TXT 显示与设置对话框；工作区/标签恢复与中途关闭保护已接入，布局与关闭集成已完成，WP5 本机回归、内部打包和隔离重启/安装/卸载已验证；2026-10-10 所有者反馈干净账户的正式安装引导与真实显示环境实测基本通过，并确认任务完成；证据边界保留于完成报告第 13 节；见[交接报告](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.md)）。
 
 具体范围与技术约束以任务文档和[项目技术基线](./docs/architecture/PROJECT_BASELINE.md)为准。
 

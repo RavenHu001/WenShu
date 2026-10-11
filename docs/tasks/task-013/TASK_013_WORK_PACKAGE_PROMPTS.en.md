@@ -4,7 +4,7 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Full-task execution prompt](./TASK_013_DEVELOPMENT_PROMPT.en.md) · [Task archive](../README.en.md)
 
-> Written on 2026-09-12; prompts preserve the original execution instructions. As of 2026-10-08, WP0–WP4 are implemented and WP5 local verification has run. Remaining environment checks and acceptance status are in the [completion report](./TASK_013_COMPLETION_REPORT.en.md).
+> Written on 2026-09-12; prompts preserve the original execution instructions. As of 2026-10-10, WP0–WP4 are implemented, WP5 local verification has run, and the owner has reported basic acceptance of the remaining environment checks and approved task completion. Evidence boundaries and closeout are in the [completion report](./TASK_013_COMPLETION_REPORT.en.md).
 
 ## How to use
 

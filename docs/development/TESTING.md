@@ -562,7 +562,7 @@ Task 10 已实施并持续验证：
 
 定向运行 `.\scripts\npm.cmd exec -- vitest run tests/app-state`。产品 E2E 的工作区/profile 在 `.local-data/test/e2e`；`--user-data-dir=<P>` 同时隔离 settings/state 和 Electron runtime，session 在 `<P>/session`。截图启动器现通过 Playwright 启动真实产品主进程，每轮使用 `.local-data/screenshots/profile-*`；沿用显式测试路径覆盖，不再提供截图专用设置服务。
 
-原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1–WP4 已接持久化、设置、磁盘恢复及布局/关闭；WP5 本机回归、内部打包和隔离重启/安装/卸载已验证；干净账户的正式安装引导和真实显示环境仍待验收。
+原生引导、实际 portable 启动器和 ACL 拒写验证使用 `scripts/verify-task-013-storage.mjs`，先准备并打包专用宿主；命令、隔离范围、原生交互和限制见 [Task 13 WP1 报告](../tasks/task-013/TASK_013_COMPLETION_REPORT.md#84-实际命令结果与证据)。不修改用户/系统 TEMP/TMP，不使用真实 profile，不将探针数据打包。WP1–WP4 已接持久化、设置、磁盘恢复及布局/关闭；WP5 本机回归、内部打包和隔离重启/安装/卸载已验证；2026-10-10 所有者反馈干净账户的正式安装引导与真实显示环境实测基本通过，并确认任务完成；证据边界保留于完成报告第 13 节。
 
 ### WP2 设置与显示验证
 
@@ -580,7 +580,7 @@ E2E 的 WP2 截图在 `.local-data/test/task-013/wp2`，不提交或打包；数
 
 定向运行 `scripts/npm.cmd exec -- vitest run tests/window tests/app-state tests/shell/settings.test.tsx tests/document/components.test.tsx tests/preload/contract.test.ts tests/workspace tests/document/settings-display.test.tsx`。验证 DIP workArea/离屏/最小尺寸/异常值、窗口监听释放、侧栏初始化与 clamp、模式政策、关闭队列与早期关闭重发、dirty/saving、重选标志和路径投影。普通正文输入不新增 checkpoint；不能通过新通道提交路径或窗口坐标。
 
-最新 E2E 14 项包含三个 WP4 真产品场景：目录重命名/移动/另存为/回收站删除后重启、设置与混合标签/最大化/normal bounds/侧栏三次启动、真实只读 state 替换失败重试及继续退出保留旧文件。原生错误框选择由测试应答驱动；平台矩阵没有因此完成。WP5 已实测最终 portable/NSIS 重启、隔离同版本构建替换/卸载和路径增量；物理拔屏、全系统缩放/高对比度以及干净账户下正式安装引导仍待验收，见完成报告第 12 节。Windows 10 实机沿用 Task 12 的延期边界。所有证据均使用仓库隔离目录，不修改全局 TEMP/TMP。
+最新 E2E 14 项包含三个 WP4 真产品场景：目录重命名/移动/另存为/回收站删除后重启、设置与混合标签/最大化/normal bounds/侧栏三次启动、真实只读 state 替换失败重试及继续退出保留旧文件。原生错误框选择由测试应答驱动；平台矩阵没有因此完成。WP5 已实测最终 portable/NSIS 重启、隔离同版本构建替换/卸载和路径增量；2026-10-10 所有者反馈物理拔屏、系统缩放/高对比度及干净账户下正式安装引导实测基本通过，并确认任务完成；证据边界见完成报告第 13 节。Windows 10 实机沿用 Task 12 的延期边界。所有证据均使用仓库隔离目录，不修改全局 TEMP/TMP。
 
 ### WP5 完整产品与内部包复核
 

@@ -4,9 +4,9 @@
 
 [Task plan](./TASK_013_SETTINGS_STARTUP_RESTORE.en.md) · [Task archive](../README.en.md)
 
-> **Status: awaiting acceptance. WP0–WP4 are complete; WP5 local regression and delivery checks have run.** Section 12 records the final 2026-10-08 results and remaining environment requirements. An isolated host is not full installed bootstrap acceptance in a clean Windows user environment.
+> **Status: complete, accepted and closed by the owner on 2026-10-10.** WP0–WP4 implementation and WP5 regression/delivery are complete. The owner reported that the remaining environment checks basically passed and explicitly approved completion; see section 13 for evidence sources and boundaries.
 > Settings, disk restoration, layout and close-failure feedback are implemented. No product-code fix was needed in this run, and no binaries were published, tags moved or dependencies upgraded. Task 12 release/system-validation boundaries remain unchanged.
-> Sections 1–11 preserve package history; section 12 is the current acceptance record.
+> Sections 1–12 preserve the conclusions recorded on their respective dates; section 13 defines final acceptance and closure.
 
 ## 1. WP0 baseline and scope
 
@@ -497,3 +497,16 @@ Two environment checks remain before marking the task complete:
 Windows 10 hardware remains deferred under Task 12's existing decision. Windows 11 evidence is not relabeled, and trusted signing/public binaries are not added as gates. Last-millisecond/power-loss behavior, actual dump production and cross-user locking gain no new guarantees from this run.
 
 Final checks: the retained product verifier passed ESLint/Prettier; its final development run `development-guGl4f` passed three normal closes. All 362 local link targets across 18 changed Markdown files exist; documentation formatting and `git diff --check` passed. Changes contain only bilingual status/delivery documentation and one verification script, with no real user paths/content, evidence artifacts, caches or dependency changes. Product source is unchanged, so final gates and internal packages refer to the same product code; passed matrices were not repeated without cause. Task 13 remains awaiting acceptance.
+
+## 13. Owner acceptance and closeout (2026-10-10)
+
+The owner selected both remaining environment checks from the WP5 handoff and reported that testing had confirmed they basically passed:
+
+| Previously outstanding check                                                                                                                   | Updated result                             | Evidence source                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| Clean Windows account or VM: final installed application without a path override, native first-run selection and the complete reselection flow | Basically passed, as reported by the owner | Owner feedback in this conversation on 2026-10-10 |
+| Physical monitor disconnect/reconnect, system scaling and high contrast                                                                        | Basically passed, as reported by the owner | Same feedback                                     |
+
+Task 13 is **complete**. After the testing feedback above, the owner explicitly instructed that it could now be considered complete and closed, closing WP5 and the overall task. Sections 12.4–12.5 preserve the evidence state recorded on 2026-10-08; plan section 9 items 1, 2 and 8 are now closed by the owner's acceptance decision rather than remaining tasks. No OS/build, account/VM choice, detailed steps, path inventories, screenshots or per-scenario results were supplied; none are inferred, and owner confirmation is not presented as a newly executed Agent matrix. The owner accepts the existing record without requiring additional documentation for task closure. Task 12's Windows 10, signing and public-binary boundaries remain unchanged.
+
+This follow-up changes documentation only. Product code, fixtures and dependencies are unchanged; the recorded check/build/E2E results remain those of 2026-10-08, with no new test execution claimed.
