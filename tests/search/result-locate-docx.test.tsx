@@ -17,6 +17,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Editor } from '@tiptap/core';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -308,7 +309,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     for (const query of ['文档标题', '粗体与斜体', '嵌套项目', '项目甲', '🎉']) {
@@ -340,7 +341,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('doc.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     // 先从文件树打开
     await act(async () => {
@@ -376,7 +377,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('doc.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     // 从文件树打开 → loading（读取挂起）
     await act(async () => {
@@ -420,7 +421,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('文档标题');
@@ -450,7 +451,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('嵌套项目');
@@ -478,7 +479,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('项目甲');
@@ -517,7 +518,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('粗体与斜体');
@@ -552,7 +553,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('嵌套项目');
@@ -588,7 +589,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('嵌套项目');
@@ -626,7 +627,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('文档标题');
@@ -652,7 +653,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('项目');
@@ -693,7 +694,7 @@ describe('DOCX 搜索结果打开与定位（第 8.6 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch('文档标题');

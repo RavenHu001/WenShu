@@ -37,6 +37,7 @@ import { DocxCompatibilityNotice } from './DocxCompatibilityNotice';
 import { Icon } from '../common/Icon';
 
 export function DocumentPane({
+  interactionBlocked = false,
   tabs,
   activeTabId,
   onActivateTab,
@@ -56,6 +57,7 @@ export function DocumentPane({
   onSearchControlsChange,
   onDocxSearchControlsChange,
 }: {
+  readonly interactionBlocked?: boolean;
   readonly tabs: readonly DocumentTabState[];
   readonly activeTabId: string | null;
   readonly onActivateTab: (tabId: string) => void;
@@ -88,7 +90,7 @@ export function DocumentPane({
   const liveTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
   const sessions = useEditorSessions(liveTabIds);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
-  const editable = activeTab !== null && isEditable(activeTab);
+  const editable = !interactionBlocked && activeTab !== null && isEditable(activeTab);
   /** 活动 DOCX 标签的编辑器实例注册表（状态驱动：注册/注销触发工具栏重渲染）。 */
   const [docxEditors, setDocxEditors] = useState<ReadonlyMap<string, Editor>>(() => new Map());
   /** 每 DOCX 标签的 current-search controls 注册表（稳定 tabId 键）。 */
@@ -169,6 +171,7 @@ export function DocumentPane({
         <WelcomePanel />
       ) : (
         <TabBody
+          interactionBlocked={interactionBlocked}
           tab={activeTab}
           sessions={sessions}
           onRetryRead={onRetryRead}
@@ -207,7 +210,7 @@ export function DocumentPane({
           <div key={tab.id} className="docx-editor-host" hidden={tab.id !== activeTabId}>
             <DocxEditorSessionHost
               tab={tab}
-              editable={isEditable(tab)}
+              editable={!interactionBlocked && isEditable(tab)}
               onContentChange={onDocxContentChange}
               onSaveRequest={onSave}
               onEditorRegister={registerDocxEditor}
@@ -290,6 +293,7 @@ function WelcomePanel(): React.JSX.Element {
 }
 
 function TabBody({
+  interactionBlocked,
   tab,
   sessions,
   onRetryRead,
@@ -304,6 +308,7 @@ function TabBody({
   onSearchPanelRequest,
   onSearchControlsChange,
 }: {
+  readonly interactionBlocked: boolean;
   readonly tab: DocumentTabState;
   readonly sessions: ReturnType<typeof useEditorSessions>;
   readonly onRetryRead: (tabId: string) => void;
@@ -411,6 +416,7 @@ function TabBody({
     <div className="doc-pane-body">
       {bannerFragment()}
       <EditorSessionHost
+        interactionBlocked={interactionBlocked}
         key={tab.id}
         tabId={tab.id}
         content={tab.content}

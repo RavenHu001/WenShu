@@ -4,7 +4,7 @@
 
 [Development and testing](./README.en.md) · [Documentation](../README.en.md)
 
-This guide covers automated checks, Windows desktop smoke tests, and manual acceptance for Tasks 1–12. Task 11 added a unified Chinese shell, design tokens and SVG icons, an adjustable/collapsible sidebar, file-tree context menus and keyboard commands, internal dragging within a workspace, a continuous centered DOCX canvas, toolbar overflow, search-result hierarchy, and toasts, without changing the file/save/search lifecycles from Tasks 1–10. Autosave, filesystem watching, and session recovery are still unavailable. Sections 3.5–3.8 retain the detailed existing checklists for Tasks 7–10. Sections 2.10 and 3.9 cover Task 11's shell, scaling, accessibility, and visual baselines. Section 2.11 covers Task 12's packaging gates, theoretical compatibility, and physical-machine validation boundaries; the [TASK-012 completion report](../tasks/task-012/TASK_012_COMPLETION_REPORT.en.md) is the final evidence source.
+This guide covers automated checks, Windows desktop smoke tests, and manual acceptance for Tasks 1–12. Task 11 added a unified Chinese shell, design tokens and SVG icons, an adjustable/collapsible sidebar, file-tree context menus and keyboard commands, internal dragging within a workspace, a continuous centered DOCX canvas, toolbar overflow, search-result hierarchy, and toasts, without changing the file/save/search lifecycles from Tasks 1–10. Autosave and filesystem watching remain unavailable. Task 13 WP3 adds workspace and disk-file restoration; see section 7. Sections 3.5–3.8 retain the detailed existing checklists for Tasks 7–10. Sections 2.10 and 3.9 cover Task 11's shell, scaling, accessibility, and visual baselines. Section 2.11 covers Task 12's packaging gates, theoretical compatibility, and physical-machine validation boundaries; the [TASK-012 completion report](../tasks/task-012/TASK_012_COMPLETION_REPORT.en.md) is the final evidence source.
 
 ## 1. Prerequisites
 
@@ -213,6 +213,15 @@ Internal Windows packages also require:
 
 All 33/33 current-scope WP8 items are closed. The acceptance host's kernel build 26200 is Windows 11 and cannot represent actual Windows 10 testing. On 2026-09-10 the owner deferred physical Windows 10 x64 validation to a later development stage, requiring only theoretical compatibility auditing now. Final 43.6.0 portable/NSIS checks of PE, architecture, Electron, NSIS, dependencies, and source-platform gates support Windows 10 x64. Installation/over-installation/uninstallation, paths, external workspace preservation, residue, security-product behavior, and existing Word/WPS document lifecycle acceptance have no known issues. The private repository uses GitHub Free; artifact attestation is unsupported and the actual reason is recorded. Main-push CI passed for exact product commit `98b05b4`. Theoretical auditing must not be described as physical Windows 10 testing. See the item-by-item mapping in the [TASK-012 completion report](../tasks/task-012/TASK_012_COMPLETION_REPORT.en.md).
 
+### 2.12 Task 13 WP0 baseline and startup probe
+
+2026-09-20: after correcting lint/format scanning of Git-ignored tool directories, sequential
+check/build passed: 73 files, 1189 passed, 10 existing conditional skips; Electron E2E also passed
+4/4. The isolated WP0 probe retained sandboxing and exercised pre-ready paths, native first
+selection/relaunch, same-root locking, portable launcher location, and separate NSIS uninstall.
+Commands, isolation, and remaining conditions are in the [Task 13 handoff](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
+This closes WP0 only, not product settings/restore; existing E2E no-sandbox arguments are not platform-security evidence.
+
 ## 3. Development-mode UI acceptance
 
 Start the application:
@@ -407,7 +416,7 @@ Fixed screenshot sizes: `1280×820`, `900×600`. In normal mode, run:
 
 ```powershell
 .\scripts\npm.cmd run build
-.\scripts\npm.cmd exec -- electron .\scripts\capture-ui-baselines.mjs
+.\scripts\node.cmd .\scripts\capture-ui-baselines.mjs
 ```
 
 Manually verify:
@@ -528,3 +537,57 @@ These constraints are verified through code review, type isolation, unit tests, 
 ```
 
 Do not run `check` and `build` in parallel: electron-vite creates temporary configuration files during builds, which can race unnecessarily with ESLint scanning.
+
+## 7. Task 13 data directories, settings, and restoration
+
+Run `.\scripts\npm.cmd exec -- vitest run tests/app-state` for focused coverage. Product E2E workspaces/profiles live in `.local-data/test/e2e`. `--user-data-dir=<P>` isolates settings/state and Electron runtime together, with session in `<P>/session`. The capture launcher now starts the real product main process through Playwright with a fresh script-relative `.local-data/screenshots/profile-*` directory per capture; no screenshot-only settings service is used.
+
+Native bootstrap, real portable-launcher, and Windows ACL-denial checks use `scripts/verify-task-013-storage.mjs` after preparing/packaging its dedicated host. See the [WP1 report](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md#84-actual-commands-and-evidence) for commands, isolation, native interaction, and limitations. Do not modify user/system TEMP/TMP, use real profiles, or package probe data. WP1–WP4 connect persistence, settings, disk restoration and layout/close integration. WP5 local regression, internal packaging, and isolated restart/install/uninstall checks passed; the owner reported that clean-account installed bootstrap and physical display checks basically passed and approved task completion on 2026-10-10; evidence boundaries remain in completion-report section 13.
+
+### WP2 settings and display checks
+
+Focused command: `scripts/npm.cmd exec -- vitest run tests/shell/settings.test.tsx tests/document/settings-display.test.tsx`. Coverage includes real editor state/selection/undo/redo preservation, preference ordering, failed previews/retry, effective startup mode, explicit bad-file reset, focus trapping, and system-theme subscription cleanup. Product E2E covers restart persistence, read-only settings write failure without clearing old records, retry, TXT/DOCX display and unchanged disk bytes, and bad-file feedback.
+
+WP2 E2E screenshots stay in `.local-data/test/task-013/wp2`, excluded from Git/packages. Paths are masked only in evidence; the product shows the real path. The 900×600 dialog can scroll vertically. High contrast uses Chromium forced-colors emulation, not a Windows system-theme switch. Run the capture script with `scripts/node.cmd scripts/capture-ui-baselines.mjs` after building; set `WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2` only for that verification process to avoid overwriting historical Task 11 images. Do not run this Node launcher through Electron.
+
+### WP3 workspace and tab restoration checks
+
+Focused command: `scripts/npm.cmd exec -- vitest run tests/app-state tests/preload/contract.test.ts`. The 25 new cases cover root validation/scan generations, zero-argument IPC, stale-session checkpoint rejection, single scheduling under StrictMode, tab order/activation, error/read-only/degraded files, limit trimming, stop/close/switch/unmount races, initial write suppression, and subsequent normal recording. The shell is inert during restoration. Unrelated App component tests explicitly supply loaded blank preferences, matching the product entry point that loads settings before rendering.
+
+After building, run `scripts/npm.cmd run test:e2e`. The prior 11 WP3 cases use real Electron and isolated profiles, covering all three modes, mixed files with current disk content, missing-file/root retries, renewed compatibility confirmation, complete old lastWorkspace preservation during batch-restore close, and partial visible state after explicit Stop. Screenshots stay in `.local-data/test/task-013/wp3`. Neither unsaved content nor exact positions are restored. WP4 permits independent window/sidebar finalization, so the entire state.json need not remain byte-identical.
+
+### WP4 layout and close checks
+
+Focused command: `scripts/npm.cmd exec -- vitest run tests/window tests/app-state tests/shell/settings.test.tsx tests/document/components.test.tsx tests/preload/contract.test.ts tests/workspace tests/document/settings-display.test.tsx`. Covers DIP work areas/offscreen/minimum/abnormal bounds, listener cleanup, sidebar initialization/clamp, mode policy, close queues/early-close replay, dirty/saving, deferred reselection and committed path projection. Content input must not add checkpoints; the new channel accepts neither paths nor window coordinates.
+
+The current 14 E2E cases include three WP4 product scenarios: restart after directory rename/move/Save As/recycle-bin deletion; three starts with settings, mixed tabs, maximization/normal bounds and sidebar; and real read-only state replacement failure with Retry/Continue Exit preserving old files. Native error-dialog choices use test responses; this does not complete platform acceptance. WP5 verified final portable/NSIS restarts, isolated same-version build replacement/uninstall, and path deltas. The owner reported basic acceptance of physical monitor removal, OS scaling/high contrast, and clean-account installed bootstrap and approved task completion on 2026-10-10; see completion-report section 13 for the evidence boundary. Windows 10 hardware remains deferred under Task 12. Evidence uses repository isolation without global TEMP/TMP changes.
+
+### WP5 complete-product and internal-package verification
+
+On 2026-10-08, sequential check → build → E2E all exited 0: 83 test files, 1288 passed, and 10 existing link-capability conditional skips; E2E was 14/14. `package:win` generated current internal portable/NSIS artifacts and automatically audited package allowlists/exclusions. Actual commands, inventories, failed attempts, and remaining conditions are in [completion-report section 12](../tasks/task-013/TASK_013_COMPLETION_REPORT.en.md). The host is Windows 11 build 26200.9457 at 125%, not Windows 10 hardware evidence.
+
+To rerun the complete gates, override TEMP/TMP in a separate PowerShell child from the repository root. Stop on failure without changing the parent process or user/system environment:
+
+```powershell
+pwsh.exe -NoLogo -NoProfile -Command {
+  $env:TEMP = [IO.Path]::GetFullPath('.local-data/test/task-013/wp5/temp')
+  $env:TMP = $env:TEMP
+  New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
+  .\scripts\npm.cmd run check
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  .\scripts\npm.cmd run build
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  .\scripts\npm.cmd run test:e2e
+  exit $LASTEXITCODE
+}
+```
+
+After building, run these entries separately; portable requires the existing `package:win` first. Do not run concurrently with an installer:
+
+```powershell
+.\scripts\node.cmd scripts/verify-task-013-product.mjs development
+.\scripts\node.cmd scripts/verify-task-013-product.mjs portable
+.\scripts\node.cmd scripts/verify-task-013-product.mjs installed '.local-data/test/task-013/wp5/nsis/install 中文/WenShu.exe'
+```
+
+Each run creates synthetic fixtures and child TEMP under `.local-data/test/task-013/wp5/<mode>-*`, performs three starts/normal closes, checks preferences/tab order/active tab/external disk changes/sidebar persistence, and writes `progress.json`/`evidence.json`. Development copies only the build allowlist; portable copies the current launcher and verifies adjacent WenShuData; installed accepts an EXE inside the repository verification directory and enforces `--user-data-dir`. It does not install software or replace native installed first-run validation. After `READY_FOR_NATIVE_CLOSE`, close the corresponding packaged test window normally. Failures terminate only this script's own PID tree. Fixtures, evidence, and verification scripts are excluded from packages.

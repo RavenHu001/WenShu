@@ -30,6 +30,54 @@ import '../../src/preload/index';
 const desktop = electronMock.expose.mock.calls[0]?.[1] as DesktopApi;
 
 describe('preload 窄接口契约', () => {
+  it('appState exposes only fixed persistence capabilities, with no root/path/channel argument', async () => {
+    expect(Object.keys(desktop.appState).sort()).toEqual([
+      'checkpoint',
+      'chooseDataDirectoryOnNextStart',
+      'flush',
+      'get',
+      'openDataDirectory',
+      'resetInvalidFile',
+      'updatePreferences',
+      'updateSidebar',
+    ]);
+    await desktop.appState.get();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:get');
+    await desktop.appState.flush();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:flush');
+    await desktop.appState.openDataDirectory();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:open-data-directory');
+    await desktop.appState.chooseDataDirectoryOnNextStart();
+    expect(electronMock.invoke).toHaveBeenLastCalledWith(
+      'app-state:choose-data-directory-on-next-start',
+    );
+    await desktop.appState.resetInvalidFile('state');
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:reset-invalid-file', 'state');
+    const preferences = {
+      theme: 'system',
+      txtFontPreset: 'monospace',
+      txtFontSizePx: 13,
+      startupMode: 'blank',
+    } as const;
+    await desktop.appState.updatePreferences(preferences);
+    expect(electronMock.invoke).toHaveBeenLastCalledWith(
+      'app-state:update-preferences',
+      preferences,
+    );
+    const checkpoint = {
+      workspaceSessionId: null,
+      tabRelativePaths: [],
+      activeRelativePath: null,
+      sidebar: { width: 258, collapsed: false },
+    } as const;
+    await desktop.appState.checkpoint(checkpoint);
+    expect(electronMock.invoke).toHaveBeenLastCalledWith('app-state:checkpoint', checkpoint);
+    await desktop.appState.updateSidebar(checkpoint.sidebar);
+    expect(electronMock.invoke).toHaveBeenLastCalledWith(
+      'app-state:update-sidebar',
+      checkpoint.sidebar,
+    );
+  });
   beforeEach(() => {
     electronMock.invoke.mockClear();
   });
@@ -39,8 +87,9 @@ describe('preload 窄接口契约', () => {
     expect(electronMock.expose.mock.calls[0]?.[0]).toBe('desktop');
   });
 
-  it('desktop 只包含 runtime、workspace、document、search、window 五个命名空间', () => {
+  it('desktop 只包含六个固定命名空间', () => {
     expect(Object.keys(desktop).sort()).toEqual([
+      'appState',
       'document',
       'runtime',
       'search',
@@ -226,13 +275,16 @@ describe('preload 窄接口契约', () => {
   it('workspace.open / refresh 仍映射固定通道', () => {
     void desktop.workspace.open();
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:open');
+    void desktop.workspace.restoreLast();
+    expect(electronMock.invoke).toHaveBeenCalledWith('workspace:restore-last');
+    expect(desktop.workspace.restoreLast.length).toBe(0);
 
     electronMock.invoke.mockClear();
     void desktop.workspace.refresh();
     expect(electronMock.invoke).toHaveBeenCalledWith('workspace:refresh');
   });
 
-  it('workspace 命名空间固定暴露 open/refresh/createText/createDocx/createDirectory/reveal/relocate/trash 八个方法', () => {
+  it('workspace 命名空间固定暴露九个方法，包括无参数 restoreLast', () => {
     expect(Object.keys(desktop.workspace).sort()).toEqual([
       'createDirectory',
       'createDocx',
@@ -240,6 +292,7 @@ describe('preload 窄接口契约', () => {
       'open',
       'refresh',
       'relocate',
+      'restoreLast',
       'reveal',
       'trash',
     ]);

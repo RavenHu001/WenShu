@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * TASK-009 WP7：mutationEpoch 生命周期与搜索失效 App 级集成测试（§4.11 / WP0 冻结）。
- * 通过真实 <App /> 组合验证：
+ * 通过真实 <App initialSettings={blankStartup} /> 组合验证：
  * - 成功 create/save-as/relocate/trash 递增 mutationEpoch → 取消活动搜索、
  *   清空 completed 结果（搜索侧栏回到 idle）；
  * - 失败、用户取消与 reveal 不递增 → completed 结果保持有效；
@@ -13,6 +13,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -106,6 +107,7 @@ function makeDesktopMock(): DesktopMock {
   const cancelTextWorkspace = vi.fn(async () => undefined);
   const open = vi.fn(async (): Promise<OpenWorkspaceResult> => ({
     status: 'selected',
+    workspaceSessionId: '00000000-0000-4000-8000-000000000001',
     workspace: snapshot([f('a.txt', 'a.txt'), f('note.bin', 'note.bin'), f('b.docx', 'b.docx')]),
   }));
   const refresh = vi.fn(async (): Promise<RefreshWorkspaceResult> => ({
@@ -247,7 +249,7 @@ async function deleteSelectedFile(): Promise<void> {
 describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
   it('completed 搜索 + 删除成功：清空结果回到 idle', async () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await resolveCompleted(api, 1);
@@ -263,7 +265,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
 
   it('searching 中 + 删除成功：取消在途请求并清空', async () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     expect(screen.getByText('正在搜索…')).toBeDefined();
@@ -283,7 +285,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
       mutationId: 1,
       error: { code: 'WRITE_FAILED', message: '写入失败' },
     });
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await resolveCompleted(api, 1);
@@ -298,7 +300,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
 
   it('completed 搜索 + 取消删除：结果保持有效（取消不递增）', async () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await resolveCompleted(api, 1);
@@ -315,7 +317,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
 
   it('completed 搜索 + reveal 成功：结果保持有效（reveal 不递增）', async () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await resolveCompleted(api, 1);
@@ -331,7 +333,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
 
   it('completed 搜索 + 新建 TXT 成功：清空结果', async () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await resolveCompleted(api, 1);
@@ -354,7 +356,7 @@ describe('mutationEpoch 搜索失效（TASK-009 §4.11）', () => {
 
   it('手工刷新：成功替换快照 → 作废搜索结果；刷新失败 → 保留', async () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await submitSearch('hello');
     await resolveCompleted(api, 1);

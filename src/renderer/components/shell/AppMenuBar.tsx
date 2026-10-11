@@ -16,6 +16,7 @@ export interface AppMenuActions {
   readonly workspaceSearch: () => void;
   readonly toggleSidebar: () => void;
   readonly about: () => void;
+  readonly settings: () => void;
 }
 
 export interface AppMenuCapabilities {
@@ -128,6 +129,12 @@ function menuItems(
     case 'view':
       return [
         {
+          id: 'settings',
+          label: '设置…',
+          shortcut: 'Ctrl+,',
+          onSelect: actions.settings,
+        },
+        {
           id: 'toggle-sidebar',
           label: capabilities.sidebarCollapsed ? '展开侧栏' : '折叠侧栏',
           icon: 'collapse',
@@ -191,7 +198,18 @@ export function AppMenuBar({
       {openMenu !== null && trigger !== null && position !== undefined && (
         <MenuSurface
           className="app-menu-surface"
-          items={menuItems(openMenu, actions, capabilities)}
+          items={menuItems(
+            openMenu,
+            {
+              ...actions,
+              settings: () => {
+                // The removed menu item cannot be the dialog's focus-return target.
+                trigger.focus();
+                actions.settings();
+              },
+            },
+            capabilities,
+          )}
           label={`${menuLabels[openMenu]}菜单`}
           onClose={() => setOpenMenu(null)}
           position={position}

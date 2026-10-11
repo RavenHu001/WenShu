@@ -4,7 +4,7 @@
 
 WenShu is a local desktop workspace for managing multiple documents, designed for personal writing, organizing creative settings, and maintaining reference material. It uses an ordinary folder as its workspace and provides a file tree, multiple tabs, and a central editor similar to a code editor, so related documents can be managed, searched, and edited together.
 
-> **Current stage: Task 12 internal Alpha release engineering.** The source code is licensed under the MIT License and may be published on GitHub. Windows portable/NSIS packages remain unsigned internal Draft artifacts and are not offered as public downloads. There are no plans to publish the project on the Microsoft Store. Microsoft Artifact Signing + GitHub OIDC is only an optional future task if public binaries are released.
+> **Current stage: Task 13 complete following owner acceptance; WP0–WP4 complete; WP5 local verification executed.** The source code is licensed under the MIT License and may be published on GitHub. Windows portable/NSIS packages remain unsigned internal Draft artifacts and are not offered as public downloads. There are no plans to publish the project on the Microsoft Store. Microsoft Artifact Signing + GitHub OIDC is only an optional future task if public binaries are released.
 
 ## Release and licensing
 
@@ -60,12 +60,16 @@ WP8 passed all 33/33 acceptance items within the current scope: preparation for 
 - Reveal a file, directory, or workspace root in File Explorer.
 - Automatically refresh the workspace after a successful create, Save As, rename, move, or delete. Old search results become invalid immediately: active search is canceled, results and navigation targets are cleared, and deleted paths cannot remain clickable. Failures, cancellations, and Reveal in File Explorer do not invalidate otherwise valid results.
 - Use a single set of Chinese application menus at the top of the renderer. Commands in File, Edit, View, and Help are functional entry points, and runtime version information is available in “关于文枢” (About WenShu).
-- Use project-local SVG icons in the activity bar, file tree, tabs, toolbars, and status feedback. The unimplemented Settings entry no longer appears to be a working feature.
+- Use project-local SVG icons in the activity bar, file tree, tabs, toolbars, and status feedback. Settings opens through View → Settings… or `Ctrl+,`.
 - Resize the workspace sidebar between 180 and 420 px by dragging or using the keyboard, collapse it, and restore it through the activity bar or View menu. Long paths, deeply nested folders, and very long filenames remain scrollable and have complete tooltips.
 - Open separate context menus for the workspace root, files, and folders using right-click, `Shift+F10`, or the Menu key. `F2` for Rename, `Delete` for deletion confirmation, `F5` for Refresh, and `Ctrl+Shift+S` for Save As reuse the existing guards.
 - Drag files and folders to ordinary directories or the root drop zone within the same workspace. No-ops, self/descendant moves, name collisions, in-progress saves, invalid types, and stale workspaces are rejected before submission; the main process still makes the final decision.
 - Edit DOCX on a centered continuous writing canvas with a maximum width of 820 px, without a pagination promise. The toolbar groups history, character, paragraph, list, and alignment controls, with a “More Formatting” overflow at narrow widths. TXT retains a full-height plain text layout.
 - Show dismissible, timed toasts for successful file operations. Errors, conflicts, and partial failures do not disappear automatically. CSS provides adaptation points for high contrast and reduced motion.
+
+View → Settings… or `Ctrl+,` opens one dialog for immediate light/dark/system previews, TXT system/monospace/serif fonts and 12–24 px sizes. Defaults remain system theme and monospace 13 px; DOCX keeps its white canvas and original formatting. The dialog shows the real data directory, a fixed open command, and installed-mode next-start reselection. Three startup modes are active: blank, workspace only, or workspace and tabs. Restoration rereads disk files in order, with error-tab retry and Stop Restore. Unsaved content still requires manual saving.
+
+Data roots are repository `.local-data/dev`, `WenShuData` beside the portable launcher, or an independently selected installed-mode directory. Installed mode retains only a ≤8 KiB locator in the system user directory. This does not promise zero C-drive writes from Windows or portable extraction.
 
 ### Engineering capabilities
 
@@ -93,9 +97,8 @@ WP8 passed all 33/33 acceptance items within the current scope: preparation for 
 
 ### Not yet implemented
 
-- Dark theme, a complete settings system, and persistent theme/font configuration.
-- Tab drag-reordering, pinning, bulk closing, and state restoration.
-- TXT/DOCX autosave and session recovery.
+- Tab drag-reordering, pinning, bulk closing, and exact-position restoration.
+- TXT/DOCX autosave and unsaved-content/draft recovery.
 - Workspace replacement, batch replacement, regular-expression/fuzzy/semantic search, and a persistent full-text index.
 - Complex Word formatting, including editing images/tables/headers/footers/comments/tracked changes, precise pagination, macros, and completely lossless round trips.
 - File system watching and automatic refresh; external changes require a manual refresh.
@@ -195,6 +198,8 @@ Production build output is written to `out/`. Internal Windows packaging and aud
 - [x] [Task 10: find and replace within the current DOCX](./docs/tasks/task-010/TASK_010_DOCX_FIND_REPLACE.en.md), complete; see the [TASK-010 completion report](./docs/tasks/task-010/TASK_010_COMPLETION_REPORT.en.md).
 - [x] [Task 11: desktop shell, information architecture, and editing experience rework](./docs/tasks/task-011/TASK_011_UI_SHELL_INFORMATION_ARCHITECTURE.en.md). Implementation, automated quality gates, and final manual Windows acceptance all passed; see the [completion report](./docs/tasks/task-011/TASK_011_COMPLETION_REPORT.en.md).
 - [x] [Task 12: Windows Alpha release engineering](./docs/tasks/task-012/TASK_012_WINDOWS_ALPHA_RELEASE.en.md). All 33/33 items in the current scope passed. MIT source publication preparation and unsigned Windows 10 x64 internal Alpha engineering are complete. Actual-machine validation is deferred to a later development phase; see the [completion report](./docs/tasks/task-012/TASK_012_COMPLETION_REPORT.en.md).
+
+- [x] [Task 13: basic settings and startup restore](./docs/tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). Completed following owner acceptance: WP0–WP4 complete, including directory initialization, JSON persistence, and basic settings/themes. Workspace/tab restoration and incomplete-restore close protection are implemented; layout and close integration are implemented; WP5 local regression, internal packaging, and isolated restart/install/uninstall checks passed; the owner reported that clean-account installed bootstrap and physical display checks basically passed and approved task completion on 2026-10-10; evidence boundaries remain in completion-report section 13. See the [handoff report](./docs/tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
 
 The task documents and [project technical baseline](./docs/architecture/PROJECT_BASELINE.en.md) define the detailed scope and technical constraints. These development records are available in Chinese and English.
 

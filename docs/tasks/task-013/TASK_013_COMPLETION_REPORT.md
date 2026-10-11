@@ -1,0 +1,533 @@
+# TASK-013 完成报告：基础设置与启动恢复
+
+简体中文 | [English](./TASK_013_COMPLETION_REPORT.en.md)
+
+[任务规划](./TASK_013_SETTINGS_STARTUP_RESTORE.md) · [任务档案](../README.md)
+
+> **状态：已完成，2026-10-10 经所有者验收确认并收尾。** WP0–WP4 实施与 WP5 回归交付已完成。所有者反馈原剩余环境检查实测基本通过，并明确同意视作完成；证据来源与边界见第 13 节。
+> 设置、磁盘标签恢复、布局与关闭失败反馈均已实现。没有公开二进制、移动标签或升级依赖；Task 12 发布与系统验证边界不变。
+> 第 1–12 节保留各日期的历史结论；完成与验收结论见第 13 节，验收后的 CI 焦点竞争修复见第 14 节。
+
+## 1. WP0 基线与改动范围
+
+- 分支 `TASK-13`，起点 `e536c1c70e826fe5dd0fe232fda178a953660635`；开始时 Git 工作树干净，无已有 Task 13 完成报告；仓库及适用父目录未发现 `AGENTS.md`。
+- 已完整阅读本任务规划、开发提示词、README、PROJECT_BASELINE、TESTING 和 Task 12 完成报告，并核查下面的实际接入点。
+- 本机 Windows build `26200.9457`，属于 Windows 11；不作为 Windows 10 实机证据。项目本地 Node `22.15.0`、npm `10.9.2`，锁定 Electron `43.6.0`、builder `27.0.0-alpha.8`；当前 Vitest `3.2.7`。
+- 未修改 `src/`、产品打包配置、依赖或锁文件。只保留两个隔离探针脚本、工具目录的 lint/format 排除和中英文交接文档；没有产品 UI 接线。
+- 全部合成数据/缓存/包位于 Git 已忽略的 `.tools/task-013-wp0/`。现有 builder 白名单只收集 `out/main`、`out/preload`、`out/renderer` 等产品文件，探针和数据不进入产品包。没有清理或搬移旧 `.tools/doc-review/` 文件。
+
+## 2. 命令与真实结果
+
+所有 npm/node 命令均经 `scripts/npm.cmd` / `scripts/node.cmd`。基线验证 shell 临时将 TEMP/TMP 指向仓库 `.tools/task-013-wp0/temp`，仅由该 shell 的子进程继承；没有修改用户/系统环境变量。探针为每轮创建独立目录，并只给子进程传入 TEMP/TMP、appData 和 profile 的隔离位置。
+
+| 命令/动作                                                                                                         | 结果 | 说明                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------- |
+| `npm.cmd run check` 首次                                                                                          | 1    | typecheck 通过；lint 扫到 Git 已忽略的 `.tools/doc-review/` 三个旧 CJS 脚本，25 个错误；后续阶段未运行     |
+| `npm.cmd run check` 修正扫描范围后                                                                                | 0    | typecheck、lint、format、103 包 NOTICE 校验通过；73 文件、1189 通过、10 条件跳过、0 失败                   |
+| 随后 `npm.cmd run build`                                                                                          | 0    | main 155.17 kB、preload 4.30 kB、renderer JS 2264.13 kB；产品代码修改数为 0                                |
+| `node.cmd scripts/verify-task-013-startup.mjs` 受限沙箱两次                                                       | 1    | 正常分支 ready 前路径设置成功；renderer 加载 data URL 报 `ERR_FAILED (-2)`；第二次只增加错误诊断           |
+| 同一命令，普通桌面进程                                                                                            | 0    | 不改安全开关即通过；同根单实例、窗口聚焦、退出重启和 cookie 持久性均通过                                   |
+| 同命令加 `--native`，普通桌面进程                                                                                 | 0    | 实际 Windows 原生选址，经 computer-use 操作；未 mock 对话框；定位文件→`app.relaunch()`→新 PID 正常启动通过 |
+| 同命令加 `--prepare-package`                                                                                      | 0    | 生成独立 appId 的最小探针工程与 builder 配置，全部位于隔离目录                                             |
+| `node.cmd scripts/run-electron-builder.mjs --config .tools/task-013-wp0/builder.json --win --x64 --publish never` | 0    | 实际生成 portable/NSIS，沿用产品 fuse hook、ASAR integrity、未签名策略；无发布                             |
+| 同探针命令加 `--portable=.tools/task-013-wp0/package/WP0-portable.exe`                                            | 0    | 真实启动器目录、解包目录、路径、同根锁、cookie 重启均通过；补齐启动器退出等待后再次通过                    |
+| 独立 NSIS `/S /D=<probe-install>`                                                                                 | 0    | 安装到仓库内中文含空格目录；独立 appId、无桌面/开始菜单快捷方式                                            |
+| 探针 `--installed=<probe-install>/WenShu.exe`                                                                     | 0    | 安装后 EXE 实际启动、外置根、同根锁、重启持久性通过                                                        |
+| 独立卸载器 `/S _?=<probe-install>`                                                                                | 0    | 安装目录内合成哨兵被删除；外置数据 44 个文件 SHA-256 前后一致                                              |
+| `npm.cmd run test:e2e`，隔离 TEMP/TMP                                                                             | 0    | 1 文件、4 用例：启动/About、TXT 精确字节、DOCX/备份、dirty 标签取消关闭                                    |
+| 新增脚本 Prettier / ESLint                                                                                        | 0    | 首次 lint 发现 MJS 未显式导入 Node 全局；补齐 import 后通过，未放宽规则                                    |
+
+基线修复仅为 ESLint / Prettier 排除 `.tools/`、`.local-data/`、`release/` 工具和产物目录；没有禁用源码规则、删除断言、增加测试跳过或调整既有 timeout。10 个跳过均为既有真实 symlink/junction 能力条件：TXT 2、DOCX 2、搜索 2、resolve/relocate/trash/reveal 各 1。测试中一条 EPERM 清理提示来自既有故障注入用例，不是基线失败。
+
+现有 E2E 本来就传 `--disable-gpu --no-sandbox`；本包未修改它，4/4 仅作既有行为回归。WP0 专用探针不传这两个开关，窗口保持 `nodeIntegration:false`、`contextIsolation:true`、`sandbox:true`；真实启动通过发生在普通桌面执行环境，不能把受限沙箱失败说成通过。
+
+收尾定向复验：最终脚本普通桌面启动通过（`known-SwsbP8`）；`npm.cmd run lint`、`npm.cmd run format:check`、`git diff --check` 均为 0。334 个本地 Markdown 链接目标存在；探针 ASAR 实读仅有 `main.mjs`、`package.json`，没有验证数据。首次 ASAR 单行命令因 Windows 命令行引号丢失而语法失败，改为本地 `.mjs` 文件后检查通过。最终仓库相关 Electron/探针进程为 0。
+
+## 3. 启动与目录证据
+
+本地证据为 `.tools/task-013-wp0/` 下的 `check*.log`、`build.log`、`e2e.log`、`package.log`、`nsis-result.json`，以及每轮的 `events.jsonl` / `summary.json`。报告只记相对路径与合成数据，不提交 profile、包或绝对用户路径。
+
+- **已知根**（`known-uVZavD`）：`paths-before-ready.ready=false`，`userData=数据 根/runtime`、`sessionData=数据 根/runtime/session`；正式分支才出现 1 个 session、1 个 BrowserWindow。第二进程在 ready 前锁失败，session/window 均为 0；首进程收到 `second-instance`，仍只有 1 个窗口且 `focused=true`。第三个 PID 的 `previousCookie=true`。
+- **首次引导**（`native-pHMzJE`）：原生对话框前及返回后均为 0 session、0 BrowserWindow。原生选择的目录包含中文/空格；定位文件实写 **103 bytes**，同目录 `wx` 临时文件→写入→fsync→close→rename。`app.relaunch()` 后是不同 PID，再在 ready 前设置正式路径。没有在 ready 后改正式缓存路径。
+- **真实落盘**：正常分支退出后可见 `runtime/session/Network/Cookies`、`Local State`、`Preferences`、`Cache`、`Code Cache`、`GPUCache` 等；`session.defaultSession.getStoragePath()` 与显式 sessionData 一致。cookie 重启后读到合成值，证明不只是调用了 setPath。logs/crashDumps 的路径和目录已验证，但没有故意产生日志或崩溃转储，不能宣称验证了 dump 内容。
+- **引导痕迹边界**：即使没有访问 defaultSession 或创建业务窗口，引导隔离 profile 仍出现 `bootstrap-traces/session/Local State`。探针为了保护真实 profile，在 ready 前给引导阶段也设置了测试路径；这不是产品备用数据根，不能证明真实系统用户目录只增加 bootstrap。WP1 必须明确启动期痕迹归属，WP5 实测最终产品目录增量；规划已允许必要引导/系统/临时痕迹。
+- **portable**（`portable-9UwWuo`，退出等待复验 `portable-aUAh15`）：启动器实测在 `launcher 中文/`；环境变量由真实 NSIS 启动器设置，验证器事先删除继承的 portable 标识。持久目录为 `launcher 中文/WenShuData/runtime/session`；运行 EXE 不在启动器目录，而在本轮子进程 TEMP 下；重启保持 cookie。仅按相同数据根验证单实例，不推断不同根/不同用户共用一把锁。
+- **NSIS**：独立探针沿用锁定 builder 默认 portable/卸载模板和产品安全 fuse hook，使用不同 appId，未触碰用户 WenShu 安装。内部 `WenShuData/synthetic-sentinel.txt` 被卸载删除，外置根 44 文件哈希不变。`_?=` 原地运行卸载器会留下卸载器自身，已记录为探针启动方式的残留，不称安装目录完全消失。未做本轮最终 WenShu 产品升级/卸载验收。
+
+## 4. 当前接入点与 WP1 文件交接
+
+| 文件/模块                                                               | 已核对事实及后续职责                                                                                                                                                                             |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/main/index.ts`                                                     | 当前不设路径、不取单实例锁；whenReady 后立即访问 defaultSession、注册业务 IPC、创建 1280×820 / 最小 900×600 窗口。WP1 必须先分流引导/正常入口，不能让引导分支落入该回调                          |
+| `workspace-session.ts` / `workspace-ipc.ts`                             | 根仅存在主进程内存，当前只来自用户打开工作区时的原生选择器；扫描成功才提交，取消/失败保留旧根。缺少主进程扫描代次和会话 token；restoreLast 必须共享安全扫描成功提交逻辑                          |
+| `scan-workspace.ts` / 文档路径解析 / 工作区搜索                         | 子树扫描和文档安全读取不是同一层；恢复根需逐段 lstat/realpath 拒绝链接，不能仅凭现有扫描就称根已安全。需按真实路径精确排除当前数据子树，不能按名称屏蔽所有 WenShuData                            |
+| `window/window-close.ts` / `App.tsx`                                    | 主进程 close 总是先询问 renderer，pending 防重；renderer 用最新 dirty/saving 决定放弃、取消、等待。以后只在用户允许关闭后提交最后元数据并 flush；不得绕过保存保护                                |
+| `src/preload/index.ts` / `src/shared/desktop-api.ts`                    | 只有固定窄调用，无 appState / restoreLast。WP1 加有限 DTO 和结果，不暴露 fs、任意键、任意根路径、通用 invoke                                                                                     |
+| `use-workspace.ts`                                                      | generation 防旧 renderer 结果、成功提交递增 epoch，刷新单飞；提取共享成功提交路径，补入主进程签发会话 token                                                                                      |
+| `use-documents.ts` / `use-editor-sessions.ts`                           | openFile 唯一路径标签，读取结果受 epoch/tabId/requestId 门禁；失败保留 read-error。复用 controller，不持久化编辑器、正文、revision 或运行时 tabId                                                |
+| `electron.vite.config.ts` / builder / `verify-package.mjs`              | preload 保持 CJS sandbox；开发根可从固定 `out/main` 相对项目根解析，不依赖 cwd；WP1 增加 `.local-data` Git/包禁止项及审计，保留现有白名单/fuses                                                  |
+| `tests/e2e/electron-smoke.test.ts` / `scripts/capture-ui-baselines.mjs` | E2E 用 tmpdir + `--user-data-dir`；截图在 ready 前只设 `out/.capture-user-data`，且路径依赖 cwd。WP1 同步迁移隔离启动方式，显式覆盖 session/log/dump 及 settings/state，不读取开发或用户恢复记录 |
+
+新增职责保持规划的少量模块：`src/shared/app-state.ts`（纯 DTO/预算/校验）、`src/main/app-state/data-directory.ts`（路径/引导/定位）、`app-state-store.ts`（两个 JSON/队列/flush）、`app-state-ipc.ts`（窄接口）。本包没有创建这些 WP1 产品模块。
+
+## 5. 固定的目录与契约
+
+### 目录
+
+1. 开发：稳定项目根下 `.local-data/dev`；不能用启动 cwd 或硬编码盘符。便携：`PORTABLE_EXECUTABLE_DIR/WenShuData`；不能用 `dirname(process.execPath)`。安装/无 portable 独立包：原生选择独立根，系统用户目录的长期应用定位数据只有 `<appData>/WenShu/bootstrap.json`（≤8 KiB）。
+2. 正式根固定含 `settings.json`、`state.json`、`runtime/session`、`runtime/logs`、`runtime/crashDumps`。userData=runtime，sessionData=runtime/session；路径存在并验证后在顶层同步设置，再取单实例锁，成功后才初始化业务 session/window/IPC。
+3. 安装根与安装目录相等、互为祖先/后代或经链接重叠均拒绝；本地普通目录逐段验证。已记录根丢失时不 mkdir 冒充原目录。不可写/缺盘走规划的重试、选择、退出；便携不可写提示移动目录或退出。不得静默回退 C 盘。
+4. 首选取消退出；主动重选取消保留原路径、清除重选标志、重启旧根；原根不可用时取消回到重试/退出。不自动迁移、合并或删除旧数据。只写下次重选标志，不立即重启编辑会话。
+5. 不承诺 Windows、引导痕迹或 portable TEMP 解包零 C 盘写入；不更改全局 TEMP/TMP。测试覆盖必须先于模式分流，明确只接受主进程启动参数，renderer 无选址路径能力。
+
+### WP0 冻结的 WP1 DTO 依据（最终实现见第 8 节）
+
+| 对象          | 字段与默认值/预算                                                                                                                                                                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| bootstrap     | `{version:1,dataRoot:string,reselectOnNextStart?:boolean}`；UTF-8 ≤8192 bytes；绝对本地根，拒绝多余字段/未知版本；取消不破坏旧定位                                                                                                                                                         |
+| settings      | `{version:1,theme,txtFontPreset,txtFontSizePx,startupMode}`；≤16384 bytes。theme=`system/light/dark`，默认 system；字体=`system/monospace/serif`，默认 **monospace**；字号整数 12–24，默认 **13**；startupMode=`blank/workspace/workspace-and-tabs`，默认最后一项                          |
+| state         | `{version:1,window:{normalBounds,maximized},sidebar:{width,collapsed},lastWorkspace}`；≤524288 bytes。normalBounds 初始 null，否则有限安全整数 x/y/width/height、宽高正数，由主进程结合屏幕校正；maximized=false；侧栏 258 px / false，复用 180–420 clamp；lastWorkspace=null              |
+| lastWorkspace | `{rootPath,tabRelativePaths,activeRelativePath}`；仅主进程填写 rootPath；相对路径使用 `/`、只 TXT/DOCX，禁止绝对路径、空段、点段、反斜杠、NUL/ADS；路径字符串建议统一上限 4096 UTF-16 单元并叠加 JSON 字节预算。活动路径可 null，否则必须属于所存列表；仅工作区模式列表为空、活动路径 null |
+| checkpoint    | `{workspaceSessionId,tabRelativePaths,activeRelativePath,sidebar}`；无工作区时 token=null 且列表为空；renderer 不传根、window bounds、dataRoot。主进程签发不透明 token，成功切换（包括同根重开）更换，refresh 保持；校验/入队及发布前复验 token，拒绝旧工作区快照。token 不写入 state.json |
+
+TXT 当前真实样式是 `app.css` 中 `'Cascadia Mono', Consolas, 'Courier New', monospace`、13 px，因此默认 monospace/13；不能按 UI 名称猜成 system。设置字号/字体只改变显示，不写文档。
+
+恢复最多 100 个标签，不限制运行时标签数；主进程先去重，超限时保留活动标签，并按原顺序保留其余所选标签，返回显式 `TAB_LIMIT` 提示。快照输入本身也受 512 KiB 总预算限制，超大 IPC 在合并前拒绝；不能先无限复制/解析再检查。文件先 stat/有界读取后 parse；版本和精确字段校验不直接展开到应用对象。
+
+窄 API：`appState.get()`、`updatePreferences(完整白名单偏好)`、`checkpoint(snapshot)`、`openDataDirectory()`、`chooseDataDirectoryOnNextStart()`、`resetInvalidFile('settings'|'state')`，以及无路径参数的 `workspace.restoreLast()`。建议统一 `{status:'ok',...}` / `{status:'error',error:{code,message}}`，取消独立 status；code 至少区分 `INVALID_REQUEST`、`INVALID_DATA`、`UNSUPPORTED_VERSION`、`TOO_LARGE`、`STALE_SESSION`、`DATA_DIRECTORY_UNAVAILABLE`、`READ_FAILED`、`WRITE_FAILED`。get 对每文件返回 missing/valid/invalid/unsupported/read-error 状态和安全默认值；错误不含原始异常/绝对路径，数据位置只经明确展示字段返回。
+
+每文件一个串行队列，约 500 ms 合并，仅元数据变动触发；排他同目录临时文件→完整写→sync→close→rename，失败保留旧文件与内存偏好。`checkpoint` 入队确认不能冒充已落盘；结果区分 queued/saved，flush 等待最新版本及在途写入，并暴露可重试持久化错误。设置模式切换的 lastWorkspace 清理在 settings 成功持久化后生效；两文件不声称事务，启动按 settings 再投影 state，防止旧标签意外恢复。损坏/未知版本禁止自动覆写，明确重置前保留原件。
+
+关闭先完成既有 dirty/saving 协议，再提交最终元数据、flush；失败给重试/继续退出，不等于文档保存失败。恢复开始到结束暂停快照；中途关闭保留原 lastWorkspace、只收尾设置/布局；用户明确停止才采纳部分现场。工作区根/窗口 bounds 归主进程，正文输入不写 state。
+
+测试兼容策略：保留已有 `--user-data-dir=<P>` 的 runtime 语义；WP1 把该显式参数识别为隔离测试根 `<P>`，settings/state 位于 `<P>`，userData 仍为 `<P>`，session/log/dump 为其子目录（仅测试布局例外），跳过真实 bootstrap/开发根。生产三种固定布局不变。E2E 与截图必须同时采用这一约定，截图绝对路径从脚本位置解析；不得让仅覆写 Chromium profile 的旧入口仍读取真实 settings/state。
+
+## 6. 可复用验证入口与剩余条件
+
+```powershell
+.\scripts\node.cmd scripts/verify-task-013-startup.mjs
+.\scripts\node.cmd scripts/verify-task-013-startup.mjs --native
+.\scripts\node.cmd scripts/verify-task-013-startup.mjs --prepare-package
+.\scripts\node.cmd scripts/run-electron-builder.mjs --config .tools/task-013-wp0/builder.json --win --x64 --publish never
+.\scripts\node.cmd scripts/verify-task-013-startup.mjs --portable=.tools/task-013-wp0/package/WP0-portable.exe
+```
+
+`--native` 在真实对话框中选择本轮打印目录下的 `数据 根`；原生选择有 180 秒人工交互期限，正常启动观察 30 秒。脚本专为合成目录设计，不能复用其简化定位读取作为产品安全校验器。独立 NSIS 的安装/卸载仅针对 `--prepare-package` 生成的独立身份；安装后可用 `--installed=<probe-install>/WenShu.exe`。不要对用户现有安装执行该演练。
+
+WP0 核心可行性检查点已满足，可交接 WP1；仍须保留以下门禁，不能标记全 Task 13 完成：
+
+- 引导阶段的 Local State 是实际发现；最终产品启动期痕迹位置及“仅有界定位文件为长期用户目录数据”仍需 WP1 定案、WP5 量测。测试 appData 重定向不替代真实产品路径证明。
+- WP1 还需严格目录/链接/安装重叠校验，不可写/缺盘、首次取消/主动重选取消/旧根不可用取消，坏 JSON、超大/未知版本、写入失败、flush 竞态等行为测试。本包没有用 mock 声称这些已完成。
+- 默认开发 `.local-data/dev` 与最终产品 portable/installed 入口尚未接线；升级/卸载保留外置业务 settings/state、真实 logs/dumps、跨用户/不同数据根锁范围及 Windows 10 实机均未验。本次只证明锁定运行时和模板的最小实际流程。
+- 后续实现需同步 E2E/截图覆盖与 `.local-data` Git/包审计禁止项；现有 E2E 的 no-sandbox 限制仍须在报告中区分。
+
+WP0 在此结束；后续单独授权的 WP1 结果记录于第 8 节。
+
+## 7. 参考核对
+
+- 锁定 `node_modules/electron/electron.d.ts` 的 `setPath`、`setAppLogsPath`、`relaunch`、`requestSingleInstanceLock`、`Session.getStoragePath`，与 [Electron app API](https://www.electronjs.org/docs/latest/api/app#appsetpathname-path) 对照：目录须存在，sessionData 须在 ready 前覆写。
+- 锁定 `node_modules/app-builder-lib/templates/nsis/portable.nsi` 的 `$EXEDIR` 环境变量、`ExecWait` 与解包清理，与 [builder portable 文档](https://www.electron.build/docs/nsis/#portable) 对照。
+- 锁定 `uninstaller.nsh` 的 `RMDir /r $INSTDIR` 与单独的 AppData 删除分支，对照 [NSIS 配置](https://www.electron.build/docs/nsis/#deleteappdataonuninstall)：`deleteAppDataOnUninstall:false` 不保护安装目录内部数据。
+
+## 8. WP1：数据目录与 JSON 存储（完成）
+
+本轮从 `521e9cd`（WP0）开始，工作树干净；重新完整阅读规划、统一提示词和 WP0 交接，未发现适用 AGENTS.md。复用仍适用的 WP0 基线、Electron 类型与 portable/NSIS 模板实测，不重跑前置全套。没有新增依赖、数据库、状态框架或通用配置键；没有改动锁文件、接设置 UI 或正文恢复调度。
+
+### 8.1 最终路径与启动行为
+
+| 运行方式     | 数据根                                                 | userData / sessionData                  | 定位与错误策略                                                                           |
+| ------------ | ------------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 开发         | 从构建入口解析的仓库 `.local-data/dev`，不依赖启动 cwd | `<根>/runtime` / `<根>/runtime/session` | 固定根失败报错退出                                                                       |
+| portable     | `PORTABLE_EXECUTABLE_DIR/WenShuData`                   | 同上                                    | 不使用解包 EXE 的目录；不可写提示移动整个便携目录后重试或退出                            |
+| 安装形态     | 原生选择的独立普通目录                                 | 同上                                    | `<appData>/WenShu/bootstrap.json`，UTF-8 ≤8192 bytes；数据根和安装目录双方均不得包含对方 |
+| 显式测试覆盖 | `--user-data-dir=<P>`                                  | `<P>` / `<P>/session`                   | settings/state 也在 `<P>`，跳过真实定位文件；空值、相对路径或不可用目录失败，不降级      |
+
+日志与转储路径分别为 runtime 下 `logs`、`crashDumps`，ready 前设置；未主动启动 crashReporter 或正文日志。首次/重选引导使用 OS temp 中自己创建的 `wenshu-bootstrap-*` runtime，退出时仅尽力清理自己那一目录。它承接 WP0 发现的 Local State，不把 Chromium profile 放在长期 bootstrap 目录。真实隔离安装形态启动后，appData 子树只有 **131 bytes 的 bootstrap.json**。这不是系统、原生选择器或 portable 临时解包“零 C 盘写入”承诺。
+
+正式分支确定目录并重定向后申请同根单实例锁；第二实例不初始化业务 session/窗口，通知首实例恢复/显示/聚焦窗口。仅正式分支注册业务 IPC、默认 session 权限拒绝与业务窗口。引导分支只用原生 UI，成功写定位文件后 `app.relaunch()` 并退出。
+
+首次取消直接退出；主动重选取消重新验证旧根、清标志、重启旧根；失效根不能创建空目录冒充，重新选址取消回到“重试/退出”。重选只写下次启动标志，不搬数据。选择器优先建议可用非 C 盘：安装卷为非 C 时建议该卷，否则枚举可用非 C 卷；建议路径不会自动成为数据根。选址只接受空目录或字段/版本兼容的 WenShu 数据目录，拒绝安装重叠、链接/不安全祖先与无关文件。
+
+### 8.2 最终字段与错误契约
+
+共享 DTO、严格白名单和预算在 `src/shared/app-state.ts`，实际默认值与 WP0 表一致：
+
+- `settings.json`：`version:1`、`theme:'system'`（system/light/dark）、`txtFontPreset:'monospace'`（system/monospace/serif）、`txtFontSizePx:13`（整数 12–24）、`startupMode:'workspace-and-tabs'`（blank/workspace/workspace-and-tabs）；≤16 KiB。
+- `state.json`：`version:1`、`window:{normalBounds:null,maximized:false}`、`sidebar:{width:258,collapsed:false}`、`lastWorkspace:null`；≤512 KiB。bounds 是安全整数 x/y/width/height，宽高为正，屏幕校正留 WP4；sidebar width 为整数 180–420。
+- `lastWorkspace` 只有主进程填写的 `rootPath`、`tabRelativePaths`、`activeRelativePath`；路径 ≤4096 UTF-16 单元并受 UTF-8 文件预算约束。只接受规范 TXT/DOCX 相对路径，拒绝点段、绝对路径、反斜杠、控制字符、ADS、保留设备名等；磁盘现有路径再逐段检查链接和类型。最多 100 个去重恢复标签，保留活动项和选中项原顺序，裁剪返回 `TAB_LIMIT`。
+- `checkpoint` 只有 `workspaceSessionId`、上述相对标签列表/活动项、sidebar。无会话时 token=null 且列表空，不因此抹掉待恢复的旧 lastWorkspace。正文、DOCX 模型、搜索、旧 revision/确认、tabId 和编辑器运行时对象都不接受。
+- `workspace-session.ts` 持有根和 UUID；成功打开（同根重开亦然）重新签发，`workspace.open()` 的 selected 结果携带 `workspaceSessionId`，refresh 不换。主进程 open generation 阻止旧扫描提交；checkpoint 入队和临时文件替换前再次检查会话。token 不写入 JSON。WP3 必须保留 selected/restore 提交返回的 token，不能事后取一个新 token 给旧标签集合使用。
+
+`appState.get()` 返回 `{status:'ok',snapshot}`，snapshot 包含 settings、投影后的 state、`effectiveStartupMode`、当前 `workspaceSessionId`、两文件 health，以及 `dataDirectory:{path,mode,canReselect}`。health 为 `{status,pending,error}`，status 是 missing/valid/invalid/unsupported/too-large/read-error。写结果为 `{status:'queued'|'saved'|'unchanged',warnings:[]|['TAB_LIMIT']}`；动作结果为 `{status:'ok'}`。错误统一 `{status:'error',error:{code,message,retryable}}`，不回传原始异常或调用栈。
+
+code 固定为 INVALID_REQUEST、INVALID_DATA、UNSUPPORTED_VERSION、TOO_LARGE、STALE_SESSION、DATA_DIRECTORY_UNAVAILABLE、READ_FAILED、WRITE_FAILED、FILE_CHANGED、NOT_SUPPORTED。写入/读取/目录不可用和旧会话错误标记 retryable；旧会话须重新提交当前快照，启动读取错误须修复后重启加载。外部修改返回 FILE_CHANGED，要求重启检查，不能盲重试覆盖。
+
+固定 preload/IPC 方法：`appState.get`、`updatePreferences`、`checkpoint`、`flush`、`openDataDirectory`、`chooseDataDirectoryOnNextStart`、`resetInvalidFile('settings'|'state')`。七个 `app-state:*` 通道校验主业务窗口、主 frame、参数数量及固定 DTO，不接受任意路径、键名或通道。目录展示经 get，打开只允许已解析数据根，重选只允许安装模式。没有提供假成功的 restore/layout 接口。
+
+### 8.3 写入和后续接线边界
+
+每文件一个队列，checkpoint 约 500 ms 合并，偏好调用等待持久化；flush 等待在途和期间接受的最新修订。同目录随机 `wx` 临时文件完整写入、sync、close，重验父目录/目标指纹、会话后同步 rename；guard 与 rename 之间不让出事件循环。不会先截断或删除目标，不用临时失败产物替换旧文件。失败保留内存待保存值、原文件和明确错误。
+
+缺失只读默认值，不因启动/get/无变更 flush 建默认文件。损坏、超大、未知版本和读取异常进入禁止自动写入状态；默认布局、启动模式更新和退出 flush 均不能覆写原件。明确 reset 仅处理 invalid/too-large，先排他备份 `.wenshu-invalid-<uuid>.json`；超大文件按文件身份检查并复制，不整文件加载到内存。未知版本、链接或读取异常不走重置覆盖。外部修改检查贯穿发布/重置。
+
+`projectStartupState` 与 `AppStateStore` 是启动模式政策的唯一归属：settings 成功持久化后才清除/裁剪 lastWorkspace；读取也按有效模式投影，blank 清空、workspace 保根清标签。两文件不宣称事务；设置写入失败保留预览值，但 `effectiveStartupMode` 仍为已持久化模式。WP2/WP3 复用这处政策。
+
+主入口只收尾已接受的 metadata 队列；错误区分为“设置或恢复记录未保存”，可重试或本次继续退出，取消 dirty 关闭不会永久放行后续 flush。WP4 仍须接最终 snapshot、window bounds/sidebar 应用、屏幕校正、saving/dirty 关闭联调；当前 main-only `updateWindow` 没有接窗口事件。WP2 设置页面、主题和字体应用，WP3 `workspace.restoreLast`、恢复代次/取消/正文读取/失败标签及 renderer 快照暂停均未实现。
+
+工作区扫描和搜索按当前数据根的路径边界（含真实路径）排除整个子树，不按 `WenShuData` 名称隐藏用户目录。扫描先判断链接，避免把同时报告 directory/link 的条目递归。E2E 改用 `.local-data/test/e2e`；截图 runtime 为从脚本位置解析的 `.local-data/screenshots/runtime`，也设置 session/log/dump 路径。新增根进入 Git ignore、builder 显式否定项及实际 ASAR/解包审计。
+
+### 8.4 实际命令、结果与证据
+
+所有命令通过仓库 `scripts/npm.cmd` / `scripts/node.cmd`；下表缩写省略该前缀。WP1 未设置全局或验证 shell 的 TEMP/TMP，只有原生探针 spawn 的环境覆盖 TEMP/TMP，且 appData 也显式隔离。
+
+| 命令/检查                                                                                                                                                    | 实际结果                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 首轮 `npm.cmd run typecheck`                                                                                                                                 | 失败：新 bootstrap 默认工厂的 version 推断为 number；显式固定 BootstrapRecord 后通过。扩展 selected 契约时同步补齐两处强类型测试夹具                                                                             |
+| 首轮定向测试                                                                                                                                                 | 11 失败/49 通过；主要为 Windows Node 22 lstat.dev=0 与 fstat.dev=卷序列号导致误判 FILE_CHANGED，另有循环 junction 测试夹具问题。保留句柄身份检查，改用 BigInt ino、时间戳、同路径边界，修正夹具；未放宽断言/超时 |
+| 首轮 `npm.cmd run check`                                                                                                                                     | typecheck 通过，lint 拒绝控制字符正则；改为字符码检测，未禁用 lint 规则                                                                                                                                          |
+| 完整 `npm.cmd run check`（修正后）                                                                                                                           | typecheck/lint/format/NOTICE 通过；76 文件、1226 通过、10 基线条件跳过；新增定向文件补测后见最终检查记录                                                                                                         |
+| 随后 `npm.cmd run build`                                                                                                                                     | 通过；后续标题/路径与退出收尾修订再次构建验证                                                                                                                                                                    |
+| `npm.cmd exec -- vitest run tests/app-state`                                                                                                                 | 4 文件、39 项通过，无跳过；包括 read-only 目标替换失败、重试、并发写/flush、过期会话、损坏/超大/未知版本、额外字段、硬链接/junction 和精确排除                                                                   |
+| `npm.cmd run test:e2e`，普通桌面                                                                                                                             | 原有 4 项通过；新增持久化重启、路径/会话和坏文件保护后 6/6 通过。移除原有 `--no-sandbox`，只保留测试 GPU 参数                                                                                                    |
+| `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never`，随后 `npm.cmd run package:verify -- --mode=dir` | 通过；实际 ASAR/解包目录排除数据与探针，主进程外部依赖仍仅 docx/jszip/mammoth。审计报告列出的旧 portable/NSIS 文件不是本轮重建的产品二进制                                                                       |
+
+可复用真实验证入口：
+
+```powershell
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --prepare-package
+.\scripts\node.cmd scripts/run-electron-builder.mjs --config .local-data/test/task-013/startup/builder.json --win --x64 --publish never
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=development
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=first
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=first-cancel
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=reselect-cancel
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=installed --case=missing-cancel
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=portable
+.\scripts\node.cmd scripts/verify-task-013-storage.mjs --mode=portable --case=unwritable
+```
+
+验证宿主直接打包产品 startup/store 模块，创建最小隔离窗口；安装形态使用真实 `app.isPackaged=true` 的 unpacked EXE，portable 使用真实 builder 启动器，不 mock Electron/原生对话框。开发的 projectRoot 与安装的 appData 由宿主注入隔离目录，因此该证据不能代替最终完整产品安装/卸载验收。原生场景需操作真实 UI；unwritable 只对新建合成数据根设置 Windows 拒写 ACL，正常结束恢复。宿主只记录原生调用与真实返回，不自动选址；所选目录必须在本轮隔离根内。
+
+证据均为 `.local-data/test/task-013/startup/<轮次>/events.jsonl`（不打包）：
+
+| 轮次                               | 观察                                                                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `development-known-0tIKBq`         | userData=`project/.local-data/dev/runtime`；session.storagePath=`…/runtime/session`；ready 前零窗口/session；同根第二实例零业务初始化                         |
+| `installed-first-plmlyS`           | PID 37776 原生选 `chosen 中文`，131 bytes 定位文件后退出，零业务窗口/session；PID 13800 重启正式分支，profile/session/log/dump 均在所选根；第二实例聚焦首实例 |
+| `installed-first-cancel-JIv7yJ`    | 取消后退出，零业务初始化，无 bootstrap 文件                                                                                                                   |
+| `installed-reselect-cancel-Mk76a6` | 取消后清标志、保持旧根并新 PID 重启；同根锁通过                                                                                                               |
+| `installed-missing-cancel-MKHmXt`  | 原生事件顺序：重试/选择/退出 → 选择 → 原生取消 → 重试/退出 → 退出；旧 locator 保留，缺失根未创建                                                              |
+| `portable-known-0w8izI`            | `PORTABLE_EXECUTABLE_DIR=launcher`；exe=`temp/<随机>/WenShu.exe`；实际 runtime/session/log/dump 在 `launcher/WenShuData`；同根锁通过                          |
+| `portable-unwritable-Y6L00C`       | 真实 ACL 拒写；原生提示移动整个便携目录，只提供退出；零业务窗口/session，无回退；结束后拒绝 ACL 已移除                                                        |
+
+缺盘交互早期两轮未取得完整可定位 UI 证据：一个隔离宿主被定向终止，一个只记录退出；均不计入缺盘取消通过结论。原生消息后来加明确标题、验证启动器允许原生交互可见，并记录真实返回；以 MKHmXt 的完整事件链为准。未改变安全开关或用 mock 替代平台结论。
+
+### 8.5 交接与剩余条件
+
+WP1 核心无未解决前置阻塞。WP2/WP3 接手 `src/shared/app-state.ts`、`DesktopApi.appState`、`AppStateStore` 和 selected 的 `workspaceSessionId`；WP3 的恢复提交复用 `workspace-session.ts` 的主进程身份/代次，不另建根来源。WP4 接 `updateWindow`、现有 window-close 协议及队列 flush。
+
+仍须在后续包完成：设置页面、真实正文恢复与失败标签、恢复期间快照抑制、窗口布局应用和 dirty/saving 最终关闭联调；最终产品 portable/NSIS 整包重启/升级/卸载及外置 settings/state 保留；实际日志/崩溃转储产生、断电/强杀的最后毫秒行为、跨用户/不同根锁边界及 Windows 10 实机。WP0 的 NSIS 模板与卸载证据仍适用，安装目录内部数据始终不受“保留 AppData”选项保护。
+
+本轮交接后结束，不自动实施 WP2、WP3 或 WP4；Task 13 不标为整体完成。
+
+### 8.6 最终检查记录
+
+- 最终 `npm.cmd run check`：退出码 0；77 个测试文件、1230 通过、10 条件跳过（沿用 WP0 的既有链接权限条件），0 失败；typecheck、lint、format、103 包 NOTICE 均通过。随后最终 build、6/6 E2E、产品 dir 打包及 package:verify 均退出 0；最终 main 193.38 kB、preload 4.96 kB，ASAR 12642170 bytes。
+- 最后补充“已验证根消失”防护：runtime 仅逐级创建直属子目录，绝不递归补建旧数据根；新增真实文件系统用例通过。该用例初版空目录夹具误用 rm 导致 EISDIR，改用 rmdir 后完整检查通过；本包存储定向用例合计 40 项。
+- 最新开发真实宿主 `development-known-XlzK63` 复核上述单级创建逻辑通过，runtime/session 路径和同根单实例不变。
+- 显式测试根的真实宿主复核 `--mode=test`：通过，证据 `test-known-or8AXF/events.jsonl`；与产品 E2E 的 `--user-data-dir` 路径证据互相补充。
+- 确认首次引导临时 runtime 已清理、首次取消未产生 bootstrap、失效根没有被创建、ACL 验证目录没有遗留拒绝 ACE；`git diff --check` 通过。
+- 安全运行目录本身无法建立时，错误提示直接在 ready 前显示并终止进程，不等待默认 profile 初始化。已核对锁定 Electron 类型及 [showErrorBox 官方说明](https://www.electronjs.org/docs/latest/api/dialog#dialogshowerrorboxtitle-content)；该极端临时目录故障分支未另作原生实测。
+- 截图启动器路径和语法已核对，本包未重生成视觉基线；WP2 接入偏好读取后还须同步截图宿主的设置服务。
+
+## 9. WP2：基础设置与主题（完成）
+
+2026-09-27 从 `ca39bae`（WP1）开始，工作树干净，无适用 AGENTS.md。已核对规划、统一提示词、WP0/WP1 实际启动证据及七个 appState 接口；路径和存储前置仍适用，无核心阻塞。本轮只实施 WP2，不开始 WP3；没有新增依赖、状态框架、localStorage、路由、设置活动栏、自动保存或草稿。
+
+### 9.1 入口、持久化与错误反馈
+
+- `AppMenuBar` 提供“视图 → 设置…”；`App` 注册 `Ctrl+,`，已有对话框时不叠开。`SettingsDialog` 复用 `ModalDialog`，只有“显示 / 启动 / 数据位置”三组，保留 Tab 圈定、Escape 和焦点恢复；菜单进入时先把返回焦点绑定到“视图”。设置内快捷键不传给文档命令。
+- 字段/默认值不变：theme=system（light/dark/system），txtFontPreset=monospace（system/monospace/serif），txtFontSizePx=13（整数 12–24），startupMode=workspace-and-tabs（blank/workspace/workspace-and-tabs）。JSON 字段、版本和预算仍按 WP1。
+- `main.tsx` 在首次 React 渲染前等待真实 `appState.get()` 并应用显示偏好；主进程根据设置与 nativeTheme 选择初始窗口背景，未加载的页面透明以减少反色闪烁。缺失使用默认值；坏文件保留原件、使用安全默认值并显示异常入口。服务读取失败明确反馈，可重读，不伪造后端。
+- `use-app-settings.ts` 管理即时预览、串行请求和反馈。`updatePreferences` 只收到四个偏好字段，不含 version；成功后用既有 flush/get 复核。迟到返回不覆盖最新预览；失败保留显示并可重试。设置写错误与目录动作错误分开，成功打开目录不吞掉写失败。
+- 已生效模式只认 `snapshot.effectiveStartupMode`；清空/裁剪 lastWorkspace 仍由 WP1 AppStateStore/projectStartupState 单处执行。UI 不 checkpoint、不另存恢复历史；写失败显示旧有效模式。当前只能宣称模式已保存，界面明确本版本暂不自动恢复工作区或标签。
+- 数据路径只来自 snapshot；固定打开和安装版 canReselect 入口调用 `openDataDirectory()` / `chooseDataDirectoryOnNextStart()`，不传路径、不立即退出或搬迁。invalid/too-large 经过二次明确操作调用 `resetInvalidFile('settings'|'state')`；unsupported 不提供重置。界面保留“启动恢复重新打开磁盘文件，未保存内容仍需手动保存”。
+
+### 9.2 显示接口与编辑器边界
+
+根 `data-theme=light|dark` 与语义 tokens 切换外壳；system 监听 prefers-color-scheme，改为显式主题或卸载时释放，StrictMode 只保留一个有效订阅。遗留 app.css 的外壳、错误/禁用、菜单/按钮、搜索面板转为语义色；CodeMirror 光标、选区、当前/普通查找匹配也适配深色。
+
+TXT 只经 `--txt-font-family` / `--txt-font-size` 作用于 `.cm-scroller`；默认 Cascadia Mono / Consolas / Courier New / monospace 13 px，system 与 serif 均有通用字体回退。无编辑器事务、实例重建或正文格式命令。DOCX `.ProseMirror` 固定白底、默认深色正文和 light color-scheme，显式颜色仍由模型控制；正文查找装饰保留白色画布配色，高对比有描边。没有 DOCX 缩放。
+
+### 9.3 实际验证与故障归因
+
+命令均使用仓库 scripts/npm.cmd / scripts/node.cmd。本机 Node os.release 为 `10.0.26200`，属 Windows 11，Electron 43.6.0；不作为 Windows 10 实机证据。CIM 查询因权限被拒，未猜测当前补丁号。没有修改用户/系统 TEMP/TMP；产品测试均用隔离 `--user-data-dir`，日志在 `.local-data/wp2-*.log`。
+
+| 命令/检查                                            | 实际结果                                                                                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 修改产品前 check（沙箱）                             | 1230 通过、10 既有条件跳过，但 worker spawn EPERM 造成 56 个未处理错误，退出 1，不能记为通过                                  |
+| 随后基线 build                                       | 退出 0；main 193.38 kB / preload 4.96 kB                                                                                      |
+| 同一基线 check，普通进程权限                         | 退出 0；77 文件 / 1230 通过 / 10 条件跳过，确认沙箱 worker 限制，无产品基线修复                                               |
+| 首轮受影响组件/样式回归                              | 4 文件 / 79 项通过                                                                                                            |
+| 新设置/真实编辑器定向测试                            | 初版 12 项通过；增加“目录成功不吞写失败”回归后的最终数量见下节                                                                |
+| 真实 Electron E2E                                    | 扩展至 8/8 通过；重启偏好、只读 settings 写失败/重试与旧 state 保护、TXT/DOCX 选区/历史/dirty、原文字颜色/磁盘字节、坏文件 UI |
+| 截图启动器 node.cmd scripts/capture-ui-baselines.mjs | 退出 0；仅给验证子进程 WENSHU_CAPTURE_OUTPUT=.local-data/screenshots/wp2，生成四张真实产品图片，未覆盖 Task 11 历史图         |
+
+初版新测试的 mock 返回类型推断为 string，改用 AppStateApi 方法类型。新增 Electron 用例初版误用 Vitest 5 秒默认值；沿用既有 E2E 的 30 秒预算后仍失败，诊断确认嵌套 label/select 在真实 Chromium 中的可访问名称包含选项；改为独立 label + htmlFor/id 后场景约 2 秒通过，未继续放宽超时。截图脚本 lint 的浏览器 document 全局改用页面执行字符串，没有禁用规则。
+
+真实窗口检查 900×600、1280×820 设置，900×600 可纵向滚动、无横向溢出且关闭可达；检查深色 TXT、白色 DOCX 画布和红色原文、工具栏/禁用态、系统主题媒体变化与 forced-colors。截图在 `.local-data/test/task-013/wp2`，证据遮罩数据根/侧栏绝对路径，UI 本身仍显示真实路径；均不提交或打包。高对比度是 Chromium 模拟，不等同 Windows 系统切换。单元测试另直接比较真实编辑器实例、不可变 state、选区、正文模型、undo/redo 和通知次数。
+
+### 9.4 最终检查与交接
+
+最终按 check → build → test:e2e 顺序验证：check 退出 0（79 文件、1243 通过、10 既有条件跳过；typecheck/lint/format/103 包 NOTICE 均通过），build 退出 0（main 193.55 kB、preload 4.96 kB、renderer CSS 61.55 kB / JS 2282.73 kB），E2E 最终 8/8 通过。随后 `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never` 与 `npm.cmd run package:verify -- --mode=dir` 均退出 0；只生成本地 unpacked 产品，没有重建 portable/NSIS 或发布。新增设置/编辑器定向用例合计 13 项，全部包含在最终 check。实际 ASAR 12669263 bytes、禁止项 0，主进程外部依赖仍为 docx/jszip/mammoth；审计列出的旧 portable/NSIS 不是本轮产物。收尾 format:check、git diff --check 通过，14 份变更文档的 336 个本地链接目标均存在，未观察到 Electron/WenShu 遗留进程。Task 13 仍为“实施中”。
+
+完整回归首轮有 1 项旧搜索组件断言失败：旧夹具没有 appState.get，应用因此正确显示读取异常入口；补齐正常读取夹具后，保留全部原断言并通过。最后新增查找高亮 E2E 时，Playwright fill 只发 input，CodeMirror 原生搜索在 change/keyup 提交；补上用户 Enter 操作，保留高亮断言和 30 秒预算后通过。真实原生窗口关闭时设置会先让出既有 dirty/saving 确认；取消仍保留两个 dirty 标签，不属于 WP4 最终快照接线。
+
+WP3 接手 `App.tsx`、`use-app-settings.ts` 的 snapshot/effectiveStartupMode、WP1 DesktopApi.appState 和 workspaceSessionId；restoreLast、正文恢复调度/取消/失败标签与恢复期间快照抑制均未实现。复用主进程模式政策，不能拿未持久化 preferences.startupMode 调度。
+
+WP4 接手 `waitForPendingPreferences()`（等完 renderer 已排队请求，再 flush 主进程队列）、现有 dirty/saving 关闭协议、最终 checkpoint/window/sidebar。没有接布局恢复或关闭最终快照，不承诺强杀前最后一次请求必达磁盘。
+
+本包未改 preload/共享 DTO。样式接口为 data-theme、两个 TXT CSS 变量和语义 tokens。截图脚本改为 Node + Playwright 启动真实产品，每轮使用 `.local-data/screenshots/profile-*`，保留 DEVICE_SCALE/HIGH_CONTRAST/ZOOM_FACTOR/MATRIX_ONLY 环境选项，增加输出目录覆盖。
+
+后续仍需完整产品 portable/NSIS 重启/升级/卸载、安装版设置按钮到下次原生引导的整包联调、Windows 系统高对比度/实际缩放和 Windows 10 实机。WP0/WP1 路径证据继续适用，不冒充本轮整包终验，不用另一套存储设计替代。本包交接后结束，不自动开始 WP3。
+
+## 10. WP3：工作区与标签恢复（完成）
+
+2026-09-27 从 `15d7a90`（WP2）开始，分支 `TASK-13`、工作树干净，无适用 AGENTS.md。完整核对规划、统一提示词、WP0–WP2 报告与实际接口；WP1 的数据根、写队列、有效模式和主进程身份没有前置阻塞。继续使用两个 JSON 文件和已有 controller，无新增依赖、localStorage、状态框架、正文缓存或任意路径 IPC。本轮未开始 WP4。
+
+### 10.1 接口、安全与记录契约
+
+- 新增 `DesktopApi.workspace.restoreLast()` → `workspace:restore-last`，参数数量必须为零，仅接受主 frame；根只取 `AppStateStore.getRestoreRecord()`。成功返回 `{status:'selected',workspace,workspaceSessionId,restore:{tabRelativePaths,activeRelativePath,warnings}}`；没有记录为 `not-recorded`，过期为 `cancelled`，失败为 `{status:'error',error:{code,message}}`。目录错误统一 `WORKSPACE_UNAVAILABLE`，请求错误 `INVALID_REQUEST`，坏状态文件沿用 WP1 错误码，均不含原始异常/绝对路径。
+- `workspace-ipc.ts` 的手动打开和恢复共用扫描提交函数；扫描前后复验普通根目录、逐段祖先链接/realpath，排除当前数据根；扫描后检查主进程 generation 和窗口存活，再签发新 UUID。取消/失败保留旧根和原记录。refresh 保留身份并拒绝旧根结果。
+- 标签先按语法/类型/4096 字符与 512 KiB 文件预算校验，大小写去重；最多选 100 个，保留活动项与所选项原顺序。磁盘读取输入可含有界重复/超限列表或不在列表内的合法活动路径；`validStoredState` 接受这种可规范化输入，`validState` 继续要求发布格式唯一且 ≤100。`get()` 返回规范化投影，main-only `getRestoreRecord()` 保留原有界列表用于 `TAB_LIMIT` 提示；单纯加载/get/flush 不改原件。危险语法、额外字段、损坏/未知版本仍拒绝且禁止自动覆写。
+- 已存在的链接、目录或内部/数据目录路径在主进程过滤并返回 `UNSAFE_PATH`；缺失/拒绝访问/一般读取故障保留调度位置。每次实际读取继续执行既有 TXT/DOCX 安全读取，无创建缺失文件、自动保存或兼容性确认。活动路径无效时选第一个保留标签；无标签显示欢迎区。
+- `useWorkspace` 保留成功结果原样携带的 `workspaceSessionId`，提供同步 `isCurrentSession` 和 `cancelPendingOpen`。renderer 快照与标签同批绑定该 token，不再查询新 token 来修饰旧标签；主进程入队/发布前的旧身份拒绝继续有效。
+- `projectStartupState`/AppStateStore 仍是唯一模式政策：blank 清除并停止记录根，workspace 只存根，workspace-and-tabs 才存列表。恢复只使用 durable `effectiveStartupMode`；设置失败的预览不改变调度。
+
+### 10.2 恢复阶段、停止与关闭保护
+
+`use-startup-restore.ts` 实现 waiting → workspace → tabs → ready，以及 error/closing。设置加载后只调度一次；首次 effect 微任务在 StrictMode 清理后才启动，卸载和新批次递增 generation，`useWorkspace` 自身代次/会话与 `useDocuments` 原 epoch/tabId/requestId 继续校验迟到结果。
+
+根成功提交后逐个 `openFile`，分配新的运行时标签并读当前磁盘版本。失败保持原位置 read-error，继续后续标签；read-only 仍只读，degraded 重新确认。没有恢复旧正文、revision、搜索、选区、历史或确认。
+
+- waiting/workspace/tabs 阶段不发 checkpoint。主界面和菜单 inert，拦截应用快捷键/文件操作；TXT 用公开 Compartment 临时切换 readOnly/editable，DOCX 使用既有 editable 接口。没有重建编辑器或写正文；原生窗口关闭仍可用。只有 tabs 阶段显示“停止恢复”。
+- 主动停止同步作废批次，取消后续调度和最后激活，不取消已经发出的单次读取；保留已打开/加载中标签并解除快照门禁。该读取仍由原 controller 正常完成，不追加额外标签或切换活动项。
+- 恢复中直接关闭先作废批次、待提交根扫描和读取结果，不提交部分标签；旧 lastWorkspace 完整保留。`prepareClose()` 在普通 ready 状态才提交当前元数据，并等 IPC 被接受后调用原 requestClose；未保存取消不调用 prepareClose，放弃仍经过原确认，saving 保护保持。main 既有退出 drain 负责已接受队列。
+- 元数据只从已提交 model 投影路径、顺序与活动路径，500 ms 合并；正文输入、dirty、读取完成、搜索和编辑器对象不触发快照。写错误有独立“重试保存恢复记录”，不使用文档保存状态。WP3 保留磁盘 sidebar 值，避免把尚未恢复的 UI 默认布局写回；window 字段不改。
+
+### 10.3 实际验证与归因
+
+所有命令经项目 `scripts/npm.cmd` / `scripts/node.cmd`。未修改任何 TEMP/TMP，真实 Electron 全用 `.local-data/test/e2e` 中的 `--user-data-dir`，没有访问真实 profile。沿用本机 Windows 11 build 26200 环境，不声称 Windows 10 实测；WP0/WP1 平台路径证据仍适用。
+
+| 命令/检查                                                                                                   | 结果                                                                                                |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 修改产品前 `npm.cmd run check`，随后 `npm.cmd run build`                                                    | 均退出 0；79 文件、1243 通过、10 既有链接权限条件跳过；使用普通进程权限避开已归因的沙箱 worker 限制 |
+| `npm.cmd exec -- vitest run tests/app-state tests/preload/contract.test.ts`                                 | 7 文件、90 项通过；新增主进程恢复 14 项、renderer 恢复 11 项                                        |
+| 受影响编辑/搜索组件定向复验                                                                                 | 4 文件、106 项通过，保留旧断言                                                                      |
+| 完整 `npm.cmd run check`                                                                                    | 退出 0；81 文件、1268 通过、10 既有条件跳过；typecheck/lint/format/103 包 NOTICE 通过               |
+| 随后 `npm.cmd run build`                                                                                    | 退出 0；main 196.82 kB、preload 5.04 kB、renderer CSS 61.83 kB / JS 2297.12 kB                      |
+| 随后 `npm.cmd run test:e2e`                                                                                 | 最终 11/11 通过；新增三个实际恢复场景约 1.82 / 2.51 / 1.42 秒，总测试 13.03 秒                      |
+| `node.cmd scripts/run-electron-builder.mjs --config electron-builder.yml --win --x64 --dir --publish never` | 退出 0；仅本地 unpacked，不安装/发布、不重建 portable/NSIS                                          |
+| `npm.cmd run package:verify -- --mode=dir`                                                                  | 退出 0；ASAR 12687281 bytes，禁止数据/测试项为 0；审计列出的旧 portable/NSIS 不是本轮产物           |
+
+定向覆盖：真实根缺失/junction/目录类型、坏路径、重复/超限/活动项保留、主进程扫描竞争与旧 token、StrictMode、顺序/错误/只读/降级标签、关闭/停止/切换/卸载迟到回包、初始写入抑制、停止后继续正常记录、正文输入不 checkpoint、元数据失败重试。现有安全读取/查找/搜索/兼容性/保存/关闭测试全部回归。
+
+真实 E2E 从 UI 手动打开混合 TXT/DOCX、同名不同路径和空文件，正常关闭/重启，验证外部修改后读入当前磁盘正文；缺失标签重试；dirty 关闭取消保留正文、放弃只恢复磁盘；三种模式连续重启。真实受保护 DOCX 仍不可编辑，degraded 在重启前确认、重启后再次要求确认，文件字节不变。缺失根有重试/正常打开入口，重新建立合成根后重试成功。
+
+真实批量 DOCX 恢复中，关闭前后旧 state.json 字节一致；另一次明确停止后，正在读取的标签正常完成，最终仅保存可见部分顺序/活动项。没有使用读取 mock 或增加取消 IPC。900×600 停止状态截图在 `.local-data/test/task-013/wp3/stopped-900x600.png`，已检查文字、按钮和 DOCX 可读性，路径仅在证据中遮罩。WP2 的 900×600/1280×820 显示场景仍包含在 11 项 E2E 中。
+
+失败也保留：早期 TypeScript 收窄和测试 Map 元组推断修正；首轮完整回归 126 项失败，原因是旧 App 夹具在设置加载前直接交互，改为显式传入已加载的 blank 模式夹具，未删除行为断言或弱化产品门禁。初版 E2E 误选同名文件、把隐藏搜索页的 role=tab 算入文档标签，以及未区分设置/错误标签“重试”按钮；用完整路径/具体对话框定位修正。动作等待统一为既有 10 秒、用例仍为 30 秒，没有放宽 timeout。定向 `-t` 命令的过滤跳过不计入最终 11/11。
+
+日志在 `.local-data/wp3-*.log`，合成目录/截图/包均忽略且不提交。没有新增 `.skip`、依赖或安全配置降级。
+
+### 10.4 交给 WP4
+
+- 接手 `useStartupRestore.prepareClose`/record 门禁、App 的 dirty/saving 协议及 WP2 `waitForPendingPreferences()`；完成最终布局/快照、renderer 请求到主进程 flush 的完整收尾及所有失败的重试/继续退出反馈。当前 main 已接受队列的错误提示不是这项完整联调的替代。
+- 接手 AppStateStore `updateWindow`、sidebar 与显示器可见范围校正；WP3 没有应用或记录实时窗口/侧栏布局。
+- 快照已自然观察既有已提交标签路径模型；WP4 仍负责重命名、移动、另存为、删除/partial failure 与最终关闭的系统性持久化联调，不另写路径迁移或模式政策。
+- 必须保留恢复中关闭的完整旧记录保护；只有完成恢复或用户明确停止才能采纳新现场，不得在 WP4 的布局/关闭 checkpoint 中绕过此门禁。
+- WP3 没有未解决核心前置阻塞。最终产品 portable/NSIS 重启/升级/卸载、系统级高对比度/缩放、Windows 10 实机仍留 WP5/后续环境验收，不冒充本轮通过。Task 13 整体仍为“实施中”。
+
+## 11. WP4：布局与关闭集成（完成，待 WP5 验收）
+
+2026-09-27 从 `ac60524` 开始，分支 `TASK-13`，工作树干净，无适用 AGENTS.md。核对完整规划/开发提示词、WP0–WP3 结果与实际存储、设置、恢复及关闭接口。没有新增依赖、第三份配置、正文缓存、路径迁移引擎或发布行为；本轮不实施 WP5。
+
+### 11.1 布局与窄契约
+
+- `src/main/window/window-layout.ts` 使用 Electron 的 DIP normal bounds 与当前 display workArea；选择相交面积最大的显示器，没有交集则在主屏居中。宽高夹在工作区与原最小 900×600 之间，位置夹到可见区域；工作区小于最小尺寸时保留最小尺寸并把标题栏放在工作区左上。非法/非有限值使用安全默认值，原非法 state.json 仍受禁止覆写保护。最大化在显示前应用；最小化、全屏、屏幕 ID、scaleFactor 不持久化。
+- 本机真实测试发现 Windows 原生窗口尺寸调整：请求宽 1100 时 normal bounds 为 1102；按构造尺寸直接恢复曾让宽度继续漂移。`applyWindowBounds` 在显示前通过公开 setBounds/getNormalBounds 对实测差值最多校正三次，尊重系统最小尺寸，不硬编码像素补偿或乘缩放系数。三次产品启动验证了实际 normal bounds 与最大化/还原的往返。
+- move/resize/maximize/unmaximize/restore 只更新主进程窗口字段，复用 state 队列合并；关闭最后采样后撤掉监听。全屏不覆盖 normal bounds，最小化保留此前最大化标志。依据锁定 Electron 类型与 [BrowserWindow 官方 API](https://www.electronjs.org/docs/latest/api/browser-window#wingetnormalbounds)。
+- 新增唯一固定能力 `appState.updateSidebar({width,collapsed})` → `app-state:update-sidebar`；沿用 StateWriteResult，精确白名单与 180–420 整数范围，不接受路径、窗口坐标或通用键。appState 共八个固定方法。`use-sidebar-layout.ts` 初始化只采纳一次已加载布局，实际修改才合并保存；无工作区/空白模式也有效，每次仍进入文件侧栏。
+- 布局更新不提交标签列表。`projectStartupState` 仍独占模式政策；布局使用不规范化待恢复列表的投影，保留完整旧 lastWorkspace，但 blank/root-only 仍清除/裁剪记录。普通显示偏好成功不再触发无关列表裁剪；只有模式实际改变才执行模式变更写入。损坏/未知版本布局更新与 flush 继续返回错误，不覆写原件。
+- 补齐菜单已经标注的 Ctrl+B 外壳快捷键；输入框/可编辑区的按键仍留给编辑器，DOCX 粗体不被侧栏抢占。分隔条 Home/End/方向键及折叠入口保持。
+
+### 11.2 完整关闭顺序与失败反馈
+
+1. 原生 close 先询问 renderer 的最新模型。saving 优先阻止退出；文件 mutation 在途提示完成后再关闭，避免在最终路径尚未提交时取快照。dirty 仍先放弃/取消；取消保留正文、选区、撤销与会话，并复位关闭请求。确认放弃也再次检查 saving。
+2. 获准关闭后 `useStartupRestore.prepareClose()` 冻结批次、扫描/读取 controller 和计时器；只有 ready（含主动停止）捕获最终标签投影。恢复尚未完成/error 状态不 checkpoint，旧 lastWorkspace 保留。最终快照只捕获一次，重试不会采纳迟到模型。
+3. 等完 renderer 设置队列及在途目录/重置动作，再提交实际侧栏。最终 checkpoint/侧栏 IPC 失败显示独立模态“退出前记录未保存”，提供重试/继续退出，正文仍在内存中。此处的成功只表示元数据被接受，不表示正文保存。
+4. 固定 window.requestClose 到主进程后锁定本次退出，作废主进程扫描代次，保留已接受快照的会话身份，采样 normal bounds/maximized 并停止布局监听，然后 await 两个文件的 flush。appState IPC 在最终阶段拒绝后续请求；重复关闭/取消不绕过在途收尾。
+5. flush 失败时主进程父窗口原生错误框提供“重试 / 继续退出”；重试重新 drain，继续退出保留最后成功落盘文件。取消/Escape 默认留在重试选择，不自动丢数据。成功或明确继续后才销毁窗口。原 before-quit 的重复 drain 已移除，防止窗口先销毁才报错或反复拦截。
+
+首个 dirty 通知同时确认 renderer 已订阅关闭事件；加载期间过早的原生关闭会重发一次，不丢失请求。强制 destroy/结束进程只可能留下最后成功落盘的元数据，不保证最后毫秒，也不恢复未保存正文。安装版重选仍只写标志：设置动作完成后退出才结束，dirty 取消不会触发重启/搬迁；原生取消清标志并回旧根的 WP1 平台证据继续适用。
+
+### 11.3 路径与实际验证
+
+路径仍从既有 `useDocuments` 成功提交的标签模型投影：目录段边界迁移、文件重命名/移动、save-as 新磁盘快照、trash 关闭受影响标签。失败、取消和 partial failure 不凭猜测迁移。没有新增第二套路径重写逻辑；正文输入不改变元数据 key，不触发记录，旧会话 token 门禁保持。
+
+| 命令/验证（均经本地 scripts）                                     | 实际结果                                                                      |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 修改前 `npm.cmd run check` → `npm.cmd run build`                  | 均退出 0；81 文件、1268 通过、10 既有条件跳过                                 |
+| 窗口/存储/恢复/设置/文件管理/编辑器定向回归                       | 27 文件、326 通过、3 既有条件跳过；随后关闭/重选/设置追加回归 77 项通过       |
+| 完整 `npm.cmd run check`                                          | 83 文件、1286 通过、10 既有条件跳过；类型、lint、format、103 包 NOTICE 通过   |
+| 随后新增模式中断回归 `vitest run tests/app-state/storage.test.ts` | 30/30 通过，包含 blank/root-only 布局写入策略两项新增用例                     |
+| 随后最终 `npm.cmd run build`                                      | 退出 0；main 201.01 kB、preload 5.12 kB、CSS 61.83 kB、renderer JS 2304.12 kB |
+| 最终 `npm.cmd run test:e2e`                                       | 14/14 通过，测试时间 20.20 秒；包含三个新增 WP4 场景和原有 11 项回归          |
+
+Windows 11 build 26200、Electron 43.6.0；全部 profile/合成文件在 `.local-data/test/e2e` 或 Task 13 隔离子目录，未修改 TEMP/TMP、真实 profile 或依赖。真实文件操作用例通过 UI 执行目录重命名→移动、TXT 另存为、重名失败后取消、删除到回收站，正常关闭/重启后只恢复已提交路径，`dir2` 同前缀兄弟不受影响，另存为源磁盘字节保留。
+
+真实布局用例连续三次启动，覆盖离屏/过大记录、normal/maximized/还原、侧栏 180/420 与折叠、深色/字号、混合 TXT/DOCX 和文件侧栏一起恢复。只读 state.json 使用真实 Windows chmod/替换失败：失败期间窗口仍在，恢复写权限后重试落盘；另一次继续退出保持旧字节。测试用固定原生对话框返回/应答驱动选择，不声称本轮人工操作了该原生错误框。已拔屏幕与不同 workArea 的算法用例通过，未做物理拔屏或全系统缩放切换。
+
+WP3 批量恢复中关闭的断言改为完整 lastWorkspace 内容一致，同时允许本包新增的窗口/侧栏字段正常收尾；不再要求整个 state.json 字节不变。这不是放宽标签保护。三种模式、恢复停止后记录、dirty 取消/放弃、只读/降级、安全读取和已有编辑器回归保持。
+
+失败记录：初版事件名 union 与 Electron overload 类型、测试对话框 overload/RTL 参数修正；第一轮最终 check 仅格式未过，格式修正后通过。初版 E2E 3 项失败：嵌套标签错误使用 basename、Windows 实测 bounds 与请求尺寸不同、含动态 import 的测试序列化应答停在退出等待；改用完整相对路径、实测 bounds 和测试进程外恢复权限/显式应答后通过。另发现菜单 Ctrl+B 只有标注无接线并补齐；尺寸漂移按上节修复。没有放宽用例 30 秒/动作 10 秒预算或新增跳过。
+
+### 11.4 WP5 接手与尚未执行
+
+本包各功能已具备进入 WP5 的条件，无已知核心实现阻塞。接手 `window-layout.ts`、`window-close.ts`、App 关闭门禁、`use-startup-restore.ts`、`use-sidebar-layout.ts` 和同一 AppStateStore；不要再建模式政策、路径迁移或存储系统。完整最终发布矩阵尚未执行，以下不得标为通过：
+
+- 最终产品 portable/NSIS 的重启、升级/卸载、独立数据目录保留，以及设置按钮→下次原生选址→取消回旧根的整包人工联调。WP1 真原生选址/取消证据与本轮状态/dirty 集成用例不能替代它。
+- 物理多屏拔插、系统 100%/125%/150% 缩放切换、系统高对比度/屏幕阅读器和 Windows 10 实机；当前仅本机 Windows 11、当前缩放的真实窗口与纯算法/已有模拟用例。
+- 强杀/断电矩阵、实际 crash dump/log 产生、系统路径目录增量及最终 ASAR/portable/NSIS 发布审计；本轮没有重建包、安装/卸载或发布。
+
+收尾 lint、format:check、git diff --check 与变更 Markdown 本地链接检查通过；未观察到 Electron/WenShu 遗留进程，差异没有新增依赖或包产物。
+
+日志 `.local-data/wp4-*.log` 与测试产物均忽略，不提交/打包。Task 13 整体为“待验收”，本轮交接后结束。
+
+## 12. WP5：回归、实际验证与交付（本机检查完成，环境项待验收）
+
+2026-10-08 从干净 `6451deb`（WP4）开始，分支 `TASK-13`，无适用 AGENTS.md。完整核对规划/开发提示词、中英文 WP0–WP4 报告以及 main、startup/store、workspace IPC、恢复/侧栏 controller、关闭协议、共享/preload 契约和实际测试。没有重做 WP1–WP4，也没有修改产品源码、依赖、锁文件或发布配置。保留一个产品验证入口，更新中英文交付文档。
+
+### 12.1 最终实现与工作包状态
+
+| 工作包 | 当前结论                                                                                                         |
+| ------ | ---------------------------------------------------------------------------------------------------------------- |
+| WP0    | 完成；启动顺序、portable 启动器目录及 NSIS 安装目录不可保留数据的结论有效                                        |
+| WP1    | 完成；三个固定数据根、原生引导、两文件白名单、串行安全替换与 flush；本轮重验原生取消和 ACL 拒写                  |
+| WP2    | 完成；单一设置对话框、主题与 TXT 显示、持久化模式、真实数据位置及失败重试                                        |
+| WP3    | 完成；只从主进程记录恢复根，重新读磁盘，顺序/活动标签、代次、停止/关闭及快照门禁                                 |
+| WP4    | 完成；DIP bounds 校正、侧栏、已提交路径投影、dirty/saving 与最终 flush/失败反馈                                  |
+| WP5    | 本机门禁、完整产品重启、内部打包/隔离安装替换/卸载、原生宿主及文档检查已执行；第 12.5 节两项真实环境验收仍未完成 |
+
+最终契约不变：version=1；settings ≤16 KiB，默认 system / monospace / 13 px / workspace-and-tabs；state ≤512 KiB，最多恢复 100 个标签，默认 sidebar=258/false、normalBounds=null、maximized=false、lastWorkspace=null。主进程持有根、窗口和会话 UUID，模式清除/裁剪只有 AppStateStore 一处；renderer 不提交根或任意配置键。八个 appState 方法及零参数 restoreLast 见第 11.1/10.1 节。损坏/更新版本原件仍阻止自动写入，正文、旧 revision/确认、搜索和编辑器对象不入记录。
+
+### 12.2 实际命令与结果
+
+以下命令均经项目 `scripts/npm.cmd` / `scripts/node.cmd`，日志为 `.local-data/wp5-*.log`。最终回归只对子进程将 TEMP/TMP 指向 `.local-data/test/task-013/wp5/temp`，没有改变用户/系统环境变量。
+
+| 命令/动作                                                                                                | 真实结果                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 首轮 `npm.cmd run check`                                                                                 | 退出 1：72 文件通过、11 文件失败；1170 通过、6 失败、113 跳过及 14 worker 错误。真实 junction 创建 EPERM、探针清理 EBUSY、worker spawn/RPC 失败；不能视为通过 |
+| 独立 junction 诊断，随后复查                                                                             | 首次仍 EPERM；用户恢复本轮工作后，同一独立夹具 2 ms 成功。未改测试或 OS 安全配置，环境/执行会话问题的底层原因未作超出证据的推断                               |
+| 最终 `npm.cmd run check`                                                                                 | 退出 0：83 文件、1288 通过、10 既有链接能力条件跳过；类型、lint、format、103 包 NOTICE 通过，0 未处理错误                                                     |
+| 随后 `npm.cmd run build`                                                                                 | 退出 0：main 201.01 kB、preload 5.12 kB、CSS 61.83 kB、renderer JS 2304.11 kB                                                                                 |
+| 随后 `npm.cmd run test:e2e`                                                                              | 退出 0：14/14，测试 29.84 秒；首轮独立 E2E 亦为 14/14。未增加 timeout、删除断言或降低安全配置                                                                 |
+| `npm.cmd run package:win`                                                                                | 退出 0；实际生成 portable/NSIS，并自动执行 `package:verify -- --mode=win`；仅本地、publish never                                                              |
+| `npm.cmd run release:manifest:unsigned` → `release:verify:unsigned`                                      | 均退出 0；更新本地忽略的 SHA256SUMS 并核验当前两个 NotSigned EXE；未上传或发布                                                                                |
+| 产品路径/重启验证                                                                                        | 开发、当前 portable、当前已安装 EXE 各三次启动/正常关闭通过；后者用明确的 `--user-data-dir` 测试覆盖，不冒充安装原生引导                                      |
+| 旧内部 NSIS `/S /D=<测试安装目录>` → 当前 NSIS 同路径替换                                                | 两次退出 0；同版本号的旧构建→新构建替换，不宣称跨版本迁移；安装 ASAR 与当前 unpacked SHA-256 一致，外置两个 JSON 哈希不变                                     |
+| 测试卸载器 `/S _?=<测试安装目录>`                                                                        | 退出 0；外置 48 文件哈希均保持，应用/注册项及安装内哨兵删除。原地卸载器自身残留不算应用数据保留                                                               |
+| 最新原生宿主重新准备/打包；first / first-cancel / reselect-cancel / missing-cancel / portable unwritable | 均退出 0，实际原生操作，无固定应答替代；事件见下表                                                                                                            |
+| 合成开发实例强制结束后重启                                                                               | 通过；仅结束本脚本 PID 及子进程，已落盘 JSON 可读、磁盘正文不变、未保存输入不恢复。不覆盖断电或最后毫秒写入保证                                               |
+
+首轮 check 中旧测试依 tmpdir 在系统临时目录建立合成夹具；没有读取真实恢复记录或清理用户 profile。最终 check 已将这些夹具一并隔离到仓库。10 条件跳过仍为既有 TXT/DOCX/搜索等真实符号链接能力分支；Task 13 的 junction/硬链接与旧会话测试在最终完整回归通过。
+
+中断/验证器错误如实保留：第一次便携探针错误地在 userData 而不是 sessionData 找 DevToolsActivePort；修正定位后产品正常。一次真实旧安装器结束了仍运行的合成便携实例，因此不计为正常关闭；安装与运行改为串行后，完整三次验证通过。用户曾用 Escape 停止原生自动化，随后明确要求继续检查。默认 profile 前后 JSON 的字段顺序误报，按文件相对名/大小/修改时间比较后差异为零。产品代码均未因此改变。
+
+### 12.3 路径、包与实际运行证据
+
+宿主是 **Windows 11 25H2，build 26200.9457，实际显示缩放 125%**；注册表旧 ProductName 字样不能用作 Windows 10 实测证据。Electron 43.6.0 / builder 27.0.0-alpha.8 没有变化。
+
+| 证据（均为仓库内相对路径）                                                   | 实测结论                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.local-data/test/task-013/wp5/development-guGl4f/evidence.json`             | 复制当前产品构建并从不同 cwd 启动：`project/.local-data/dev/settings.json` 106 bytes、state 354 bytes；userData=`runtime`，sessionData 与真实 session.storagePath=`runtime/session`；logs/crashDumps 均在 runtime 下 |
+| `wp5/portable-t9gAoW/evidence.json`（同上父目录）                            | 当前最终 launcher 在 `launcher 中文/`；EXE 实际位于本轮 TEMP 的随机解包目录；settings 106 bytes、state 351 bytes 在启动器旁 WenShuData。三次恢复后 runtime 有 43 文件，持久数据不随解包目录清理                      |
+| `wp5/installed-WfFgHv/evidence.json`                                         | 当前 NSIS 安装后 EXE 三次正常启动：显式测试根 `external-data`，userData 就是该根、session 子目录为 Chromium 存储；settings 106 bytes/state 352 bytes。此覆盖按 WP1 契约隔离，不能证明默认用户目录 bootstrap 行为     |
+| `.local-data/test/task-013/startup/installed-first-69s2Bu/events.jsonl`      | 引导 PID 3152：ready 前临时 runtime，原生选择前后零业务窗口/session；131-byte bootstrap 后退出。PID 21976：ready 前设置所选根 runtime/session，才创建业务窗口/session；同根第二实例行为通过                          |
+| `startup/installed-first-cancel-eYtnP6` / `installed-reselect-cancel-R3H1lk` | 首次取消零业务初始化、无 locator；主动重选取消清标志、重启旧根、没有搬迁                                                                                                                                             |
+| `startup/installed-missing-cancel-1vgZwr` / `portable-unwritable-T8MmS4`     | 缺失根选择取消后回重试/退出，旧根未被创建；真实 ACL 拒写只有移动整个目录提示/退出，无回退。结束后拒绝 ACE 已移除                                                                                                     |
+| `wp5/default-profile-comparison.json`                                        | 最终便携两次重启前后，三个候选默认应用目录的存在性、文件名/大小/修改时间零变化；只读元数据，不读取真实 settings/state 内容、不清理旧目录                                                                             |
+| `wp5/nsis/result.json` / `before-uninstall.json`                             | 安装目录位于隔离 nsis 子目录，外置数据均在其外；48 文件卸载前后 SHA-256 相等，安装内哨兵不保留                                                                                                                       |
+
+正常运行确实产生 `Local State`、`Preferences`、`Code Cache`、`DawnGraphiteCache`、`DawnWebGPUCache`、`Network` 等 session 文件；保留运行前/后清单，并非仅检查 setPath。logs/crashDumps 是已设置并建立的按需位置；本任务没有日志生产器或 crashReporter，未伪造日志/转储内容验证。首次引导临时 Local State 在自己的 bootstrap TEMP 中，结束后尽力清理；Windows 原生对话框/安装登记等系统痕迹和 portable TEMP 解包不属于“零 C 盘写入”承诺。
+
+内部包审计：ASAR **12698541 bytes**；五个 out/main、out/preload、out/renderer 构建文件与最终 build 逐字节一致。实际包白名单/禁止项审计通过，没有 settings/state/bootstrap、runtime、验证脚本/资料或旧截图 profile 入包。两个 EXE 均为 NotSigned，未发布：
+
+- portable：104075546 bytes；SHA-256 `38B8D9E0CFAC3437C4345B5726F4139B485835EE86E8290E51A481BD01BD0A98`。
+- NSIS：104382345 bytes；SHA-256 `1BAD947A80520DDE3C2762AFD7EB28862C6F2928054FEB7D776CDB0B17D78BAE`。
+
+从当前 unpacked EXE 实际读取的八个 fuse 与既有加固配置一致：RunAsNode、NODE_OPTIONS、Node inspect 关闭，ASAR 完整性与 OnlyLoadAppFromAsar 开启；cookie、V8 snapshot、file 协议兼容设置未变。读取工具初次参数引号和枚举导入错误修正后通过，没有翻转任何 fuse。
+
+14 项 E2E 覆盖混合/同名/空/错误标签、当前磁盘字节、read-only/degraded 新确认、三种模式、停止/恢复中关闭、路径迁移、布局重启和只读 state 失败。组件/真实编辑器测试覆盖 saving、选区、dirty、历史与模式写失败保护。实际检查 `.local-data/test/task-013/wp2` 中本轮重新生成的 900×600/1280×820 设置、深色 TXT/查找、白色 DOCX/原文颜色/查找、失败重试截图；forced-colors 仅 Chromium 模拟。截图是合成资料，路径遮罩只用于证据。
+
+### 12.4 第 9 节逐项验收对应
+
+| 项                                                     | 结论             | 对应证据/测试                                                                                        |
+| ------------------------------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| 1 三种根及实际 profile/cache/log/dump                  | 部分通过         | §12.3 实际文件/路径；完整安装版无覆盖的默认用户环境仍待验                                            |
+| 2 有界 locator、安装外置、升级/卸载、portable 解包区分 | 部分通过         | 131-byte 原生宿主、最终包安装替换/卸载 48 哈希与实际 portable；默认用户环境增量仍待验                |
+| 3 中文/空格、不可写/缺失/取消、无迁移/回退             | 通过             | 最新五组原生宿主事件、data-directory.test.ts；完整设置入口→原生重选链的余项见 §12.5                  |
+| 4 坏/超大/未知/额外字段/危险路径/写失败                | 通过             | storage、data-directory、restore-workspace、IPC/安全读取及真实只读文件 E2E；失败/flush 不覆写原件    |
+| 5 三模式与双层代次/初始抑制                            | 通过             | startup-restore、workspace-session、restore-workspace、storage 与三模式 E2E                          |
+| 6 混合标签/兼容性/外部修改/路径变化                    | 通过             | E2E 14 项及文件管理/controller/路径段边界测试                                                        |
+| 7 显示/恢复不 dirty、不保留旧运行时对象                | 通过             | settings-display、settings、startup-restore、文档会话测试与编辑器 E2E                                |
+| 8 显示器/缩放/布局与真实 UI                            | 部分通过         | window-layout、sidebar-layout、实际 125%/两尺寸、E2E 三次布局重启；物理拔屏与系统切换仍待验          |
+| 9 取消/放弃/saving/写失败/强杀                         | 通过             | window-close、App/编辑器测试、真实 E2E、force-end.json；无正文或最后毫秒保证                         |
+| 10 测试/截图隔离与覆盖                                 | 通过（最终运行） | 最终子进程 TEMP、独立 profile/复制构建、窄 --user-data-dir；未动真实资料                             |
+| 11 顺序门禁和内部包重启                                | 通过             | check→build→14/14 E2E，package:win 自动审计，开发/portable/已安装 EXE 三次启动；安装覆盖限制见项 1/2 |
+
+### 12.5 复现入口与仍需的真实条件
+
+保留 `scripts/verify-task-013-product.mjs`：`development`、`portable`、`installed <仓库内测试 EXE>` 三种参数。开发仅复制 main/preload/renderer 白名单，不复制 out 下的历史截图 profile；portable 使用当前内部启动器；installed 强制既有隔离覆盖。脚本创建全新合成根，检查三轮 UI/磁盘持久化和目录清单；出现 `READY_FOR_NATIVE_CLOSE` 时正常关闭该测试窗口，勿同时运行安装器。断言失败/人工超时只结束自己启动的 PID 树。该脚本不安装/卸载软件，产物/证据不入包。原生引导继续用第 8.4 节命令，本轮宿主已重新编译。
+
+仍需以下两项才能把整体状态改为“完成”：
+
+1. **干净 Windows 测试账户或 VM**：运行未经 `--user-data-dir` 覆盖的最终 NSIS 包；从原生首次选址开始，选择非系统盘独立根，重启并从设置标记下次重选，验证 dirty 取消/正常退出后再选址取消回旧根；量测真实默认 appData 仅有 ≤8 KiB locator 及列明系统痕迹。实测已证明仅改子进程 APPDATA 不会改变 Windows Electron 的 appData，因此没有用环境变量假隔离或触碰真实 bootstrap 来代替该验收。
+2. **可操作的显示环境**：物理多屏移除/换屏、Windows 100%/125%/150% 与系统高对比度/文本缩放切换，复核标题栏可达、布局、设置/错误反馈和 DOCX。当前只有实际 125%、workArea 算法和 Chromium 模拟；未擅自修改用户系统显示设置。
+
+Windows 10 实机仍沿用 Task 12 已明确延后的边界，不把本机 Windows 11 结果写成 Windows 10 验证，也不新增可信签名/公开二进制门禁。最后毫秒/断电、实际 crash dump 产生与跨用户锁不在本轮新增承诺内。
+
+收尾：保留的产品验证脚本通过 ESLint/Prettier，最终开发入口 `development-guGl4f` 三次正常关闭通过。18 份变更 Markdown 的 362 个本地链接目标存在；文档格式与 `git diff --check` 通过。差异仅含中英文状态/交付文档及一个验证脚本，未包含真实用户路径/内容、证据产物、缓存或依赖变化。产品源码未变化，最终门禁与内部包对应同一产品代码；没有重复执行已通过的矩阵。Task 13 保持“待验收”。
+
+## 13. 所有者验收确认与收尾（2026-10-10）
+
+所有者针对 WP5 交接中剩余的两项环境检查作出反馈：经过测试，确认基本通过。
+
+| 原剩余检查                                                               | 更新结果           | 证据来源                    |
+| ------------------------------------------------------------------------ | ------------------ | --------------------------- |
+| 干净 Windows 账户或 VM：正式安装版无路径覆盖的首次原生引导及重选完整流程 | 所有者实测基本通过 | 2026-10-10 本会话所有者反馈 |
+| 真实多屏拔插、系统缩放和高对比度                                         | 所有者实测基本通过 | 同上                        |
+
+Task 13 当前状态为**已完成**。所有者在上述实测反馈后明确指示“目前可视作完成并收尾”，据此关闭 WP5 与整项任务。第 12.5 节及第 12.4 节部分通过项保留 2026-10-08 当时的证据状态；规划第 9 节第 1、2、8 项现按所有者验收决定关闭，不再作为待办。此次反馈未附 OS/build、账户或 VM 类型、详细步骤、路径清单、截图和逐场景结果，仍不推断这些细节，也不将所有者确认写成 Agent 新执行的完整矩阵。现有记录由所有者接受，不再要求补录作为本任务完成条件。Task 12 的 Windows 10、签名与公开二进制边界不变。
+
+本次仅更新文档；产品代码、夹具和依赖未变。check/build/E2E 继续引用 2026-10-08 的真实结果，没有新增执行记录。
+
+## 14. 验收后 CI 回归：设置对话框焦点竞争（2026-10-10）
+
+用户提供的 GitHub Actions 日志显示 build/check 已通过，E2E 13/14 通过；设置场景在按 Escape 后点击“视图”超时，`.confirm-overlay` 持续拦截点击。源码与真实 Electron 复现确认：DOCX 关闭查找调用 Tiptap `commands.focus()`，实际聚焦延迟到 requestAnimationFrame；若设置先打开，该回调会把焦点带回编辑器。ModalDialog 原来只拦截 Tab，Escape 因此无法到达对话框。未改变代码的本机单次定向运行通过，说明普通重跑不能排除该时序问题。
+
+修复与回归：
+
+- ModalDialog 增加只由最上层模态框生效的 focusin 约束，恢复到框内最近控件；无可聚焦控件时聚焦对话框自身；卸载先移除监听再恢复原焦点。
+- 文件管理取消时的工具栏焦点恢复移到关闭提交后的微任务；若已有新模态框，则放弃旧恢复请求。保留原有取消焦点断言。
+- E2E 通过真实“关闭查找”点击捕获其实际动画帧，在设置获得焦点后释放，固定重现竞争；修复前框内焦点断言失败，修复后通过。另验证 Escape 后模态框已卸载，再点击“视图”。没有替换存储服务、强制点击遮罩或扩大超时。
+- 两项新增组件回归覆盖迟到焦点、监听释放、最上层模态框及无控件场景；既有 TXT/DOCX 内容、dirty、选区、历史和关闭保护断言保留。
+
+| 实际命令/验证                                                                                                                                                                              | 结果                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm.cmd exec -- vitest run tests/common/ui-primitives.test.tsx tests/shell/settings.test.tsx tests/workspace/file-management-ui.test.tsx tests/search/docx-current-search-panel.test.tsx` | 最终 4 文件、51/51 通过                                                                                                                                          |
+| `npm.cmd run check`                                                                                                                                                                        | 未通过；首次暴露上述文件管理取消兼容问题，修正后该原用例通过。另遇本机 junction EPERM 与文件系统 hook 超时；保留日志并终止本次验证进程树，未把未完成用例计为通过 |
+| 独立仓库 junction 探针                                                                                                                                                                     | 5 秒诊断预算内未完成，ETIMEDOUT；未更改测试断言或 OS 配置，不推断更底层原因                                                                                      |
+| 最终 `npm.cmd run build`                                                                                                                                                                   | 退出 0，全部类型检查通过；renderer JS 2305.00 kB                                                                                                                 |
+| 随后 `npm.cmd run test:e2e`                                                                                                                                                                | 退出 0，14/14，测试 49.74 秒；包含确定时序的焦点回归                                                                                                             |
+
+最终 build/E2E 使用 CI=true，子进程 TEMP/TMP 与 profile 均在仓库隔离目录；日志 `.local-data/ci-*.log` 不提交。本轮未执行 GitHub 远端重跑，也未重建内部 portable/NSIS；第 12 节二进制哈希仍对应当时构建。完整 check 的本机文件系统限制如实保留，不能以本轮定向和 E2E 通过替代其全套结果。

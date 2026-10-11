@@ -82,7 +82,7 @@ textarea:disabled {
 }
 
 .ws-btn-primary {
-  color: #fff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border-color: var(--color-primary);
 }
@@ -93,7 +93,7 @@ textarea:disabled {
 }
 
 .ws-btn-danger {
-  color: #fff;
+  color: var(--color-on-primary);
   background: var(--color-danger);
   border-color: var(--color-danger);
 }

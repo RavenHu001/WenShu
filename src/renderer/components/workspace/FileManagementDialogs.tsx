@@ -44,10 +44,15 @@ function modeTitle(mode: FileManagementMode | null): string {
 }
 
 function restoreFocusToToolbar(): void {
-  const button = document.querySelector<HTMLButtonElement>(
-    '[role="treeitem"][aria-current="true"] button, button[aria-label="新建"]',
-  );
-  button?.focus();
+  // Let the cancellation commit/unmount first; an open modal still owns focus.
+  // A replacement modal also takes precedence over this old close request.
+  queueMicrotask(() => {
+    if (document.querySelector('[role="dialog"][aria-modal="true"]') !== null) return;
+    const button = document.querySelector<HTMLButtonElement>(
+      '[role="treeitem"][aria-current="true"] button, button[aria-label="新建"]',
+    );
+    button?.focus();
+  });
 }
 
 export function FileManagementDialogs({

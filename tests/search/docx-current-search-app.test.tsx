@@ -13,6 +13,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Editor } from '@tiptap/core';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -184,7 +185,7 @@ async function openWorkspace(entries: readonly WorkspaceEntry[]): Promise<void> 
     status: 'selected',
     workspace: snapshot(entries),
   } as OpenWorkspaceResult);
-  render(<App />);
+  render(<App initialSettings={blankStartup} />);
   await act(async () => {
     fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
   });
@@ -396,7 +397,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('ro.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -420,7 +421,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('dg.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });
@@ -443,7 +444,7 @@ describe('WP3：DOCX 当前查找 App 集成（第 8.7 节）', () => {
       status: 'selected',
       workspace: snapshot([entry('slow.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await act(async () => {
       fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
     });

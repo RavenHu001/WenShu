@@ -61,9 +61,25 @@ export interface WorkspaceSnapshot {
  * - `error`：选择了目录但根目录扫描失败（权限不足、路径不存在等），保留原工作区。
  */
 export type OpenWorkspaceResult =
-  | { readonly status: 'selected'; readonly workspace: WorkspaceSnapshot }
+  | {
+      readonly status: 'selected';
+      readonly workspace: WorkspaceSnapshot;
+      readonly workspaceSessionId: string;
+    }
   | { readonly status: 'cancelled' }
   | { readonly status: 'error'; readonly error: WorkspaceEntryError };
+
+/** Root comes exclusively from the main process's validated state, never from IPC arguments. */
+export type RestoreWorkspaceResult =
+  | (Extract<OpenWorkspaceResult, { status: 'selected' }> & {
+      readonly restore: {
+        readonly tabRelativePaths: readonly string[];
+        readonly activeRelativePath: string | null;
+        readonly warnings: readonly ('TAB_LIMIT' | 'UNSAFE_PATH')[];
+      };
+    })
+  | Exclude<OpenWorkspaceResult, { status: 'selected' }>
+  | { readonly status: 'not-recorded' };
 
 /**
  * 刷新当前工作区的结果 —— discriminated union。

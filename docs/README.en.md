@@ -12,6 +12,7 @@
 - Run automated checks, manual acceptance, and production-build verification: [testing guide](./development/TESTING.en.md).
 - Understand product scope, architecture, and security constraints: [project definition and technical baseline](./architecture/PROJECT_BASELINE.en.md).
 - Trace feature planning, implementation, and acceptance: [task archive index](./tasks/README.en.md).
+- Completed following owner acceptance: [Task 13: basic settings and startup restore](./tasks/task-013/TASK_013_SETTINGS_STARTUP_RESTORE.en.md). WP0–WP4 are complete: directories, JSON storage, basic settings, and themes are connected. Workspace/tab restoration and incomplete-restore close protection are connected; layout and close integration are implemented; WP5 local regression, internal packaging, and isolated restart/install/uninstall checks passed; the owner reported that clean-account installed bootstrap and physical display checks basically passed and approved task completion on 2026-10-10; evidence boundaries remain in completion-report section 13. See the [handoff report](./tasks/task-013/TASK_013_COMPLETION_REPORT.en.md).
 
 ## Categories
 

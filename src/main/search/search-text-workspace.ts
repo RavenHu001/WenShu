@@ -55,6 +55,7 @@
 
 import { extname, isAbsolute, join } from 'node:path';
 import { readdir } from 'node:fs/promises';
+import { isDataPath } from '../app-state/data-directory';
 import {
   MAX_CANDIDATE_FILES,
   MAX_DOCX_CANDIDATE_FILES,
@@ -225,6 +226,7 @@ async function collectCandidates(
     relative: string,
     isRoot: boolean,
   ): Promise<void> => {
+    if (isDataPath(dir)) return;
     let entries: readonly DirEntry[];
     try {
       entries = await readDirFn(dir);
@@ -238,6 +240,7 @@ async function collectCandidates(
       return;
     }
     for (const entry of entries) {
+      if (isDataPath(join(dir, entry.name))) continue;
       if (shouldStop()) {
         return;
       }

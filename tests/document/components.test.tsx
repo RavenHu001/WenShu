@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { EditorView } from '@codemirror/view';
 import { undo } from '@codemirror/commands';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
+import type { AppStateApi } from '../../src/shared/app-state';
 import { EditorSessionHost } from '../../src/renderer/components/document/EditorSessionHost';
 import { useEditorSessions } from '../../src/renderer/lib/use-editor-sessions';
 import { useTextDocuments } from '../../src/renderer/lib/use-text-documents';
@@ -162,7 +164,7 @@ function savedDoc(
 
 async function openWorkspaceWith(entries: readonly WorkspaceEntry[]): Promise<void> {
   mockDesktop(vi.fn<ReadTextFn>(), selectedOpen(snapshot({ entries })));
-  render(<App />);
+  render(<App initialSettings={blankStartup} />);
   await userEvent.click(openBtn());
 }
 
@@ -312,7 +314,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(() => new Promise<ReadTextDocumentResult>(() => {})),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -326,7 +328,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async () => loadedDoc('a.txt', 'hello\n世界')),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -342,7 +344,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async () => loadedDoc('empty.txt', '')),
       selectedOpen(snapshot({ entries: [f('empty.txt', 'empty.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('empty.txt');
@@ -357,7 +359,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -376,7 +378,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -393,7 +395,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       readText,
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -411,7 +413,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
   it('同路径仍在 loading 时再次点击只激活原标签，不发起第二次读取', async () => {
     const readText = vi.fn<ReadTextFn>(() => new Promise<ReadTextDocumentResult>(() => {}));
     mockDesktop(readText, selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })));
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -428,7 +430,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         snapshot({ entries: [f('a.txt', 'a.txt'), d('sub', 'sub', [f('a.txt', 'sub/a.txt')])] }),
       ),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -455,7 +457,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -474,7 +476,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -495,7 +497,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt'), f('c.txt', 'c.txt')] }),
       ),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -516,7 +518,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -533,7 +535,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -552,7 +554,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       })),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -575,7 +577,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         }),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -598,7 +600,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       })
       .mockResolvedValueOnce(loadedDoc('a.txt', '重试成功'));
     mockDesktop(readText, selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })));
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -619,7 +621,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       vi.fn<ReadTextFn>().mockRejectedValue(new Error('bridge down')),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -640,7 +642,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       ),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -675,7 +677,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         }),
     );
     mockDesktop(readText, selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })));
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -711,7 +713,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
           workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
         } as OpenWorkspaceResult),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
 
@@ -741,7 +743,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
           workspace: snapshot({ entries: [f('c.txt', 'c.txt')] }),
         } as OpenWorkspaceResult),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     expect(editorDoc()).toBe('内容:a.txt');
@@ -764,7 +766,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         } as OpenWorkspaceResult)
         .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await openTextFile('b.txt');
@@ -785,7 +787,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         workspace: snapshot({ entries: [f('b.txt', 'b.txt')] }),
       } as RefreshWorkspaceResult),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
 
@@ -810,7 +812,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
         }),
       ),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await userEvent.click(within(screen.getByRole('tree')).getByText('notes.md'));
@@ -832,7 +834,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       undefined,
       windowApi,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
 
@@ -844,6 +846,95 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('WP4 installed reselect stays deferred and dirty cancellation keeps the editor and undo session', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
+      undefined,
+      windowApi,
+    );
+    if (blankStartup.status !== 'ok') throw new Error('fixture');
+    const initial = {
+      ...blankStartup,
+      snapshot: {
+        ...blankStartup.snapshot,
+        dataDirectory: { path: '/synthetic', mode: 'installed' as const, canReselect: true },
+      },
+    };
+    const chooseDataDirectoryOnNextStart = vi.fn(async () => ({ status: 'ok' as const }));
+    Object.assign(window.desktop, {
+      appState: { get: async () => initial, chooseDataDirectoryOnNextStart },
+    });
+    render(<App initialSettings={initial} />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await insertAtEnd('+unsaved');
+    const view = editorView();
+    await userEvent.keyboard('{Control>},{/Control}');
+    await userEvent.click(screen.getByRole('button', { name: '下次启动重新选择数据目录' }));
+    await screen.findByText('已标记：下次启动重新选择。当前数据不搬迁。');
+    expect(chooseDataDirectoryOnNextStart).toHaveBeenCalledTimes(1);
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    await act(async () => windowApi.triggerCloseRequested());
+    await userEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(editorView()).toBe(view);
+    expect(view!.state.doc.toString()).toContain('+unsaved');
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    expect(windowApi.cancelClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('WP4 quick close waits for queued preferences and failed final checkpoint offers retry or continue', async () => {
+    const windowApi = makeWindowApi();
+    mockDesktop(
+      vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
+      async () => ({
+        status: 'selected',
+        workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
+        workspaceSessionId: '11111111-1111-4111-8111-111111111111',
+      }),
+      undefined,
+      windowApi,
+    );
+    if (blankStartup.status !== 'ok') throw new Error('fixture');
+    const initial = {
+      ...blankStartup,
+      snapshot: { ...blankStartup.snapshot, effectiveStartupMode: 'workspace-and-tabs' as const },
+    };
+    let finish!: (value: Awaited<ReturnType<AppStateApi['updatePreferences']>>) => void;
+    const checkpoint = vi.fn<AppStateApi['checkpoint']>().mockResolvedValue({
+      status: 'error',
+      error: { code: 'WRITE_FAILED', message: 'final metadata failed', retryable: true },
+    });
+    Object.assign(window.desktop, {
+      appState: {
+        get: async () => initial,
+        checkpoint,
+        flush: async () => ({ status: 'saved', warnings: [] }),
+        updatePreferences: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      },
+    });
+    render(<App initialSettings={initial} />);
+    await userEvent.click(openBtn());
+    await openTextFile('a.txt');
+    await userEvent.keyboard('{Control>},{/Control}');
+    await userEvent.selectOptions(screen.getByLabelText('主题'), 'dark');
+    await act(async () => windowApi.triggerCloseRequested());
+    expect(windowApi.requestClose).not.toHaveBeenCalled();
+    await act(async () => finish({ status: 'saved', warnings: [] }));
+    await screen.findByRole('dialog', { name: '退出前记录未保存' });
+    expect(editorView()!.state.doc.toString()).toBe('内容:a.txt');
+    checkpoint.mockResolvedValue({ status: 'queued', warnings: [] });
+    await userEvent.click(screen.getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(windowApi.requestClose).toHaveBeenCalledTimes(1));
+    expect(checkpoint).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tabRelativePaths: ['a.txt'] }),
+    );
+  });
+
   it('窗口 dirty 上报跟随编辑变化', async () => {
     const windowApi = makeWindowApi();
     mockDesktop(
@@ -852,7 +943,7 @@ describe('中央文档区（WP2 多标签读取回归）', () => {
       undefined,
       windowApi,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     expect(windowApi.setDirtyState).toHaveBeenLastCalledWith(false);
@@ -873,7 +964,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -894,7 +985,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -921,7 +1012,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -941,7 +1032,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -975,7 +1066,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -998,7 +1089,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1029,7 +1120,7 @@ describe('每标签 CodeMirror 编辑会话（WP3，第 8.4 节）', () => {
           workspace: snapshot({ entries: [f('a.txt', 'a.txt')] }),
         } as OpenWorkspaceResult),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1137,7 +1228,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1180,7 +1271,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+x');
@@ -1214,7 +1305,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1254,7 +1345,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1290,7 +1381,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
 
@@ -1329,7 +1420,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1367,7 +1458,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1403,7 +1494,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1440,7 +1531,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1474,7 +1565,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1509,7 +1600,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
 
@@ -1542,7 +1633,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1590,7 +1681,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1634,7 +1725,7 @@ describe('每标签保存、冲突与延迟确认（WP4，第 8.5 节）', () =>
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+edit');
@@ -1667,7 +1758,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1689,7 +1780,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1709,7 +1800,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1734,7 +1825,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       selectedOpen(snapshot({ entries: [f('a.txt', 'a.txt'), f('b.txt', 'b.txt')] })),
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     async function pressCtrlW(): Promise<void> {
@@ -1777,7 +1868,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       open,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+a');
@@ -1807,7 +1898,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async () => loadedDoc('a.txt')),
       open,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+edit');
@@ -1835,7 +1926,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       vi.fn<ReadTextFn>(async (relativePath) => loadedDoc(relativePath)),
       open,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+edit');
@@ -1862,7 +1953,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       windowApi,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
 
     await openTextFile('a.txt');
@@ -1891,7 +1982,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       undefined,
       windowApi,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+a');
@@ -1930,7 +2021,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       undefined,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+edit');
@@ -1967,7 +2058,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       windowApi,
       saveText,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+edit');
@@ -1995,7 +2086,7 @@ describe('关闭、工作区与窗口保护（WP5，第 8.6 节）', () => {
       undefined,
       windowApi,
     );
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await userEvent.click(openBtn());
     await openTextFile('a.txt');
     await insertAtEnd('+edit');

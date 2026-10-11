@@ -27,6 +27,9 @@ interface WindowCloseState {
   dirty: boolean;
   closeAllowed: boolean;
   pendingRequest: boolean;
+  finalizing: boolean;
+  rendererReady: boolean;
+  finalize?: () => Promise<void>;
 }
 
 /** 按 webContents id 维护每个窗口的最小关闭协调状态。 */
@@ -35,9 +38,19 @@ const windowStates = new Map<number, WindowCloseState>();
 let ipcRegistered = false;
 
 /** 为指定窗口启用关闭保护；应在窗口创建后立即调用。 */
-export function registerWindowCloseProtection(window: BrowserWindow): void {
+export function registerWindowCloseProtection(
+  window: BrowserWindow,
+  finalize?: () => Promise<void>,
+): void {
   const id = window.webContents.id;
-  windowStates.set(id, { dirty: false, closeAllowed: false, pendingRequest: false });
+  windowStates.set(id, {
+    dirty: false,
+    closeAllowed: false,
+    pendingRequest: false,
+    finalizing: false,
+    rendererReady: false,
+    ...(finalize ? { finalize } : {}),
+  });
 
   window.on('close', (event) => {
     const state = windowStates.get(id);
@@ -71,24 +84,44 @@ export function registerWindowCloseIpc(): void {
     if (state !== undefined) {
       // 只接受严格布尔值，避免把任意数据误记为 dirty
       state.dirty = dirty === true;
+      // The first renderer notification also acknowledges that its close listener is mounted.
+      // A native close during load must not be lost before preload/React subscribes.
+      if (!state.rendererReady) {
+        state.rendererReady = true;
+        if (state.pendingRequest) event.sender.send('window:close-requested');
+      }
     }
   });
 
-  ipcMain.handle('window:close-allowed', (event) => {
+  ipcMain.handle('window:close-allowed', (event, ...args: unknown[]) => {
     const state = windowStates.get(event.sender.id);
-    if (state === undefined) {
+    if (
+      state === undefined ||
+      state.finalizing ||
+      args.length ||
+      event.senderFrame !== event.sender.mainFrame
+    ) {
       return;
     }
-    state.closeAllowed = true;
-    state.pendingRequest = false;
-    // 再次触发 close：本次放行，窗口正常销毁
-    BrowserWindow.fromWebContents(event.sender)?.close();
+    const complete = () => {
+      if (windowStates.get(event.sender.id) !== state) return;
+      state.closeAllowed = true;
+      state.pendingRequest = false;
+      BrowserWindow.fromWebContents(event.sender)?.close();
+    };
+    state.finalizing = true;
+    if (state.finalize) return state.finalize().then(complete);
+    complete();
   });
 
   ipcMain.handle('window:close-cancelled', (event) => {
     const state = windowStates.get(event.sender.id);
-    if (state !== undefined) {
+    if (state !== undefined && !state.finalizing) {
       state.pendingRequest = false;
     }
   });
+}
+
+export function isWindowFinalizing(id: number): boolean {
+  return windowStates.get(id)?.finalizing ?? false;
 }

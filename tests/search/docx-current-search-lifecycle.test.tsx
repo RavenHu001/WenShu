@@ -30,6 +30,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { Editor } from '@tiptap/core';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -330,7 +331,7 @@ async function renderApp(api: DesktopMock, entries: readonly WorkspaceEntry[]): 
     status: 'selected',
     workspace: snapshot(entries),
   } as OpenWorkspaceResult);
-  render(<App />);
+  render(<App initialSettings={blankStartup} />);
   await act(async () => {
     fireEvent.click(screen.getAllByText('打开文件夹')[0] as HTMLButtonElement);
   });

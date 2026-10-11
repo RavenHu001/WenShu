@@ -22,6 +22,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Editor } from '@tiptap/core';
 import { EditorView } from '@codemirror/view';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -401,7 +402,7 @@ describe('DOCX 定位生命周期：read-error / loading 关闭 / 工作区切�
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '文档标题');
@@ -431,7 +432,7 @@ describe('DOCX 定位生命周期：read-error / loading 关闭 / 工作区切�
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '文档标题');
@@ -474,7 +475,7 @@ describe('DOCX 定位生命周期：read-error / loading 关闭 / 工作区切�
         status: 'selected',
         workspace: snapshot([], { rootName: 'other-root' }),
       } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '文档标题');
@@ -514,7 +515,7 @@ describe('DOCX 定位生命周期：read-error / loading 关闭 / 工作区切�
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '文档标题');
@@ -554,7 +555,7 @@ describe('DOCX 定位生命周期：read-error / loading 关闭 / 工作区切�
         status: 'selected',
         workspace: snapshot([], { rootName: 'other-root' }),
       } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '文档标题');
@@ -585,7 +586,7 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
       status: 'selected',
       workspace: snapshot([entry('doc.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     // 先从文件树打开
     await act(async () => {
@@ -639,7 +640,7 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '粗体与斜体');
@@ -677,7 +678,7 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '嵌套项目');
@@ -715,7 +716,7 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '嵌套项目');
@@ -748,7 +749,7 @@ describe('DOCX 定位生命周期：saving / dirty / 格式与结构变化（WP5
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '文档标题');
@@ -791,7 +792,7 @@ describe('DOCX 定位兼容性：degraded / read-only / kind 防御（WP5，第 
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '嵌套项目');
@@ -832,7 +833,7 @@ describe('DOCX 定位兼容性：degraded / read-only / kind 防御（WP5，第 
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const match = projectionMatch(PROJECTION, '结尾文本');
@@ -862,7 +863,7 @@ describe('DOCX 定位兼容性：degraded / read-only / kind 防御（WP5，第 
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     // 主进程正常不会产生 kind 与路径不一致的结果；本用例验证 App 的类型防御校验：
@@ -898,7 +899,7 @@ describe('DOCX 定位混合场景：TXT/DOCX 混合结果与多标签会话隔�
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const docxMatchPos = projectionMatch(PROJECTION, '项目甲');
@@ -945,7 +946,7 @@ describe('DOCX 定位混合场景：TXT/DOCX 混合结果与多标签会话隔�
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const aMatch = projectionMatch(PROJECTION, '嵌套项目');
@@ -986,7 +987,7 @@ describe('DOCX 定位混合场景：TXT/DOCX 混合结果与多标签会话隔�
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const aMatch = projectionMatch(PROJECTION, '嵌套项目');
@@ -1030,7 +1031,7 @@ describe('DOCX 定位混合场景：TXT/DOCX 混合结果与多标签会话隔�
       status: 'selected',
       workspace: snapshot([entry('doc.docx')]),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'doc.docx' }));

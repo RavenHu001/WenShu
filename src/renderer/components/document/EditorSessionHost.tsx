@@ -23,7 +23,7 @@
  */
 
 import { useEffect, useRef, type RefObject } from 'react';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, panels, type KeyBinding } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search';
@@ -51,6 +51,7 @@ export interface EditorSearchControls {
 }
 
 export interface EditorSessionHostProps {
+  readonly interactionBlocked?: boolean;
   /** 稳定标签 id：会话缓存键。 */
   readonly tabId: string;
   /** 外部正文（磁盘读取结果 / 已保存基线）；与编辑器当前内容不一致时视为外部替换。 */
@@ -83,6 +84,7 @@ export interface EditorSessionHostProps {
 }
 
 /** 保存快捷键绑定：run 必须返回 true，表示快捷键已被处理。 */
+const interaction = new Compartment();
 function saveBinding(requestSave: () => void): KeyBinding {
   return {
     key: 'Mod-s',
@@ -159,6 +161,7 @@ function createEditorState(
   searchPanelHost: HTMLElement | null,
 ): EditorState {
   const extensions: Extension[] = [
+    interaction.of([EditorState.readOnly.of(false), EditorView.editable.of(true)]),
     EditorState.lineSeparator.of(lineSeparator),
     history(),
     keymap.of([
@@ -226,6 +229,7 @@ function createSession(
 }
 
 export function EditorSessionHost({
+  interactionBlocked = false,
   tabId,
   content,
   lineSeparator = '\n',
@@ -339,6 +343,17 @@ export function EditorSessionHost({
       createEditorState(content, lineSeparator, session, searchPanelHostRef?.current ?? null),
     );
   }, [content, lineSeparator, tabId]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view && view.state.readOnly !== interactionBlocked)
+      view.dispatch({
+        effects: interaction.reconfigure([
+          EditorState.readOnly.of(interactionBlocked),
+          EditorView.editable.of(!interactionBlocked),
+        ]),
+      });
+  }, [interactionBlocked, content, lineSeparator, tabId]);
 
   // 搜索结果定位：视图就绪后校验当前正文范围，命中则设置选区、滚动到可视区域并聚焦。
   // 同一目标对象只应用一次（appliedLocateRef 守卫），普通 rerender 不会重复抢焦点（第 6.7 节）。

@@ -1,5 +1,9 @@
-import { app, BrowserWindow, Menu, session } from 'electron';
-import { join } from 'node:path';
+import { app, BrowserWindow, dialog, Menu, nativeTheme, session, screen } from 'electron';
+import { join, resolve } from 'node:path';
+import { startApplication } from './app-state/startup';
+import { AppStateStore } from './app-state/app-state-store';
+import { registerAppStateIpc } from './app-state/app-state-ipc';
+import { beginWorkspaceOpen, getWorkspaceIdentity } from './workspace/workspace-session';
 import { appIdentity } from '../shared/app-metadata';
 import { registerWorkspaceIpc } from './workspace/workspace-ipc';
 import { registerDocumentIpc } from './document/document-ipc';
@@ -8,16 +12,32 @@ import { registerSearchIpc } from './search/search-ipc';
 import { registerFileManagementIpc } from './workspace/file-management-ipc';
 import { registerSaveAsIpc } from './document/save-as-ipc';
 import { registerWindowCloseIpc, registerWindowCloseProtection } from './window/window-close';
+import {
+  restoreWindowLayout,
+  applyWindowBounds,
+  trackWindowLayout,
+  WINDOW_MIN_WIDTH,
+  WINDOW_MIN_HEIGHT,
+} from './window/window-layout';
 
-const createMainWindow = (): BrowserWindow => {
+const createMainWindow = (store: AppStateStore): BrowserWindow => {
+  const { settings: preferences, state } = store.get();
+  const layout = restoreWindowLayout(
+    state.window,
+    screen.getAllDisplays().map((display) => display.workArea),
+    screen.getPrimaryDisplay().workArea,
+  );
   const window = new BrowserWindow({
     title: appIdentity.productName,
-    width: 1280,
-    height: 820,
-    minWidth: 900,
-    minHeight: 600,
+    ...layout.normalBounds!,
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     show: false,
-    backgroundColor: '#f4f5f7',
+    backgroundColor:
+      preferences.theme === 'dark' ||
+      (preferences.theme === 'system' && nativeTheme.shouldUseDarkColors)
+        ? '#20242c'
+        : '#f5f6f8',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // 渲染进程必须保持浏览器权限模型，桌面能力只能经 preload 窄接口进入。
@@ -27,14 +47,38 @@ const createMainWindow = (): BrowserWindow => {
     },
   });
 
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => {
+    applyWindowBounds(window, layout.normalBounds!);
+    if (layout.maximized) window.maximize();
+    window.show();
+  });
 
   // Task 1 不需要外部导航或弹窗；默认拒绝可减少未来内容注入后的攻击面。
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
 
   // 窗口关闭协调：未保存修改时由渲染进程确认后才放行关闭
-  registerWindowCloseProtection(window);
+  const stopLayout = trackWindowLayout(window, store);
+  registerWindowCloseProtection(window, async () => {
+    // Keep the accepted session identity for queued checkpoints; only invalidate scans.
+    beginWorkspaceOpen();
+    stopLayout();
+    while (!window.isDestroyed()) {
+      const result = await store.flush();
+      if (result.status !== 'error') return;
+      const choice = await dialog.showMessageBox(window, {
+        title: '文枢记录未保存',
+        type: 'error',
+        message: result.error.message,
+        detail:
+          '本次设置或恢复记录未保存。原有文件与当前编辑内容仍保留；继续退出不会保存未保存正文。',
+        buttons: ['重试', '继续退出'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (choice.response === 1) return;
+    }
+  });
 
   const developmentUrl = process.env['ELECTRON_RENDERER_URL'];
   if (!app.isPackaged && developmentUrl) {
@@ -48,30 +92,52 @@ const createMainWindow = (): BrowserWindow => {
 
 app.setAppUserModelId(appIdentity.appId);
 
-void app.whenReady().then(() => {
-  // 文枢使用 renderer 内可测试、可访问的中文菜单；移除 Electron 默认英文菜单，避免双菜单。
-  Menu.setApplicationMenu(null);
-  // 当前应用无需摄像头、定位等 Web 权限，因此采用拒绝优先策略。
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
-  });
+startApplication(
+  {
+    packaged: app.isPackaged,
+    projectRoot: resolve(__dirname, '../..'),
+    executable: app.getPath('exe'),
+    appData: app.getPath('appData'),
+    temp: app.getPath('temp'),
+    ...(process.env['PORTABLE_EXECUTABLE_DIR']
+      ? { portableDirectory: process.env['PORTABLE_EXECUTABLE_DIR'] }
+      : {}),
+    ...(app.commandLine.hasSwitch('user-data-dir')
+      ? { userDataOverride: app.commandLine.getSwitchValue('user-data-dir') }
+      : {}),
+  },
+  (plan) => {
+    const store = new AppStateStore({
+      root: plan.directory.root,
+      mode: plan.directory.mode,
+      getWorkspace: getWorkspaceIdentity,
+    });
+    let mainWindow: BrowserWindow | null = null;
+    registerAppStateIpc(store, plan, () => mainWindow);
+    // 文枢使用 renderer 内可测试、可访问的中文菜单；移除 Electron 默认英文菜单，避免双菜单。
+    Menu.setApplicationMenu(null);
+    // 当前应用无需摄像头、定位等 Web 权限，因此采用拒绝优先策略。
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+      callback(false);
+    });
 
-  registerWorkspaceIpc();
-  registerDocumentIpc();
-  registerDocxIpc();
-  registerSearchIpc();
-  registerFileManagementIpc();
-  registerSaveAsIpc();
-  registerWindowCloseIpc();
+    registerWorkspaceIpc(store);
+    registerDocumentIpc();
+    registerDocxIpc();
+    registerSearchIpc();
+    registerFileManagementIpc();
+    registerSaveAsIpc();
+    registerWindowCloseIpc();
 
-  createMainWindow();
+    mainWindow = createMainWindow(store);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
-  });
-});
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createMainWindow(store);
+      }
+    });
+  },
+);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

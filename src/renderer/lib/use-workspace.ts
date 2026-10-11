@@ -17,13 +17,16 @@
  *
  * ## 边界
  *
- * - 不持有工作区根路径以外的文件系统信息；不新增 IPC 能力，复用
- *   `workspace.open()` / `workspace.refresh()` 固定窄协议；
+ * - 仅持有工作区快照与主进程签发的身份，使用 open / restoreLast / refresh 固定窄协议；
  * - 未保存修改守卫由 App 在调用 `openWorkspace` 前执行（本模块不感知 dirty / saving）。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WorkspaceEntryError, WorkspaceSnapshot } from '../../shared/workspace';
+import type {
+  RestoreWorkspaceResult,
+  WorkspaceEntryError,
+  WorkspaceSnapshot,
+} from '../../shared/workspace';
 
 export type WorkspaceStatus = 'idle' | 'loading' | 'loaded' | 'error' | 'refreshing';
 
@@ -38,6 +41,10 @@ export interface WorkspaceController {
   readonly state: WorkspaceUiState;
   /** 工作区会话编号：成功切换时 +1；供文档与搜索共享校验（WP0 冻结项 11）。 */
   readonly epoch: number;
+  readonly workspaceSessionId: string | null;
+  readonly isCurrentSession: (id: string) => boolean;
+  readonly restoreLast: () => Promise<RestoreWorkspaceResult>;
+  readonly cancelPendingOpen: () => void;
   /**
    * 文件管理变更版本（TASK-009 §4.11）：create/save-as/relocate/trash 确认成功后 +1；
    * 失败、取消、reveal 与手工刷新（成功与否见返回值）不递增，由调用方显式通知。
@@ -77,6 +84,9 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     error: null,
   });
   const [epoch, setEpoch] = useState(0);
+  const [workspaceSessionId, setWorkspaceSessionId] = useState<string | null>(null);
+  const identityRef = useRef<string | null>(null);
+  const isCurrentSession = useCallback((id: string) => identityRef.current === id, []);
   const [mutationEpoch, setMutationEpoch] = useState(0);
   const stateRef = useRef(state);
   const onWorkspaceSelectedRef = useRef(options.onWorkspaceSelected);
@@ -97,7 +107,13 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     setMutationEpoch((current) => current + 1);
   }, []);
 
-  const openWorkspace = useCallback(async () => {
+  const cancelPendingOpen = useCallback(() => {
+    workspaceGenerationRef.current++;
+    refreshInFlightRef.current = null;
+  }, []);
+  useEffect(() => cancelPendingOpen, [cancelPendingOpen]);
+
+  const open = useCallback(async (restore: boolean): Promise<RestoreWorkspaceResult> => {
     const generation = ++workspaceGenerationRef.current;
     // 打开新工作区使旧根目录刷新失去单飞所有权；旧结果仍会完成，但会被 generation 丢弃。
     refreshInFlightRef.current = null;
@@ -105,17 +121,25 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     setState({ status: 'loading', workspace: prevWorkspace, error: null });
 
     try {
-      const result = await window.desktop.workspace.open();
+      const result: RestoreWorkspaceResult = await (async () => {
+        if (restore) return window.desktop.workspace.restoreLast();
+        const opened = await window.desktop.workspace.open();
+        return opened.status === 'selected'
+          ? { ...opened, restore: { tabRelativePaths: [], activeRelativePath: null, warnings: [] } }
+          : opened;
+      })();
       if (generation !== workspaceGenerationRef.current) {
-        return;
+        return { status: 'cancelled' };
       }
 
       if (result.status === 'selected') {
         setState({ status: 'loaded', workspace: result.workspace, error: null });
         // 扫描成功才递增 epoch 并通知文档失效；取消或失败保持原工作区与旧搜索状态
         setEpoch((current) => current + 1);
+        identityRef.current = result.workspaceSessionId;
+        setWorkspaceSessionId(result.workspaceSessionId);
         onWorkspaceSelectedRef.current?.();
-      } else if (result.status === 'cancelled') {
+      } else if (result.status === 'cancelled' || result.status === 'not-recorded') {
         setState({
           status: prevWorkspace ? 'loaded' : 'idle',
           workspace: prevWorkspace,
@@ -128,17 +152,23 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
           error: result.error,
         });
       }
+      return result;
     } catch (error) {
       if (generation !== workspaceGenerationRef.current) {
-        return;
+        return { status: 'cancelled' };
       }
       setState({
         status: 'error',
         workspace: prevWorkspace,
         error: toWorkspaceEntryError(error),
       });
+      return { status: 'error', error: toWorkspaceEntryError(error) };
     }
   }, []);
+  const openWorkspace = useCallback(async () => {
+    await open(false);
+  }, [open]);
+  const restoreLast = useCallback(() => open(true), [open]);
 
   const refreshWorkspace = useCallback(
     (refreshOptions: RefreshWorkspaceOptions = {}): Promise<boolean> => {
@@ -203,5 +233,16 @@ export function useWorkspace(options: UseWorkspaceOptions = {}): WorkspaceContro
     [],
   );
 
-  return { state, epoch, mutationEpoch, notifyMutationCommitted, openWorkspace, refreshWorkspace };
+  return {
+    state,
+    epoch,
+    workspaceSessionId,
+    isCurrentSession,
+    restoreLast,
+    cancelPendingOpen,
+    mutationEpoch,
+    notifyMutationCommitted,
+    openWorkspace,
+    refreshWorkspace,
+  };
 }

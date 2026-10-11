@@ -28,6 +28,7 @@
 
 import { readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { isDataPath } from '../app-state/data-directory';
 import type {
   WorkspaceEntry,
   WorkspaceEntryError,
@@ -51,16 +52,14 @@ export type ReadDirFn = (path: string) => Promise<readonly DirEntry[]>;
 
 /**
  * 将 `DirEntry` 分类为 WorkspaceEntryKind。
- * 优先级：directory > symbolic-link > file > other。
- * 符号链接在 directory 判断之后检查，因为有些文件系统可能同时报告 `isDirectory()` 和
- * `isSymbolicLink()` 为 true —— 这种情况下我们按 directory 处理以保持一致性。
+ * 符号链接优先，任何同时报告目录和链接的条目都不得递归。
  */
 function classifyKind(entry: DirEntry): WorkspaceEntry['kind'] {
-  if (entry.isDirectory()) {
-    return 'directory';
-  }
   if (entry.isSymbolicLink()) {
     return 'symbolic-link';
+  }
+  if (entry.isDirectory()) {
+    return 'directory';
   }
   if (entry.isFile()) {
     return 'file';
@@ -123,10 +122,12 @@ async function scanDir(
   // 根目录时 relativeDir 为空，absolutePath 即为 rootPath；
   // 子目录时用 join 拼接得到绝对路径用于文件系统读取
   const absolutePath = relativeDir ? join(rootPath, relativeDir) : rootPath;
+  if (isDataPath(absolutePath)) return [];
   const rawEntries = await readDirFn(absolutePath);
   const results: WorkspaceEntry[] = [];
 
   for (const raw of rawEntries) {
+    if (isDataPath(join(absolutePath, raw.name))) continue;
     // DOCX 安全保存器会在原文件旁保留最近一次保存前版本。它是内部恢复文件，
     // 不应作为普通工作区条目暴露给用户；目录同名时仍按正常目录处理。
     if (raw.isFile() && raw.name.toLowerCase().endsWith('.wenshu.bak')) {

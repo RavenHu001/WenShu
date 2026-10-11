@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * TASK-006 WP4 活动栏与搜索侧栏组件测试（任务第 8.5 节）。
- * 通过真实 <App /> 组合验证：活动栏按钮语义与切换、Ctrl+Shift+F、
+ * 通过真实 <App initialSettings={blankStartup} /> 组合验证：活动栏按钮语义与切换、Ctrl+Shift+F、
  * 无工作区空状态不发起 IPC、输入与已提交查询分离、loading/completed/cancelled/error/
  * empty/truncated 展示、结果分组与安全高亮、新请求取消旧请求、侧栏切换不丢
  * 工作区/标签/文件树状态、工作区打开取消/失败保留与成功切换清空旧结果。
@@ -11,6 +11,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../../src/renderer/App';
+import { blankStartup } from '../app-state/blank-startup-fixture';
+import { defaultSettings, defaultState, type AppStateApi } from '../../src/shared/app-state';
 import type {
   OpenWorkspaceResult,
   RefreshWorkspaceResult,
@@ -127,6 +129,22 @@ function makeDesktopMock(): {
   const open = vi.fn(async (): Promise<OpenWorkspaceResult> => ({ status: 'cancelled' }));
   const refresh = vi.fn(async (): Promise<RefreshWorkspaceResult> => ({ status: 'not-open' }));
   (window as unknown as Record<string, unknown>).desktop = {
+    appState: {
+      get: vi.fn<AppStateApi['get']>(async () => ({
+        status: 'ok',
+        snapshot: {
+          settings: defaultSettings(),
+          state: defaultState(),
+          effectiveStartupMode: 'workspace-and-tabs',
+          workspaceSessionId: null,
+          files: {
+            settings: { status: 'missing', pending: false, error: null },
+            state: { status: 'missing', pending: false, error: null },
+          },
+          dataDirectory: { path: '/test-data', mode: 'test', canReselect: false },
+        },
+      })),
+    },
     runtime: { platform: 'win32', electronVersion: '99.9.9', appVersion: '0.1.0-alpha.1' },
     workspace: { open, refresh },
     document: {
@@ -195,7 +213,7 @@ async function submitSearch(query: string): Promise<void> {
 describe('活动栏（第 4.10 节）', () => {
   it('文件/搜索使用明确名称与 SVG，并且不展示伪可用设置入口', () => {
     makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
 
     const filesBtn = screen.getByRole('button', { name: '文件面板' });
     const searchBtn = screen.getByRole('button', { name: '搜索面板' });
@@ -220,7 +238,7 @@ describe('活动栏（第 4.10 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     act(() => {
@@ -236,7 +254,7 @@ describe('活动栏（第 4.10 节）', () => {
 
   it('侧栏可折叠，并可通过活动栏恢复且不伪造设置入口', async () => {
     makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     const sidebar = document.querySelector<HTMLElement>('aside.sidebar');
     expect(sidebar?.hidden).toBe(false);
     await userEvent.click(screen.getByRole('button', { name: '折叠侧栏' }));
@@ -250,7 +268,7 @@ describe('活动栏（第 4.10 节）', () => {
 describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
   it('无工作区：显示空状态且不发起搜索 IPC', () => {
     const api = makeDesktopMock();
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
 
     act(() => {
       window.dispatchEvent(
@@ -269,7 +287,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const user = userEvent.setup();
@@ -308,7 +326,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');
@@ -355,7 +373,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('zzz');
@@ -372,7 +390,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');
@@ -392,7 +410,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');
@@ -412,7 +430,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');
@@ -458,7 +476,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const user = userEvent.setup();
@@ -473,7 +491,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot({ entries: [f('b.docx', 'b.docx')] }),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     // 打开 DOCX 标签（mock readDocx 返回 loaded 空文档）
@@ -502,7 +520,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const user = userEvent.setup();
@@ -528,7 +546,7 @@ describe('搜索侧栏状态与结果展示（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');
@@ -551,7 +569,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot(),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const user = userEvent.setup();
@@ -598,7 +616,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
       status: 'selected',
       workspace: snapshot({ entries: [d('src', 'src', [f('deep.txt', 'src/deep.txt')])] }),
     } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     const user = userEvent.setup();
@@ -621,7 +639,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
     api.open
       .mockResolvedValueOnce({ status: 'selected', workspace: snapshot() } as OpenWorkspaceResult)
       .mockResolvedValueOnce({ status: 'cancelled' } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');
@@ -644,7 +662,7 @@ describe('搜索竞态与侧栏状态保持（第 8.5 节）', () => {
         status: 'selected',
         workspace: snapshot({ rootName: 'other-root', entries: [] }),
       } as OpenWorkspaceResult);
-    render(<App />);
+    render(<App initialSettings={blankStartup} />);
     await openWorkspace();
 
     await submitSearch('hello');

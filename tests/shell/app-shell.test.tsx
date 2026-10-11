@@ -29,6 +29,7 @@ function actions(): AppMenuActions {
     workspaceSearch: vi.fn(),
     toggleSidebar: vi.fn(),
     about: vi.fn(),
+    settings: vi.fn(),
   };
 }
 

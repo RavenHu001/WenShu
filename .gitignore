@@ -1,5 +1,7 @@
 node_modules/
 .tools/
+.local-data/
+/WenShuData/
 out/
 dist/
 release/

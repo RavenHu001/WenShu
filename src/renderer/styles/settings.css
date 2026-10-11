@@ -1,0 +1,156 @@
+/* Loaded last: shared surfaces, CodeMirror's injected defaults and the settings dialog. */
+:root:not([data-theme]) {
+  background: transparent;
+}
+
+.confirm-dialog:has(.settings-dialog) {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.settings-dialog h2 {
+  margin: 0 0 16px;
+  font-size: var(--font-size-title);
+}
+.settings-dialog fieldset {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.settings-dialog legend {
+  padding: 0 6px;
+  font-weight: 600;
+  font-size: var(--font-size-md);
+}
+.settings-dialog .settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 6px 0;
+  font-size: var(--font-size-md);
+}
+.settings-dialog select {
+  width: 240px;
+  max-width: 65%;
+  padding: 5px 8px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.settings-dialog p {
+  margin: 8px 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.settings-dialog .settings-error,
+.settings-dialog .settings-error p {
+  color: var(--color-danger);
+}
+.settings-data-path {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.settings-feedback {
+  min-height: 16px;
+}
+.settings-dialog .ws-btn {
+  border: 1px solid var(--color-border-strong);
+}
+.settings-alert {
+  margin-left: auto;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+.confirm-dialog {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+.doc-editor .cm-content {
+  caret-color: var(--color-text);
+}
+.doc-editor .cm-content ::selection,
+.doc-editor .cm-line::selection {
+  background: var(--color-selected);
+}
+.doc-editor .cm-searchMatch {
+  background: var(--color-search-match);
+  outline: 1px solid var(--color-search-outline);
+}
+.doc-editor .cm-searchMatch-selected {
+  background: var(--color-search-current);
+  outline: 2px solid var(--color-search-outline);
+}
+.doc-editor .cm-selectionMatch {
+  background: var(--color-selected);
+}
+.doc-editor .cm-gutters {
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border);
+}
+.button--primary,
+.button--danger {
+  color: var(--color-on-primary);
+}
+
+/* DOCX match decorations deliberately keep the white canvas palette, including explicit text colors. */
+.docx-editor .ProseMirror {
+  color-scheme: light;
+}
+
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme='dark'] {
+    --color-text: CanvasText;
+    --color-text-secondary: CanvasText;
+    --color-text-muted: CanvasText;
+    --color-canvas: Canvas;
+    --color-workspace: Canvas;
+    --color-surface: Canvas;
+    --color-surface-raised: Canvas;
+    --color-surface-subtle: Canvas;
+    --color-border: CanvasText;
+    --color-border-strong: CanvasText;
+    --color-focus: Highlight;
+    --color-disabled: GrayText;
+  }
+  .doc-editor .cm-searchMatch,
+  .wenshu-search-match {
+    border: 1px solid Highlight;
+  }
+  .doc-editor .cm-searchMatch-selected,
+  .wenshu-search-current {
+    outline: 2px solid Highlight;
+    text-decoration: underline;
+  }
+  .settings-dialog select:focus-visible {
+    outline: 2px solid Highlight;
+  }
+  .settings-dialog .ws-btn {
+    border-color: ButtonText;
+    color: ButtonText;
+  }
+  .settings-dialog :disabled {
+    color: GrayText;
+    opacity: 1;
+  }
+}

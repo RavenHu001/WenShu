@@ -96,6 +96,61 @@ describe('MenuSurface', () => {
 });
 
 describe('ModalDialog', () => {
+  it('gives only the frontmost modal ownership and keeps an empty modal keyboard-accessible', async () => {
+    const user = userEvent.setup();
+    const underlying = render(
+      <ModalDialog title="下层">
+        <button type="button">下层操作</button>
+      </ModalDialog>,
+    );
+    const underlyingButton = screen.getByRole('button', { name: '下层操作' });
+    const onCancel = vi.fn();
+    const top = render(
+      <ModalDialog title="上层" onCancel={onCancel}>
+        <p>处理中</p>
+      </ModalDialog>,
+    );
+    const topDialog = screen.getByRole('dialog', { name: '上层' });
+    expect(document.activeElement).toBe(topDialog);
+    underlyingButton.focus();
+    expect(document.activeElement).toBe(topDialog);
+    await user.keyboard('{Escape}');
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    top.unmount();
+    expect(document.activeElement).toBe(underlyingButton);
+    underlying.unmount();
+  });
+
+  it('retains the last dialog focus against late background focus and removes the guard on unmount', async () => {
+    const user = userEvent.setup();
+    const trigger = document.createElement('button');
+    document.body.append(trigger);
+    trigger.focus();
+    const onCancel = vi.fn();
+    const view = render(
+      <ModalDialog title="设置" onCancel={onCancel}>
+        <button type="button">第一个</button>
+        <button type="button">第二个</button>
+      </ModalDialog>,
+    );
+    try {
+      const second = screen.getByRole('button', { name: '第二个' });
+      second.focus();
+      await Promise.resolve().then(() => trigger.focus());
+      expect(document.activeElement).toBe(second);
+      await user.keyboard('{Escape}');
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      view.unmount();
+      expect(document.activeElement).toBe(trigger);
+      trigger.blur();
+      trigger.focus();
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      view.unmount();
+      trigger.remove();
+    }
+  });
+
   it('traps Tab, closes with Escape, and restores focus after unmount', async () => {
     const user = userEvent.setup();
     const trigger = document.createElement('button');

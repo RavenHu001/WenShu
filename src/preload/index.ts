@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-api';
 import { appIdentity } from '../shared/app-metadata';
+import type { AppPreferences, SessionCheckpoint, StateFileName } from '../shared/app-state';
 import type { SaveTextDocumentRequest } from '../shared/document';
 import type {
   CreateWorkspaceEntryTarget,
@@ -17,15 +18,30 @@ import type {
 } from '../shared/search';
 
 const desktopApi: DesktopApi = Object.freeze({
+  appState: Object.freeze({
+    get: () => ipcRenderer.invoke('app-state:get'),
+    updatePreferences: (value: AppPreferences) =>
+      ipcRenderer.invoke('app-state:update-preferences', value),
+    checkpoint: (value: SessionCheckpoint) => ipcRenderer.invoke('app-state:checkpoint', value),
+    updateSidebar: (value: import('../shared/app-state').SidebarState) =>
+      ipcRenderer.invoke('app-state:update-sidebar', value),
+    flush: () => ipcRenderer.invoke('app-state:flush'),
+    openDataDirectory: () => ipcRenderer.invoke('app-state:open-data-directory'),
+    chooseDataDirectoryOnNextStart: () =>
+      ipcRenderer.invoke('app-state:choose-data-directory-on-next-start'),
+    resetInvalidFile: (file: StateFileName) =>
+      ipcRenderer.invoke('app-state:reset-invalid-file', file),
+  }),
   runtime: Object.freeze({
     platform: process.platform,
     electronVersion: process.versions.electron,
     appVersion: appIdentity.version,
   }),
   // preload 只开放固定的 IPC 调用，不暴露 ipcRenderer、通用 invoke 或可指定通道的接口。
-  // 渲染进程无法向主进程传入路径参数 —— open 使用原生目录选择器，refresh 只操作已有工作区。
+  // open 使用原生选择器，restoreLast 使用主进程记录，refresh 只操作当前根；均无路径参数。
   workspace: Object.freeze({
     open: () => ipcRenderer.invoke('workspace:open'),
+    restoreLast: () => ipcRenderer.invoke('workspace:restore-last'),
     refresh: () => ipcRenderer.invoke('workspace:refresh'),
     // 三个新建入口共用固定 workspace:create-entry 通道，kind 由 preload 固定注入：
     // renderer 只能通过方法名选择 TXT / DOCX / 文件夹，不能提交 kind 或危险开关。
